@@ -248,14 +248,8 @@
     </div>
     <button class="btn btn-outline" style="margin-top:14px" onclick="downloadAllQR()">📦 Download All Invitations (ZIP)</button>
     <button class="btn btn-outline" style="margin-top:8px" onclick="exportCSV()">📥 Export List</button>
-    <div style="margin-top:8px; padding: 14px; background: rgba(201,168,76,0.1); border-radius: 12px; border: 1px solid rgba(201,168,76,0.3);">
-      <label style="display: block; margin-bottom: 8px; font-size: 13px; color: #888;">📄 Import from CSV</label>
-      <div class="admin-add-form">
-        <input type="file" id="csv-import" accept=".csv" onchange="importCSV(event)">
-        <button class="btn" onclick="document.getElementById('csv-import').click()">📂 Choose File</button>
-      </div>
-      <p style="font-size: 12px; color: #666; margin-top: 8px;">Format: Name (one per line) or CSV with headers</p>
-    </div>
+    <button class="btn btn-outline" style="margin-top:8px" onclick="document.getElementById('csv-import').click()">📂 Import from CSV</button>
+    <input type="file" id="csv-import" accept=".csv" onchange="importCSV(event)" style="display:none;">
     <button class="btn btn-outline" style="margin-top:8px" onclick="clearAll()">🗑 Clear All Data</button>
     <button class="btn btn-outline" style="margin-top:8px" onclick="lockAdmin()">🔒 Logout</button>
   </div>
