@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title> دعوة الزفاف</title>
+<title>نظام دعوات الزفاف</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
 <script type="module">
@@ -30,44 +30,51 @@
   window.dispatchEvent(new Event('dbReady'));
 </script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Tajawal:wght@300;400;500;700&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  :root { --gold: #C9A84C; --gold-light: #E8D5A3; --black: #0A0A0A; --white: #FAFAF8; }
-  body { font-family: 'Tajawal', sans-serif; background: var(--black); color: var(--white); min-height: 100vh; }
+  :root { --gold: #D4AF7F; --gold-light: #E8D4B8; --black: #0F0F0F; --dark: #1A1A1A; --white: #FAFAF8; }
+  body { font-family: 'Tajawal', sans-serif; background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 100%); color: var(--white); min-height: 100vh; overflow-x: hidden; }
 
-  nav { display: flex; justify-content: center; gap: 8px; padding: 16px; background: #111; border-bottom: 1px solid #222; flex-wrap: wrap; }
-  .nav-btn { padding: 10px 22px; border: 1px solid #333; background: transparent; color: #888; border-radius: 50px; cursor: pointer; font-family: 'Tajawal', sans-serif; font-size: 14px; transition: all 0.3s; }
-  .nav-btn.active { background: var(--gold); color: var(--black); border-color: var(--gold); font-weight: 700; }
+  nav { display: flex; justify-content: center; gap: 12px; padding: 20px 16px; background: rgba(26,26,26,0.8); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(212, 175, 127, 0.2); flex-wrap: wrap; position: sticky; top: 0; z-index: 100; }
+  .nav-btn { padding: 12px 28px; border: 1.5px solid rgba(212, 175, 127, 0.3); background: rgba(255,255,255,0.02); color: #999; border-radius: 50px; cursor: pointer; font-family: 'Tajawal', sans-serif; font-size: 14px; font-weight: 500; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+  .nav-btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(212, 175, 127, 0.05); }
+  .nav-btn.active { background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%); color: var(--black); border-color: var(--gold); font-weight: 700; box-shadow: 0 8px 32px rgba(212, 175, 127, 0.25); }
 
-  .page { display: none; padding: 24px 16px; max-width: 600px; margin: 0 auto; }
+  .page { display: none; padding: 24px 16px; max-width: 600px; margin: 0 auto; animation: fadeIn 0.6s ease-out; }
   .page.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-  .hero { text-align: center; padding: 30px 0 20px; }
-  .hero-ornament { font-size: 24px; color: var(--gold); letter-spacing: 8px; margin-bottom: 10px; }
-  .hero h1 { font-size: 26px; font-weight: 300; color: var(--white); letter-spacing: 2px; margin-bottom: 6px; }
-  .hero .subtitle { font-size: 13px; color: #666; }
-  .gold-line { width: 60px; height: 1px; background: var(--gold); margin: 16px auto; }
+  .hero { text-align: center; padding: 40px 0 30px; }
+  .hero-ornament { font-size: 36px; color: var(--gold); letter-spacing: 12px; margin-bottom: 16px; animation: float 3s ease-in-out infinite; }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+  .hero h1 { font-family: 'Playfair Display', serif; font-size: 48px; font-weight: 700; color: var(--gold-light); letter-spacing: 2px; margin-bottom: 10px; }
+  .hero .subtitle { font-size: 13px; color: #888; letter-spacing: 2px; text-transform: uppercase; }
+  .gold-line { width: 80px; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); margin: 20px auto; }
 
-  .card { background: #111; border: 1px solid #222; border-radius: 16px; padding: 24px; margin-bottom: 16px; }
-  .card-title { font-size: 15px; color: var(--gold); margin-bottom: 18px; font-weight: 500; }
+  .card { background: linear-gradient(135deg, rgba(26,26,26,0.9), rgba(15,15,15,0.95)); border: 1px solid rgba(212, 175, 127, 0.15); border-radius: 18px; padding: 28px; margin-bottom: 18px; backdrop-filter: blur(10px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); transition: all 0.4s ease; }
+  .card:hover { border-color: rgba(212, 175, 127, 0.35); box-shadow: 0 12px 48px rgba(212, 175, 127, 0.15); }
+  .card-title { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; color: var(--gold-light); margin-bottom: 18px; text-align: center; }
 
-  .form-group { margin-bottom: 16px; }
-  label { display: block; font-size: 13px; color: #888; margin-bottom: 8px; }
-  input[type=text], input[type=password] { width: 100%; padding: 14px 16px; background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 10px; color: var(--white); font-family: 'Tajawal', sans-serif; font-size: 15px; outline: none; }
-  input:focus { border-color: var(--gold); }
-  input::placeholder { color: #444; }
+  .form-group { margin-bottom: 18px; }
+  label { display: block; font-size: 13px; color: var(--gold); margin-bottom: 10px; font-weight: 500; letter-spacing: 0.5px; }
+  input[type=text], input[type=password], textarea { width: 100%; padding: 14px 18px; background: rgba(255,255,255,0.04); border: 1px solid rgba(212, 175, 127, 0.2); border-radius: 12px; color: var(--white); font-family: 'Tajawal', sans-serif; font-size: 15px; outline: none; transition: all 0.3s ease; }
+  input:focus, textarea:focus { border-color: var(--gold); background: rgba(212, 175, 127, 0.08); box-shadow: 0 0 20px rgba(212, 175, 127, 0.15); }
+  input::placeholder { color: #555; }
 
-  .btn { width: 100%; padding: 15px; background: var(--gold); color: var(--black); border: none; border-radius: 10px; font-family: 'Tajawal', sans-serif; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.3s; }
-  .btn:hover { background: var(--gold-light); }
-  .btn:disabled { background: #333; color: #666; cursor: not-allowed; }
-  .btn-outline { background: transparent; border: 1px solid var(--gold); color: var(--gold); margin-top: 10px; }
-  .btn-outline:hover { background: var(--gold); color: var(--black); }
+  .btn { width: 100%; padding: 15px 24px; background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%); color: var(--black); border: none; border-radius: 12px; font-family: 'Tajawal', sans-serif; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-bottom: 10px; box-shadow: 0 4px 16px rgba(212, 175, 127, 0.25); }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(212, 175, 127, 0.35); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { background: #333; color: #666; cursor: not-allowed; box-shadow: none; }
+  .btn-outline { background: transparent; border: 1.5px solid var(--gold); color: var(--gold); margin-top: 10px; box-shadow: none; }
+  .btn-outline:hover { background: rgba(212, 175, 127, 0.1); box-shadow: 0 4px 16px rgba(212, 175, 127, 0.2); }
+
+  .message { text-align: center; color: var(--gold); font-size: 14px; margin-bottom: 16px; padding: 14px; background: rgba(212, 175, 127, 0.08); border-radius: 10px; border-left: 3px solid var(--gold); }
 
   #qr-result { display: none; }
-  .qr-box { text-align: center; padding: 24px; background: var(--white); border-radius: 16px; margin: 16px 0; }
-  #qrcode { display: inline-block; }
-  .guest-name-display { font-size: 20px; color: var(--black); font-weight: 700; margin-top: 14px; }
-  .guest-id { font-size: 11px; color: #999; margin-top: 4px; direction: ltr; }
+  .qr-box { text-align: center; padding: 28px; background: linear-gradient(135deg, var(--white) 0%, #F5F5F5 100%); border-radius: 18px; margin: 18px 0; box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+  #qrcode { display: inline-block; padding: 12px; background: white; border-radius: 12px; }
+  .guest-name-display { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--black); font-weight: 700; margin-top: 16px; }
+  .guest-id { font-size: 12px; color: #999; margin-top: 6px; direction: ltr; }
 
   .camera-wrapper { position: relative; width: 100%; max-width: 320px; margin: 0 auto 16px; border-radius: 16px; overflow: hidden; border: 2px solid var(--gold); background: #000; aspect-ratio: 1; }
   #camera-video { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -77,47 +84,48 @@
   @keyframes scanLine { 0% { top: 17.5%; } 100% { top: 82.5%; } }
   .camera-status { font-size: 13px; color: #666; margin-bottom: 14px; min-height: 20px; text-align: center; }
 
-  .result-card { display: none; padding: 22px; border-radius: 14px; margin-top: 16px; text-align: center; }
-  .result-card.allowed { background: #0D2B1A; border: 1px solid #1A5C32; }
-  .result-card.duplicate { background: #2B2200; border: 1px solid #8B6914; }
-  .result-card.denied { background: #2B0D0D; border: 1px solid #5C1A1A; }
-  .result-icon { font-size: 44px; margin-bottom: 10px; }
-  .result-name { font-size: 22px; font-weight: 700; color: var(--white); margin-bottom: 6px; }
-  .result-status { font-size: 14px; color: #888; }
+  .result-card { display: none; padding: 24px; border-radius: 16px; margin-top: 16px; text-align: center; animation: slideUp 0.4s ease-out; }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  .result-card.allowed { background: linear-gradient(135deg, rgba(76, 175, 80, 0.12), rgba(76, 175, 80, 0.04)); border: 1px solid rgba(76, 175, 80, 0.3); }
+  .result-card.duplicate { background: linear-gradient(135deg, rgba(255, 193, 7, 0.12), rgba(255, 193, 7, 0.04)); border: 1px solid rgba(255, 193, 7, 0.3); }
+  .result-card.denied { background: linear-gradient(135deg, rgba(244, 67, 54, 0.12), rgba(244, 67, 54, 0.04)); border: 1px solid rgba(244, 67, 54, 0.3); }
+  .result-icon { font-size: 48px; margin-bottom: 12px; }
+  .result-name { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: var(--gold-light); margin-bottom: 8px; }
+  .result-status { font-size: 14px; color: #999; }
   .result-status.ok { color: #4CAF50; }
-  .result-status.dup { color: #C9A84C; }
+  .result-status.dup { color: var(--gold); }
   .result-status.err { color: #F44336; }
 
   .admin-lock { text-align: center; padding: 60px 20px; }
   .admin-lock h2 { font-size: 20px; color: var(--gold); margin-bottom: 20px; }
-  .stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px; }
-  .stat-box { background: #111; border: 1px solid #222; border-radius: 12px; padding: 14px; text-align: center; }
-  .stat-num { font-size: 26px; font-weight: 700; color: var(--gold); }
-  .stat-label { font-size: 11px; color: #666; margin-top: 4px; }
-  .guest-list { background: #111; border: 1px solid #222; border-radius: 16px; overflow: hidden; max-height: 60vh; overflow-y: auto; }
-  .guest-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #1A1A1A; gap: 10px; }
+  .stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+  .stat-box { background: linear-gradient(135deg, rgba(26,26,26,0.9), rgba(15,15,15,0.95)); border: 1px solid rgba(212, 175, 127, 0.15); border-radius: 14px; padding: 16px; text-align: center; transition: all 0.3s ease; }
+  .stat-box:hover { border-color: rgba(212, 175, 127, 0.35); }
+  .stat-num { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; color: var(--gold); }
+  .stat-label { font-size: 11px; color: #888; margin-top: 6px; }
+  .guest-list { background: linear-gradient(135deg, rgba(26,26,26,0.9), rgba(15,15,15,0.95)); border: 1px solid rgba(212, 175, 127, 0.15); border-radius: 16px; overflow: hidden; max-height: 60vh; overflow-y: auto; }
+  .guest-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgba(212, 175, 127, 0.08); gap: 10px; transition: background 0.2s ease; }
+  .guest-item:hover { background: rgba(212, 175, 127, 0.05); }
   .guest-item:last-child { border-bottom: none; }
   .guest-item .name { color: var(--white); font-size: 14px; font-weight: 500; }
-  .guest-item .gid { color: #555; font-size: 11px; direction: ltr; }
-  .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-  .badge.scanned { background: #0D2B1A; color: #4CAF50; }
-  .badge.pending { background: #1A1A1A; color: #555; }
-  .del-btn { background: none; border: none; color: #5C1A1A; font-size: 18px; cursor: pointer; padding: 4px 8px; }
-  .del-btn:hover { background: #2B0D0D; color: #F44336; }
-  .empty-state { text-align: center; padding: 40px 20px; color: #444; font-size: 14px; }
+  .guest-item .gid { color: #666; font-size: 11px; direction: ltr; }
+  .badge { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .badge.scanned { background: rgba(76, 175, 80, 0.15); color: #4CAF50; }
+  .badge.pending { background: rgba(255,255,255,0.05); color: #888; }
+  .del-btn { background: none; border: none; color: #F44336; font-size: 18px; cursor: pointer; padding: 4px 8px; transition: all 0.2s ease; }
+  .del-btn:hover { transform: scale(1.2); }
+  .empty-state { text-align: center; padding: 40px 20px; color: #666; font-size: 14px; }
 
-  .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: var(--gold); color: var(--black); padding: 12px 24px; border-radius: 50px; font-weight: 700; font-size: 14px; opacity: 0; transition: opacity 0.3s; z-index: 999; }
+  .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--gold), var(--gold-light)); color: var(--black); padding: 14px 28px; border-radius: 50px; font-weight: 700; font-size: 14px; opacity: 0; transition: opacity 0.3s; z-index: 999; box-shadow: 0 8px 24px rgba(212, 175, 127, 0.3); }
   .toast.show { opacity: 1; }
-  @keyframes pulse { 0%{transform:scale(1)} 50%{transform:scale(1.05)} 100%{transform:scale(1)} }
-  .pulse { animation: pulse 0.4s ease; }
 </style>
 </head>
 <body>
 
 <nav>
   <button class="nav-btn active" onclick="showPage('register', this)">📝 التسجيل</button>
-  <button class="nav-btn" onclick="showPage('scanner', this)">📷 المسح</button>
-  <button class="nav-btn" onclick="showPage('admin', this)">⚙️ الإدارة</button>
+  <button class="nav-btn" onclick="showPage('scanner', this)">Scan</button>
+  <button class="nav-btn" onclick="showPage('admin', this)">⚙️ Admin</button>
 </nav>
 
 <!-- REGISTER -->
@@ -130,6 +138,7 @@
   </div>
   <div class="card">
     <div class="card-title">🎟 سجّل اسمك لاستلام دعوتك</div>
+    <p style="text-align:center;color:#C9A84C;font-size:14px;margin-bottom:16px">💡 كل شخص له باركود خاص فيه</p>
     <div class="form-group">
       <label>الاسم الكامل</label>
       <input type="text" id="guest-name" placeholder="مثال: محمد أحمد العمري">
@@ -155,23 +164,23 @@
 <div class="page" id="page-scanner">
   <div class="hero">
     <div class="hero-ornament">✦</div>
-    <h1>مسح الدعوات</h1>
-    <p class="subtitle">للسكرتير فقط</p>
+    <h1>QR Scanner</h1>
+    <p class="subtitle">For Secretary Only</p>
     <div class="gold-line"></div>
   </div>
   <div class="card" style="text-align:center">
-    <p class="camera-status" id="camera-status">افتح كاميرا الجوال وامسح الباركود</p>
+    <p class="camera-status" id="camera-status">Open camera and scan the barcode</p>
     <label style="display:block;width:100%;margin-bottom:10px">
       <input type="file" id="qr-file-input" accept="image/*" capture="environment" style="display:none" onchange="scanFromImage(this)">
-      <span class="btn" style="display:block;cursor:pointer">📷 مسح باركود</span>
+      <span class="btn" style="display:block;cursor:pointer">📷 Scan QR Code</span>
     </label>
-    <button class="btn btn-outline" id="start-camera-btn" onclick="startCamera()">🎥 كاميرا مباشرة</button>
+    <button class="btn btn-outline" id="start-camera-btn" onclick="startCamera()">🎥 Live Camera</button>
     
     <div style="margin-top:16px;padding-top:16px;border-top:1px solid #222">
-      <p style="color:#666;font-size:12px;margin-bottom:10px">أو أدخل الكود يدويّاً:</p>
+      <p style="color:#666;font-size:12px;margin-bottom:10px">Or enter code manually:</p>
       <div style="display:flex;gap:8px">
-        <input type="text" id="manual-code" placeholder="مثال: WD-ABC123" style="flex:1">
-        <button class="btn" onclick="checkManualCode()" style="width:auto;padding:14px 16px">✓ تحقق</button>
+        <input type="text" id="manual-code" placeholder="Example: WD-ABC123" style="flex:1">
+        <button class="btn" onclick="checkManualCode()" style="width:auto;padding:14px 16px">✓ Verify</button>
       </div>
     </div>
     
@@ -186,51 +195,51 @@
     <div class="result-card allowed" id="result-allowed">
       <div class="result-icon">✅</div>
       <div class="result-name" id="result-name-ok"></div>
-      <div class="result-status ok">مسموح بالدخول</div>
+      <div class="result-status ok">Access Allowed</div>
     </div>
     <div class="result-card duplicate" id="result-duplicate">
       <div class="result-icon">⚠️</div>
       <div class="result-name" id="result-name-dup"></div>
-      <div class="result-status dup">تم الدخول مسبقاً بهذه الدعوة!</div>
+      <div class="result-status dup">Already Checked In!</div>
     </div>
     <div class="result-card denied" id="result-denied">
       <div class="result-icon">❌</div>
-      <div class="result-name">غير مسجّل</div>
-      <div class="result-status err">الباركود غير صحيح</div>
+      <div class="result-name">Not Registered</div>
+      <div class="result-status err">Invalid QR Code</div>
     </div>
   </div>
-  <button class="btn btn-outline" onclick="resetScan()">🔄 مسح جديد</button>
+  <button class="btn btn-outline" onclick="resetScan()">🔄 New Scan</button>
 </div>
 
 <!-- ADMIN -->
 <div class="page" id="page-admin">
   <div id="admin-lock">
     <div class="admin-lock">
-      <h2>🔐 صفحة الإدارة</h2>
+      <h2>🔐 Admin Panel</h2>
       <div class="form-group">
-        <label>كلمة السر</label>
-        <input type="password" id="admin-pass" placeholder="أدخل كلمة السر" onkeydown="if(event.key==='Enter') checkPass()">
+        <label>Password</label>
+        <input type="password" id="admin-pass" placeholder="Enter password" onkeydown="if(event.key==='Enter') checkPass()">
       </div>
-      <button class="btn" onclick="checkPass()">دخول</button>
+      <button class="btn" onclick="checkPass()">Login</button>
     </div>
   </div>
   <div id="admin-content" style="display:none">
     <div class="hero">
       <div class="hero-ornament">✦</div>
-      <h1>لوحة الإدارة</h1>
+      <h1>Admin Dashboard</h1>
       <div class="gold-line"></div>
     </div>
     <div class="stats-row">
-      <div class="stat-box"><div class="stat-num" id="stat-total">0</div><div class="stat-label">إجمالي المسجلين</div></div>
-      <div class="stat-box"><div class="stat-num" id="stat-scanned">0</div><div class="stat-label">دخلوا الحفل</div></div>
-      <div class="stat-box"><div class="stat-num" id="stat-pending">0</div><div class="stat-label">لم يحضروا</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Total Guests</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-scanned">0</div><div class="stat-label">Attended</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-pending">0</div><div class="stat-label">Not Yet</div></div>
     </div>
     <div class="guest-list" id="guest-list">
-      <div class="empty-state">لا يوجد مسجلون بعد</div>
+      <div class="empty-state">No guests registered yet</div>
     </div>
-    <button class="btn btn-outline" style="margin-top:14px" onclick="exportCSV()">📥 تصدير القائمة</button>
-    <button class="btn btn-outline" style="margin-top:8px" onclick="clearAll()">🗑 مسح جميع البيانات</button>
-    <button class="btn btn-outline" style="margin-top:8px" onclick="lockAdmin()">🔒 تسجيل خروج</button>
+    <button class="btn btn-outline" style="margin-top:14px" onclick="exportCSV()">📥 Export List</button>
+    <button class="btn btn-outline" style="margin-top:8px" onclick="clearAll()">🗑 Clear All Data</button>
+    <button class="btn btn-outline" style="margin-top:8px" onclick="lockAdmin()">🔒 Logout</button>
   </div>
 </div>
 
@@ -251,13 +260,22 @@ function onDbReady(cb) {
   else window.addEventListener('dbReady', cb);
 }
 
+// Start listening to guests collection immediately on page load
+onDbReady(() => {
+  const { onSnapshot } = window._firestore;
+  onSnapshot(window._guestsCol, (snapshot) => {
+    guests = snapshot.docs.map(d => ({ docId: d.id, ...d.data() }));
+    if (document.getElementById('admin-content').style.display === 'block') renderAdmin();
+  });
+});
+
 function showPage(page, btn) {
   if (page !== 'scanner') resetScan();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   if (btn) btn.classList.add('active');
-  if (page === 'admin') startRealtimeAdmin();
+  if (page === 'admin') renderAdmin();
 }
 
 async function registerGuest() {
@@ -341,16 +359,16 @@ function resetRegistration() {
 function scanFromImage(input) {
   if (!input.files || !input.files[0]) return;
   const status = document.getElementById('camera-status');
-  status.textContent = '🔍 جاري القراءة...';
+  status.textContent = '🔍 Reading...';
   QrScanner.scanImage(input.files[0], { returnDetailedScanResult: true })
     .then(result => { handleScannedCode(result.data); input.value = ''; })
-    .catch(() => { status.textContent = '⚠️ ما قدر يقرأ، صوّر الباركود بوضوح وحاول'; input.value = ''; });
+    .catch(() => { status.textContent = '⚠️ Could not read QR, try a clearer photo'; input.value = ''; });
 }
 
 async function startCamera() {
   const status = document.getElementById('camera-status');
   const video = document.getElementById('camera-video');
-  status.textContent = 'جاري تشغيل الكاميرا...';
+  status.textContent = 'Starting camera...';
   try {
     qrScanner = new QrScanner(video, result => {
       if (!scanCooldown) handleScannedCode(result.data);
@@ -358,15 +376,15 @@ async function startCamera() {
     await qrScanner.start();
     document.getElementById('camera-wrapper').style.display = 'block';
     document.getElementById('start-camera-btn').style.display = 'none';
-    status.textContent = 'وجّه الكاميرا نحو الباركود';
+    status.textContent = 'Point camera at QR code';
   } catch(e) {
-    status.textContent = '⚠️ تعذّر الوصول للكاميرا';
+    status.textContent = '⚠️ Could not access camera';
   }
 }
 
 async function checkManualCode() {
   const code = document.getElementById('manual-code').value.trim().toUpperCase();
-  if (!code.startsWith('WD-')) { showToast('⚠️ الكود لازم يبدأ بـ WD-'); return; }
+  if (!code.startsWith('WD-')) { showToast('⚠️ Code must start with WD-'); return; }
   await handleScannedCode(code);
   document.getElementById('manual-code').value = '';
 }
@@ -382,21 +400,21 @@ async function handleScannedCode(raw) {
   lastScanned = val;
   scanCooldown = true;
 
-  document.getElementById('camera-status').textContent = '🔍 جاري التحقق...';
+  document.getElementById('camera-status').textContent = '🔍 Verifying...';
 
   try {
-    const { getDocs, doc, updateDoc } = window._firestore;
-    const snapshot = await getDocs(window._guestsCol);
-    const docFound = snapshot.docs.find(d => d.data().id === val);
+    const { doc, updateDoc } = window._firestore;
+    // Search locally in cached guests array — no network call needed
+    const guestData = guests.find(g => g.id === val);
 
-    if (docFound) {
-      const guest = docFound.data();
+    if (guestData) {
+      const guest = guestData;
       if (guest.scanned) {
         document.getElementById('result-name-dup').textContent = guest.name;
         document.getElementById('result-allowed').style.display = 'none';
         document.getElementById('result-duplicate').style.display = 'block';
         document.getElementById('result-denied').style.display = 'none';
-        document.getElementById('camera-status').textContent = '⚠️ تم الدخول مسبقاً!';
+        document.getElementById('camera-status').textContent = '⚠️ Already checked in!';
         playBeep(false);
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       } else {
@@ -404,28 +422,28 @@ async function handleScannedCode(raw) {
         document.getElementById('result-allowed').style.display = 'block';
         document.getElementById('result-duplicate').style.display = 'none';
         document.getElementById('result-denied').style.display = 'none';
-        document.getElementById('camera-status').textContent = '✅ مسموح بالدخول';
+        document.getElementById('camera-status').textContent = '✅ Access Allowed';
         playBeep(true);
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
         document.getElementById('result-allowed').classList.add('pulse');
         setTimeout(() => document.getElementById('result-allowed').classList.remove('pulse'), 400);
-        await updateDoc(doc(window._db, 'guests', docFound.id), { scanned: true, scannedAt: new Date().toISOString() });
+        await updateDoc(doc(window._db, 'guests', guestData.docId), { scanned: true, scannedAt: new Date().toISOString() });
       }
     } else {
       document.getElementById('result-allowed').style.display = 'none';
       document.getElementById('result-duplicate').style.display = 'none';
       document.getElementById('result-denied').style.display = 'block';
-      document.getElementById('camera-status').textContent = '❌ باركود غير مسجّل';
+      document.getElementById('camera-status').textContent = '❌ QR Code not registered';
       playBeep(false);
       if (navigator.vibrate) navigator.vibrate(500);
     }
   } catch(e) {
-    document.getElementById('camera-status').textContent = '⚠️ خطأ في الاتصال';
+    document.getElementById('camera-status').textContent = '⚠️ Connection error';
   }
 
   setTimeout(() => {
     scanCooldown = false; lastScanned = null;
-    document.getElementById('camera-status').textContent = 'وجّه الكاميرا نحو الباركود';
+    document.getElementById('camera-status').textContent = 'Point camera at QR code';
     document.getElementById('result-allowed').style.display = 'none';
     document.getElementById('result-duplicate').style.display = 'none';
     document.getElementById('result-denied').style.display = 'none';
@@ -452,7 +470,7 @@ function resetScan() {
   lastScanned = null; scanCooldown = false;
   document.getElementById('camera-wrapper').style.display = 'none';
   document.getElementById('start-camera-btn').style.display = 'block';
-  document.getElementById('camera-status').textContent = 'افتح كاميرا الجوال وامسح الباركود';
+  document.getElementById('camera-status').textContent = 'Open camera and scan the QR code';
   document.getElementById('result-allowed').style.display = 'none';
   document.getElementById('result-duplicate').style.display = 'none';
   document.getElementById('result-denied').style.display = 'none';
@@ -464,26 +482,14 @@ function checkPass() {
   if (pass === ADMIN_PASS) {
     document.getElementById('admin-lock').style.display = 'none';
     document.getElementById('admin-content').style.display = 'block';
-    startRealtimeAdmin();
-  } else { showToast('❌ كلمة السر غير صحيحة'); }
+    renderAdmin();
+  } else { showToast('❌ Incorrect password'); }
 }
 
 function lockAdmin() {
-  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
   document.getElementById('admin-lock').style.display = 'block';
   document.getElementById('admin-content').style.display = 'none';
   document.getElementById('admin-pass').value = '';
-}
-
-function startRealtimeAdmin() {
-  onDbReady(() => {
-    const { onSnapshot } = window._firestore;
-    if (unsubscribe) unsubscribe();
-    unsubscribe = onSnapshot(window._guestsCol, (snapshot) => {
-      guests = snapshot.docs.map(d => ({ docId: d.id, ...d.data() }));
-      renderAdmin();
-    });
-  });
 }
 
 function renderAdmin() {
@@ -494,7 +500,7 @@ function renderAdmin() {
   document.getElementById('stat-pending').textContent = total - scanned;
 
   const list = document.getElementById('guest-list');
-  if (total === 0) { list.innerHTML = '<div class="empty-state">لا يوجد مسجلون بعد</div>'; return; }
+  if (total === 0) { list.innerHTML = '<div class="empty-state">No guests registered yet</div>'; return; }
 
   list.innerHTML = guests.map((g) => `
     <div class="guest-item">
@@ -502,38 +508,38 @@ function renderAdmin() {
         <div class="name">${g.name}</div>
         <div class="gid">${g.id}</div>
       </div>
-      <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ حضر' : 'لم يحضر'}</span>
+      <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ Attended' : 'Not Yet'}</span>
       <button class="del-btn" onclick="deleteGuest('${g.docId}', '${g.name}')">🗑</button>
     </div>
   `).join('');
 }
 
 async function deleteGuest(docId, name) {
-  if (!confirm('حذف ' + name + '؟')) return;
+  if (!confirm('Delete ' + name + '?')) return;
   onDbReady(async () => {
     const { doc, deleteDoc } = window._firestore;
     await deleteDoc(doc(window._db, 'guests', docId));
-    showToast('تم الحذف');
+    showToast('✅ Guest deleted');
   });
 }
 
 async function clearAll() {
-  if (!confirm('هل أنت متأكد؟ سيتم مسح جميع البيانات نهائياً')) return;
+  if (!confirm('Are you sure? All data will be permanently deleted.')) return;
   onDbReady(async () => {
     const { doc, deleteDoc, getDocs } = window._firestore;
     const snapshot = await getDocs(window._guestsCol);
     await Promise.all(snapshot.docs.map(d => deleteDoc(doc(window._db, 'guests', d.id))));
-    showToast('تم مسح البيانات');
+    showToast('✅ All data cleared');
   });
 }
 
 function exportCSV() {
-  const rows = [['الاسم', 'الكود', 'الحضور', 'وقت التسجيل']];
-  guests.forEach(g => rows.push([g.name, g.id, g.scanned ? 'حضر' : 'لم يحضر', g.registeredAt]));
+  const rows = [['Name', 'Code', 'Attendance', 'Registered At']];
+  guests.forEach(g => rows.push([g.name, g.id, g.scanned ? 'Attended' : 'Not Yet', g.registeredAt]));
   const csv = rows.map(r => r.join(',')).join('\n');
   const link = document.createElement('a');
   link.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
-  link.download = 'قائمة-المعازيم.csv';
+  link.download = 'guests-list.csv';
   link.click();
 }
 
@@ -561,16 +567,16 @@ window.addEventListener('load', () => {
         if (guest.scanned) {
           document.getElementById('result-name-dup').textContent = guest.name;
           document.getElementById('result-duplicate').style.display = 'block';
-          document.getElementById('camera-status').textContent = '⚠️ تم الدخول مسبقاً!';
+          document.getElementById('camera-status').textContent = '⚠️ Already checked in!';
         } else {
           document.getElementById('result-name-ok').textContent = guest.name;
           document.getElementById('result-allowed').style.display = 'block';
-          document.getElementById('camera-status').textContent = '✅ مسموح بالدخول';
-          await updateDoc(doc(window._db, 'guests', docFound.id), { scanned: true, scannedAt: new Date().toISOString() });
+          document.getElementById('camera-status').textContent = '✅ Access Allowed';
+          await updateDoc(doc(window._db, 'guests', guestData.docId), { scanned: true, scannedAt: new Date().toISOString() });
         }
       } else {
         document.getElementById('result-denied').style.display = 'block';
-        document.getElementById('camera-status').textContent = '❌ باركود غير مسجّل';
+        document.getElementById('camera-status').textContent = '❌ QR Code not registered';
       }
     });
     window.history.replaceState({}, '', '/');
