@@ -128,13 +128,12 @@
 <body>
 
 <nav>
-  <button class="nav-btn active" onclick="showPage('register', this)">📝 التسجيل</button>
-  <button class="nav-btn" onclick="showPage('scanner', this)">Scan</button>
+  <button class="nav-btn active" onclick="showPage('scanner', this)">📱 Scan</button>
   <button class="nav-btn" onclick="showPage('admin', this)">⚙️ Admin</button>
 </nav>
 
 <!-- REGISTER -->
-<div class="page active" id="page-register">
+<div class="page" id="page-register">
   <div class="hero">
     <div class="hero-ornament">✦ ✦ ✦</div>
     <h1>دعوة زفاف</h1>
@@ -166,7 +165,7 @@
 </div>
 
 <!-- SCANNER -->
-<div class="page" id="page-scanner">
+<div class="page active" id="page-scanner">
   <div class="hero">
     <div class="hero-ornament">✦</div>
     <h1>QR Scanner</h1>
@@ -279,7 +278,7 @@ onDbReady(() => {
 });
 
 function showPage(page, btn) {
-  if (page !== 'scanner') resetScan();
+  if (page === 'scanner') resetScan();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
@@ -739,7 +738,7 @@ window.addEventListener('load', () => {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('page-scanner').classList.add('active');
-    document.querySelectorAll('.nav-btn')[1].classList.add('active');
+    document.querySelectorAll('.nav-btn')[0].classList.add('active');
     onDbReady(async () => {
       const { getDocs, doc, updateDoc } = window._firestore;
       const val = verifyId.toUpperCase();
