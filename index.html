@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام دعوات الزفاف</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAeygMBPsJdXO76susC4Tk5rwTfZLUq5VE",
+    authDomain: "wedding-qr-27f3c.firebaseapp.com",
+    projectId: "wedding-qr-27f3c",
+    storageBucket: "wedding-qr-27f3c.firebasestorage.app",
+    messagingSenderId: "149053298560",
+    appId: "1:149053298560:web:b93d2395bcb0e51d7a9365"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const guestsCol = collection(db, 'guests');
+
+  window._db = db;
+  window._guestsCol = guestsCol;
+  window._firestore = { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot };
+  window._dbReady = true;
+  window.dispatchEvent(new Event('dbReady'));
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root { --gold: #C9A84C; --gold-light: #E8D5A3; --black: #0A0A0A; --white: #FAFAF8; }
+  body { font-family: 'Tajawal', sans-serif; background: var(--black); color: var(--white); min-height: 100vh; }
+
+  nav { display: flex; justify-content: center; gap: 8px; padding: 16px; background: #111; border-bottom: 1px solid #222; flex-wrap: wrap; }
+  .nav-btn { padding: 10px 22px; border: 1px solid #333; background: transparent; color: #888; border-radius: 50px; cursor: pointer; font-family: 'Tajawal', sans-serif; font-size: 14px; transition: all 0.3s; }
+  .nav-btn.active { background: var(--gold); color: var(--black); border-color: var(--gold); font-weight: 700; }
+
+  .page { display: none; padding: 24px 16px; max-width: 600px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  .hero { text-align: center; padding: 30px 0 20px; }
+  .hero-ornament { font-size: 24px; color: var(--gold); letter-spacing: 8px; margin-bottom: 10px; }
+  .hero h1 { font-size: 26px; font-weight: 300; color: var(--white); letter-spacing: 2px; margin-bottom: 6px; }
+  .hero .subtitle { font-size: 13px; color: #666; }
+  .gold-line { width: 60px; height: 1px; background: var(--gold); margin: 16px auto; }
+
+  .card { background: #111; border: 1px solid #222; border-radius: 16px; padding: 24px; margin-bottom: 16px; }
+  .card-title { font-size: 15px; color: var(--gold); margin-bottom: 18px; font-weight: 500; }
+
+  .form-group { margin-bottom: 16px; }
+  label { display: block; font-size: 13px; color: #888; margin-bottom: 8px; }
+  input[type=text], input[type=password] { width: 100%; padding: 14px 16px; background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 10px; color: var(--white); font-family: 'Tajawal', sans-serif; font-size: 15px; outline: none; }
+  input:focus { border-color: var(--gold); }
+  input::placeholder { color: #444; }
+
+  .btn { width: 100%; padding: 15px; background: var(--gold); color: var(--black); border: none; border-radius: 10px; font-family: 'Tajawal', sans-serif; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.3s; }
+  .btn:hover { background: var(--gold-light); }
+  .btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+  .btn-outline { background: transparent; border: 1px solid var(--gold); color: var(--gold); margin-top: 10px; }
+  .btn-outline:hover { background: var(--gold); color: var(--black); }
+
+  #qr-result { display: none; }
+  .qr-box { text-align: center; padding: 24px; background: var(--white); border-radius: 16px; margin: 16px 0; }
+  #qrcode { display: inline-block; }
+  .guest-name-display { font-size: 20px; color: var(--black); font-weight: 700; margin-top: 14px; }
+  .guest-id { font-size: 11px; color: #999; margin-top: 4px; direction: ltr; }
+
+  .camera-wrapper { position: relative; width: 100%; max-width: 320px; margin: 0 auto 16px; border-radius: 16px; overflow: hidden; border: 2px solid var(--gold); background: #000; aspect-ratio: 1; }
+  #camera-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .scan-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .scan-frame { width: 65%; height: 65%; border: 2px solid var(--gold); border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); }
+  .scan-line { position: absolute; width: 65%; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); animation: scanLine 2s linear infinite; }
+  @keyframes scanLine { 0% { top: 17.5%; } 100% { top: 82.5%; } }
+  .camera-status { font-size: 13px; color: #666; margin-bottom: 14px; min-height: 20px; text-align: center; }
+
+  .result-card { display: none; padding: 22px; border-radius: 14px; margin-top: 16px; text-align: center; }
+  .result-card.allowed { background: #0D2B1A; border: 1px solid #1A5C32; }
+  .result-card.duplicate { background: #2B2200; border: 1px solid #8B6914; }
+  .result-card.denied { background: #2B0D0D; border: 1px solid #5C1A1A; }
+  .result-icon { font-size: 44px; margin-bottom: 10px; }
+  .result-name { font-size: 22px; font-weight: 700; color: var(--white); margin-bottom: 6px; }
+  .result-status { font-size: 14px; color: #888; }
+  .result-status.ok { color: #4CAF50; }
+  .result-status.dup { color: #C9A84C; }
+  .result-status.err { color: #F44336; }
+
+  .admin-lock { text-align: center; padding: 60px 20px; }
+  .admin-lock h2 { font-size: 20px; color: var(--gold); margin-bottom: 20px; }
+  .stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .stat-box { background: #111; border: 1px solid #222; border-radius: 12px; padding: 14px; text-align: center; }
+  .stat-num { font-size: 26px; font-weight: 700; color: var(--gold); }
+  .stat-label { font-size: 11px; color: #666; margin-top: 4px; }
+  .guest-list { background: #111; border: 1px solid #222; border-radius: 16px; overflow: hidden; max-height: 60vh; overflow-y: auto; }
+  .guest-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #1A1A1A; gap: 10px; }
+  .guest-item:last-child { border-bottom: none; }
+  .guest-item .name { color: var(--white); font-size: 14px; font-weight: 500; }
+  .guest-item .gid { color: #555; font-size: 11px; direction: ltr; }
+  .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .badge.scanned { background: #0D2B1A; color: #4CAF50; }
+  .badge.pending { background: #1A1A1A; color: #555; }
+  .del-btn { background: none; border: none; color: #5C1A1A; font-size: 18px; cursor: pointer; padding: 4px 8px; }
+  .del-btn:hover { background: #2B0D0D; color: #F44336; }
+  .empty-state { text-align: center; padding: 40px 20px; color: #444; font-size: 14px; }
+
+  .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: var(--gold); color: var(--black); padding: 12px 24px; border-radius: 50px; font-weight: 700; font-size: 14px; opacity: 0; transition: opacity 0.3s; z-index: 999; }
+  .toast.show { opacity: 1; }
+  @keyframes pulse { 0%{transform:scale(1)} 50%{transform:scale(1.05)} 100%{transform:scale(1)} }
+  .pulse { animation: pulse 0.4s ease; }
+</style>
+</head>
+<body>
+
+<nav>
+  <button class="nav-btn active" onclick="showPage('register', this)">📝 التسجيل</button>
+  <button class="nav-btn" onclick="showPage('scanner', this)">📷 المسح</button>
+  <button class="nav-btn" onclick="showPage('admin', this)">⚙️ الإدارة</button>
+</nav>
+
+<!-- REGISTER -->
+<div class="page active" id="page-register">
+  <div class="hero">
+    <div class="hero-ornament">✦ ✦ ✦</div>
+    <h1>دعوة زفاف</h1>
+    <p class="subtitle">٣ سبتمبر ٢٠٢٦</p>
+    <div class="gold-line"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">🎟 سجّل اسمك لاستلام دعوتك</div>
+    <div class="form-group">
+      <label>الاسم الكامل</label>
+      <input type="text" id="guest-name" placeholder="مثال: محمد أحمد العمري">
+    </div>
+    <button class="btn" id="register-btn" onclick="registerGuest()">✨ استلم دعوتك</button>
+  </div>
+  <div id="qr-result">
+    <div class="card">
+      <div class="card-title" style="text-align:center">🎉 دعوتك جاهزة!</div>
+      <div class="qr-box">
+        <div id="qrcode"></div>
+        <div class="guest-name-display" id="display-name"></div>
+        <div class="guest-id" id="display-id"></div>
+      </div>
+      <p style="text-align:center;color:#666;font-size:13px;margin-bottom:14px">احتفظ بهذا الباركود — ستحتاجه عند الدخول</p>
+      <button class="btn" onclick="saveQR()">💾 حفظ الدعوة في الجوال</button>
+      <button class="btn btn-outline" onclick="resetRegistration()" style="font-size:13px">➕ تسجيل معزوم آخر</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCANNER -->
+<div class="page" id="page-scanner">
+  <div class="hero">
+    <div class="hero-ornament">✦</div>
+    <h1>مسح الدعوات</h1>
+    <p class="subtitle">للسكرتير فقط</p>
+    <div class="gold-line"></div>
+  </div>
+  <div class="card" style="text-align:center">
+    <p class="camera-status" id="camera-status">افتح كاميرا الجوال وامسح الباركود</p>
+    <label style="display:block;width:100%;margin-bottom:10px">
+      <input type="file" id="qr-file-input" accept="image/*" capture="environment" style="display:none" onchange="scanFromImage(this)">
+      <span class="btn" style="display:block;cursor:pointer">📷 مسح باركود</span>
+    </label>
+    <button class="btn btn-outline" id="start-camera-btn" onclick="startCamera()">🎥 كاميرا مباشرة</button>
+    
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #222">
+      <p style="color:#666;font-size:12px;margin-bottom:10px">أو أدخل الكود يدويّاً:</p>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="manual-code" placeholder="مثال: WD-ABC123" style="flex:1">
+        <button class="btn" onclick="checkManualCode()" style="width:auto;padding:14px 16px">✓ تحقق</button>
+      </div>
+    </div>
+    
+    <div class="camera-wrapper" id="camera-wrapper" style="display:none;margin-top:14px">
+      <video id="camera-video" autoplay playsinline muted></video>
+      <div class="scan-overlay">
+        <div class="scan-frame"></div>
+        <div class="scan-line"></div>
+      </div>
+    </div>
+    <canvas id="scan-canvas" style="display:none"></canvas>
+    <div class="result-card allowed" id="result-allowed">
+      <div class="result-icon">✅</div>
+      <div class="result-name" id="result-name-ok"></div>
+      <div class="result-status ok">مسموح بالدخول</div>
+    </div>
+    <div class="result-card duplicate" id="result-duplicate">
+      <div class="result-icon">⚠️</div>
+      <div class="result-name" id="result-name-dup"></div>
+      <div class="result-status dup">تم الدخول مسبقاً بهذه الدعوة!</div>
+    </div>
+    <div class="result-card denied" id="result-denied">
+      <div class="result-icon">❌</div>
+      <div class="result-name">غير مسجّل</div>
+      <div class="result-status err">الباركود غير صحيح</div>
+    </div>
+  </div>
+  <button class="btn btn-outline" onclick="resetScan()">🔄 مسح جديد</button>
+</div>
+
+<!-- ADMIN -->
+<div class="page" id="page-admin">
+  <div id="admin-lock">
+    <div class="admin-lock">
+      <h2>🔐 صفحة الإدارة</h2>
+      <div class="form-group">
+        <label>كلمة السر</label>
+        <input type="password" id="admin-pass" placeholder="أدخل كلمة السر" onkeydown="if(event.key==='Enter') checkPass()">
+      </div>
+      <button class="btn" onclick="checkPass()">دخول</button>
+    </div>
+  </div>
+  <div id="admin-content" style="display:none">
+    <div class="hero">
+      <div class="hero-ornament">✦</div>
+      <h1>لوحة الإدارة</h1>
+      <div class="gold-line"></div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-num" id="stat-total">0</div><div class="stat-label">إجمالي المسجلين</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-scanned">0</div><div class="stat-label">دخلوا الحفل</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-pending">0</div><div class="stat-label">لم يحضروا</div></div>
+    </div>
+    <div class="guest-list" id="guest-list">
+      <div class="empty-state">لا يوجد مسجلون بعد</div>
+    </div>
+    <button class="btn btn-outline" style="margin-top:14px" onclick="exportCSV()">📥 تصدير القائمة</button>
+    <button class="btn btn-outline" style="margin-top:8px" onclick="clearAll()">🗑 مسح جميع البيانات</button>
+    <button class="btn btn-outline" style="margin-top:8px" onclick="lockAdmin()">🔒 تسجيل خروج</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ADMIN_PASS = '19921995';
+const SITE_URL = 'https://wedding-qr1.netlify.app';
+
+let guests = [];
+let unsubscribe = null;
+let qrScanner = null;
+let lastScanned = null;
+let scanCooldown = false;
+
+function onDbReady(cb) {
+  if (window._dbReady) cb();
+  else window.addEventListener('dbReady', cb);
+}
+
+function showPage(page, btn) {
+  if (page !== 'scanner') resetScan();
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (page === 'admin') startRealtimeAdmin();
+}
+
+async function registerGuest() {
+  const name = document.getElementById('guest-name').value.trim();
+  if (!name || name.length < 2) { showToast('⚠️ أدخل الاسم كاملاً'); return; }
+
+  const btn = document.getElementById('register-btn');
+  btn.disabled = true; btn.textContent = 'جاري التسجيل...';
+
+  try {
+    onDbReady(async () => {
+      const { addDoc, getDocs } = window._firestore;
+      const snapshot = await getDocs(window._guestsCol);
+      const exists = snapshot.docs.find(d => d.data().name === name);
+      if (exists) { showToast('⚠️ هذا الاسم مسجل مسبقاً'); btn.disabled = false; btn.textContent = '✨ استلم دعوتك'; return; }
+
+      const id = 'WD-' + Date.now().toString(36).toUpperCase();
+      await addDoc(window._guestsCol, { id, name, scanned: false, registeredAt: new Date().toISOString() });
+
+      document.getElementById('display-name').textContent = name;
+      document.getElementById('display-id').textContent = id;
+
+      document.getElementById('qrcode').innerHTML = '';
+      new QRCode(document.getElementById('qrcode'), {
+        text: SITE_URL + '/?verify=' + id,
+        width: 220, height: 220,
+        colorDark: '#0A0A0A', colorLight: '#FAFAF8',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+
+      setTimeout(() => document.getElementById('qr-result').scrollIntoView({ behavior: 'smooth' }), 300);
+      showToast('✅ تم التسجيل بنجاح!');
+      btn.disabled = false; btn.textContent = '✨ استلم دعوتك';
+      document.getElementById('qr-result').style.display = 'block';
+    });
+  } catch(e) {
+    showToast('❌ خطأ في التسجيل'); btn.disabled = false; btn.textContent = '✨ استلم دعوتك';
+  }
+}
+
+function saveQR() {
+  const canvas = document.querySelector('#qrcode canvas');
+  if (!canvas) { showToast('⚠️ انتظر ثانية وحاول مجدداً'); return; }
+  const name = document.getElementById('display-name').textContent;
+  const id = document.getElementById('display-id').textContent;
+
+  const card = document.createElement('canvas');
+  card.width = 1000; card.height = 1250;
+  const ctx = card.getContext('2d');
+  ctx.fillStyle = '#FAFAF8'; ctx.fillRect(0, 0, 1000, 1250);
+  ctx.fillStyle = '#C9A84C'; ctx.fillRect(0, 0, 1000, 20); ctx.fillRect(0, 1230, 1000, 20);
+  ctx.fillStyle = '#C9A84C'; ctx.font = 'bold 60px Arial'; ctx.textAlign = 'center';
+  ctx.fillText('دعوة زفاف', 500, 130);
+  ctx.fillStyle = '#888'; ctx.font = '37px Arial';
+  ctx.fillText('٣ سبتمبر ٢٠٢٦', 500, 190);
+  ctx.strokeStyle = '#C9A84C'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(350, 225); ctx.lineTo(650, 225); ctx.stroke();
+  ctx.drawImage(canvas, 225, 250, 550, 550);
+  ctx.fillStyle = '#0A0A0A'; ctx.font = 'bold 50px Arial';
+  ctx.fillText(name, 500, 890);
+  ctx.fillStyle = '#AAA'; ctx.font = '30px Arial';
+  ctx.fillText(id, 500, 945);
+  ctx.fillStyle = '#888'; ctx.font = '32px Arial';
+  ctx.fillText('أبرز هذا الباركود عند الدخول', 500, 1100);
+
+  const link = document.createElement('a');
+  link.download = 'دعوة-' + name + '.png';
+  link.href = card.toDataURL('image/png');
+  link.click();
+  showToast('📥 تم حفظ الدعوة!');
+}
+
+function resetRegistration() {
+  document.getElementById('qr-result').style.display = 'none';
+  document.getElementById('guest-name').value = '';
+  document.getElementById('guest-name').focus();
+  document.getElementById('register-btn').disabled = false;
+  document.getElementById('register-btn').textContent = '✨ استلم دعوتك';
+}
+
+function scanFromImage(input) {
+  if (!input.files || !input.files[0]) return;
+  const status = document.getElementById('camera-status');
+  status.textContent = '🔍 جاري القراءة...';
+  QrScanner.scanImage(input.files[0], { returnDetailedScanResult: true })
+    .then(result => { handleScannedCode(result.data); input.value = ''; })
+    .catch(() => { status.textContent = '⚠️ ما قدر يقرأ، صوّر الباركود بوضوح وحاول'; input.value = ''; });
+}
+
+async function startCamera() {
+  const status = document.getElementById('camera-status');
+  const video = document.getElementById('camera-video');
+  status.textContent = 'جاري تشغيل الكاميرا...';
+  try {
+    qrScanner = new QrScanner(video, result => {
+      if (!scanCooldown) handleScannedCode(result.data);
+    }, { returnDetailedScanResult: true, preferredCamera: 'environment' });
+    await qrScanner.start();
+    document.getElementById('camera-wrapper').style.display = 'block';
+    document.getElementById('start-camera-btn').style.display = 'none';
+    status.textContent = 'وجّه الكاميرا نحو الباركود';
+  } catch(e) {
+    status.textContent = '⚠️ تعذّر الوصول للكاميرا';
+  }
+}
+
+async function checkManualCode() {
+  const code = document.getElementById('manual-code').value.trim().toUpperCase();
+  if (!code.startsWith('WD-')) { showToast('⚠️ الكود لازم يبدأ بـ WD-'); return; }
+  await handleScannedCode(code);
+  document.getElementById('manual-code').value = '';
+}
+
+async function handleScannedCode(raw) {
+  let val = raw.trim();
+  if (val.includes('verify=')) val = val.split('verify=')[1].split('&')[0];
+  const match = val.match(/WD-[A-Z0-9]+/);
+  if (match) val = match[0];
+  val = val.toUpperCase();
+  if (!val.startsWith('WD-')) return;
+  if (val === lastScanned) return;
+  lastScanned = val;
+  scanCooldown = true;
+
+  document.getElementById('camera-status').textContent = '🔍 جاري التحقق...';
+
+  try {
+    const { getDocs, doc, updateDoc } = window._firestore;
+    const snapshot = await getDocs(window._guestsCol);
+    const docFound = snapshot.docs.find(d => d.data().id === val);
+
+    if (docFound) {
+      const guest = docFound.data();
+      if (guest.scanned) {
+        document.getElementById('result-name-dup').textContent = guest.name;
+        document.getElementById('result-allowed').style.display = 'none';
+        document.getElementById('result-duplicate').style.display = 'block';
+        document.getElementById('result-denied').style.display = 'none';
+        document.getElementById('camera-status').textContent = '⚠️ تم الدخول مسبقاً!';
+        playBeep(false);
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      } else {
+        document.getElementById('result-name-ok').textContent = guest.name;
+        document.getElementById('result-allowed').style.display = 'block';
+        document.getElementById('result-duplicate').style.display = 'none';
+        document.getElementById('result-denied').style.display = 'none';
+        document.getElementById('camera-status').textContent = '✅ مسموح بالدخول';
+        playBeep(true);
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        document.getElementById('result-allowed').classList.add('pulse');
+        setTimeout(() => document.getElementById('result-allowed').classList.remove('pulse'), 400);
+        await updateDoc(doc(window._db, 'guests', docFound.id), { scanned: true, scannedAt: new Date().toISOString() });
+      }
+    } else {
+      document.getElementById('result-allowed').style.display = 'none';
+      document.getElementById('result-duplicate').style.display = 'none';
+      document.getElementById('result-denied').style.display = 'block';
+      document.getElementById('camera-status').textContent = '❌ باركود غير مسجّل';
+      playBeep(false);
+      if (navigator.vibrate) navigator.vibrate(500);
+    }
+  } catch(e) {
+    document.getElementById('camera-status').textContent = '⚠️ خطأ في الاتصال';
+  }
+
+  setTimeout(() => {
+    scanCooldown = false; lastScanned = null;
+    document.getElementById('camera-status').textContent = 'وجّه الكاميرا نحو الباركود';
+    document.getElementById('result-allowed').style.display = 'none';
+    document.getElementById('result-duplicate').style.display = 'none';
+    document.getElementById('result-denied').style.display = 'none';
+  }, 3000);
+}
+
+function playBeep(success) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = success ? 880 : 300;
+    o.type = success ? 'sine' : 'square';
+    g.gain.setValueAtTime(0.3, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    o.start(ctx.currentTime);
+    o.stop(ctx.currentTime + 0.4);
+  } catch(e) {}
+}
+
+function resetScan() {
+  if (qrScanner) { qrScanner.stop(); qrScanner.destroy(); qrScanner = null; }
+  lastScanned = null; scanCooldown = false;
+  document.getElementById('camera-wrapper').style.display = 'none';
+  document.getElementById('start-camera-btn').style.display = 'block';
+  document.getElementById('camera-status').textContent = 'افتح كاميرا الجوال وامسح الباركود';
+  document.getElementById('result-allowed').style.display = 'none';
+  document.getElementById('result-duplicate').style.display = 'none';
+  document.getElementById('result-denied').style.display = 'none';
+  document.getElementById('qr-file-input').value = '';
+}
+
+function checkPass() {
+  const pass = document.getElementById('admin-pass').value;
+  if (pass === ADMIN_PASS) {
+    document.getElementById('admin-lock').style.display = 'none';
+    document.getElementById('admin-content').style.display = 'block';
+    startRealtimeAdmin();
+  } else { showToast('❌ كلمة السر غير صحيحة'); }
+}
+
+function lockAdmin() {
+  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+  document.getElementById('admin-lock').style.display = 'block';
+  document.getElementById('admin-content').style.display = 'none';
+  document.getElementById('admin-pass').value = '';
+}
+
+function startRealtimeAdmin() {
+  onDbReady(() => {
+    const { onSnapshot } = window._firestore;
+    if (unsubscribe) unsubscribe();
+    unsubscribe = onSnapshot(window._guestsCol, (snapshot) => {
+      guests = snapshot.docs.map(d => ({ docId: d.id, ...d.data() }));
+      renderAdmin();
+    });
+  });
+}
+
+function renderAdmin() {
+  const total = guests.length;
+  const scanned = guests.filter(g => g.scanned).length;
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-scanned').textContent = scanned;
+  document.getElementById('stat-pending').textContent = total - scanned;
+
+  const list = document.getElementById('guest-list');
+  if (total === 0) { list.innerHTML = '<div class="empty-state">لا يوجد مسجلون بعد</div>'; return; }
+
+  list.innerHTML = guests.map((g) => `
+    <div class="guest-item">
+      <div style="flex:1;min-width:0">
+        <div class="name">${g.name}</div>
+        <div class="gid">${g.id}</div>
+      </div>
+      <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ حضر' : 'لم يحضر'}</span>
+      <button class="del-btn" onclick="deleteGuest('${g.docId}', '${g.name}')">🗑</button>
+    </div>
+  `).join('');
+}
+
+async function deleteGuest(docId, name) {
+  if (!confirm('حذف ' + name + '؟')) return;
+  onDbReady(async () => {
+    const { doc, deleteDoc } = window._firestore;
+    await deleteDoc(doc(window._db, 'guests', docId));
+    showToast('تم الحذف');
+  });
+}
+
+async function clearAll() {
+  if (!confirm('هل أنت متأكد؟ سيتم مسح جميع البيانات نهائياً')) return;
+  onDbReady(async () => {
+    const { doc, deleteDoc, getDocs } = window._firestore;
+    const snapshot = await getDocs(window._guestsCol);
+    await Promise.all(snapshot.docs.map(d => deleteDoc(doc(window._db, 'guests', d.id))));
+    showToast('تم مسح البيانات');
+  });
+}
+
+function exportCSV() {
+  const rows = [['الاسم', 'الكود', 'الحضور', 'وقت التسجيل']];
+  guests.forEach(g => rows.push([g.name, g.id, g.scanned ? 'حضر' : 'لم يحضر', g.registeredAt]));
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const link = document.createElement('a');
+  link.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
+  link.download = 'قائمة-المعازيم.csv';
+  link.click();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+window.addEventListener('load', () => {
+  const params = new URLSearchParams(window.location.search);
+  const verifyId = params.get('verify');
+  if (verifyId) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('page-scanner').classList.add('active');
+    document.querySelectorAll('.nav-btn')[1].classList.add('active');
+    onDbReady(async () => {
+      const { getDocs, doc, updateDoc } = window._firestore;
+      const val = verifyId.toUpperCase();
+      const snapshot = await getDocs(window._guestsCol);
+      const docFound = snapshot.docs.find(d => d.data().id === val);
+      if (docFound) {
+        const guest = docFound.data();
+        if (guest.scanned) {
+          document.getElementById('result-name-dup').textContent = guest.name;
+          document.getElementById('result-duplicate').style.display = 'block';
+          document.getElementById('camera-status').textContent = '⚠️ تم الدخول مسبقاً!';
+        } else {
+          document.getElementById('result-name-ok').textContent = guest.name;
+          document.getElementById('result-allowed').style.display = 'block';
+          document.getElementById('camera-status').textContent = '✅ مسموح بالدخول';
+          await updateDoc(doc(window._db, 'guests', docFound.id), { scanned: true, scannedAt: new Date().toISOString() });
+        }
+      } else {
+        document.getElementById('result-denied').style.display = 'block';
+        document.getElementById('camera-status').textContent = '❌ باركود غير مسجّل';
+      }
+    });
+    window.history.replaceState({}, '', '/');
+  }
+});
+</script>
+</body>
+</html>
