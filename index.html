@@ -313,17 +313,33 @@ async function handleScannedCode(raw) {
   document.getElementById('camera-status').textContent = '🔍 Verifying...';
 
   try {
-    // Wait for guests data to be loaded if empty
-    if (guests.length === 0) {
-      await new Promise(r => setTimeout(r, 500));
+    const { getDocs, doc, updateDoc, runTransaction } = window._firestore;
+    
+    // Smart approach: Try local array first (faster), fallback to Firebase if needed
+    let guestData = null;
+    let docId = null;
+    
+    if (guests.length > 0) {
+      const found = guests.find(g => g.id === val);
+      if (found) {
+        guestData = found;
+        docId = found.docId;
+      }
+    }
+    
+    // Fallback to Firebase if not found locally
+    if (!guestData) {
+      const snapshot = await getDocs(window._guestsCol);
+      const docFound = snapshot.docs.find(d => d.data().id === val);
+      if (docFound) {
+        guestData = docFound.data();
+        docId = docFound.id;
+      }
     }
 
-    const { doc, runTransaction } = window._firestore;
-    const guestData = guests.find(g => g.id === val);
-
     if (guestData) {
-      // Use transaction to prevent double-entry if 2 scanners scan same QR simultaneously
-      const guestRef = doc(window._db, 'guests', guestData.docId);
+      // Use transaction to prevent double-entry if 2 scanners scan same QR
+      const guestRef = doc(window._db, 'guests', docId);
       const result = await runTransaction(window._db, async (transaction) => {
         const snap = await transaction.get(guestRef);
         if (!snap.exists()) return 'not_found';
@@ -343,7 +359,6 @@ async function handleScannedCode(raw) {
         document.getElementById('result-allowed').classList.add('pulse');
         setTimeout(() => document.getElementById('result-allowed').classList.remove('pulse'), 400);
       } else {
-        // 'already' or 'not_found'
         document.getElementById('result-name-dup').textContent = guestData.name;
         document.getElementById('result-allowed').style.display = 'none';
         document.getElementById('result-duplicate').style.display = 'block';
@@ -361,6 +376,7 @@ async function handleScannedCode(raw) {
       if (navigator.vibrate) navigator.vibrate(500);
     }
   } catch(e) {
+    console.error(e);
     document.getElementById('camera-status').textContent = '⚠️ Connection error';
   }
 
