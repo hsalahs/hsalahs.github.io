@@ -248,6 +248,14 @@
     </div>
     <button class="btn btn-outline" style="margin-top:14px" onclick="downloadAllQR()">📦 Download All Invitations (ZIP)</button>
     <button class="btn btn-outline" style="margin-top:8px" onclick="exportCSV()">📥 Export List</button>
+    <div style="margin-top:8px; padding: 14px; background: rgba(201,168,76,0.1); border-radius: 12px; border: 1px solid rgba(201,168,76,0.3);">
+      <label style="display: block; margin-bottom: 8px; font-size: 13px; color: #888;">📄 Import from CSV</label>
+      <div class="admin-add-form">
+        <input type="file" id="csv-import" accept=".csv" onchange="importCSV(event)">
+        <button class="btn" onclick="document.getElementById('csv-import').click()">📂 Choose File</button>
+      </div>
+      <p style="font-size: 12px; color: #666; margin-top: 8px;">Format: Name (one per line) or CSV with headers</p>
+    </div>
     <button class="btn btn-outline" style="margin-top:8px" onclick="clearAll()">🗑 Clear All Data</button>
     <button class="btn btn-outline" style="margin-top:8px" onclick="lockAdmin()">🔒 Logout</button>
   </div>
@@ -616,6 +624,61 @@ function exportCSV() {
   link.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
   link.download = 'guests-list.csv';
   link.click();
+}
+
+async function importCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const text = e.target.result;
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    
+    // Try to detect if it's CSV with comma or just names
+    let names = [];
+    lines.forEach(line => {
+      if (line.includes(',')) {
+        // CSV format - take first column (usually Name)
+        const parts = line.split(',');
+        const name = parts[0].trim();
+        if (name && name.toLowerCase() !== 'name') names.push(name);
+      } else {
+        // Plain names, one per line
+        names.push(line);
+      }
+    });
+    
+    if (names.length === 0) {
+      showToast('⚠️ No valid names found in file');
+      document.getElementById('csv-import').value = '';
+      return;
+    }
+    
+    showToast('⏳ Importing ' + names.length + ' guests...');
+    let added = 0, duplicates = 0;
+    
+    for (const name of names) {
+      const exists = guests.find(g => g.name === name);
+      if (exists) {
+        duplicates++;
+        continue;
+      }
+      
+      onDbReady(async () => {
+        const { addDoc } = window._firestore;
+        const id = 'WD-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substr(2, 5);
+        await addDoc(window._guestsCol, { id, name, scanned: false, registeredAt: new Date().toISOString() });
+        added++;
+      });
+    }
+    
+    // Small delay for all to process
+    await new Promise(r => setTimeout(r, 500 * names.length / 10));
+    showToast('✅ Imported ' + added + ' guests' + (duplicates > 0 ? ' (' + duplicates + ' duplicates skipped)' : ''));
+    document.getElementById('csv-import').value = '';
+  };
+  reader.readAsText(file);
 }
 
 async function adminAddGuest() {
