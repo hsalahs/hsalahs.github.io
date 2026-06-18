@@ -310,6 +310,9 @@ async function handleScannedCode(raw) {
   lastScanned = val;
   scanCooldown = true;
 
+  // DIAGNOSTIC: show what was scanned
+  showToast('Scanned: ' + val + ' | DB has: ' + guests.length);
+
   document.getElementById('camera-status').textContent = '🔍 Verifying...';
 
   try {
