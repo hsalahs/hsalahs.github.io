@@ -138,7 +138,7 @@
   <div class="hero">
     <div class="hero-ornament">✦</div>
     <h1>QR Scanner</h1>
-    <p class="subtitle">For Secretary Only</p>
+    <p class="subtitle">For Security Only</p>
     <div class="gold-line"></div>
   </div>
   <div class="card" style="text-align:center">
@@ -309,9 +309,6 @@ async function handleScannedCode(raw) {
   if (val === lastScanned) return;
   lastScanned = val;
   scanCooldown = true;
-
-  // DIAGNOSTIC: show what was scanned
-  showToast('Scanned: ' + val + ' | DB has: ' + guests.length);
 
   document.getElementById('camera-status').textContent = '🔍 Verifying...';
 
