@@ -143,11 +143,7 @@
   </div>
   <div class="card" style="text-align:center">
     <p class="camera-status" id="camera-status">Open camera and scan the barcode</p>
-    <label style="display:block;width:100%;margin-bottom:10px">
-      <input type="file" id="qr-file-input" accept="image/*" capture="environment" style="display:none" onchange="scanFromImage(this)">
-      <span class="btn" style="display:block;cursor:pointer">📷 Scan QR Code</span>
-    </label>
-    <button class="btn btn-outline" id="start-camera-btn" onclick="startCamera()">🎥 Live Camera</button>
+    <button class="btn" id="start-camera-btn" onclick="startCamera()" style="display:block;width:100%">📷 Scan QR Code</button>
     
     <div style="margin-top:16px;padding-top:16px;border-top:1px solid #222">
       <p style="color:#666;font-size:12px;margin-bottom:10px">Or enter code manually:</p>
