@@ -9,7 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAeygMBPsJdXO76susC4Tk5rwTfZLUq5VE",
@@ -26,7 +26,7 @@
 
   window._db = db;
   window._guestsCol = guestsCol;
-  window._firestore = { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot };
+  window._firestore = { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, runTransaction };
   window._dbReady = true;
   window.dispatchEvent(new Event('dbReady'));
 </script>
@@ -469,22 +469,22 @@ async function handleScannedCode(raw) {
   document.getElementById('camera-status').textContent = '🔍 Verifying...';
 
   try {
-    const { doc, updateDoc } = window._firestore;
-    // Search locally in cached guests array — no network call needed
+    const { doc, runTransaction } = window._firestore;
     const guestData = guests.find(g => g.id === val);
 
     if (guestData) {
-      const guest = guestData;
-      if (guest.scanned) {
-        document.getElementById('result-name-dup').textContent = guest.name;
-        document.getElementById('result-allowed').style.display = 'none';
-        document.getElementById('result-duplicate').style.display = 'block';
-        document.getElementById('result-denied').style.display = 'none';
-        document.getElementById('camera-status').textContent = '⚠️ Already checked in!';
-        playBeep(false);
-        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-      } else {
-        document.getElementById('result-name-ok').textContent = guest.name;
+      // Use transaction to prevent double-entry if 2 scanners scan same QR simultaneously
+      const guestRef = doc(window._db, 'guests', guestData.docId);
+      const result = await runTransaction(window._db, async (transaction) => {
+        const snap = await transaction.get(guestRef);
+        if (!snap.exists()) return 'not_found';
+        if (snap.data().scanned) return 'already';
+        transaction.update(guestRef, { scanned: true, scannedAt: new Date().toISOString() });
+        return 'allowed';
+      });
+
+      if (result === 'allowed') {
+        document.getElementById('result-name-ok').textContent = guestData.name;
         document.getElementById('result-allowed').style.display = 'block';
         document.getElementById('result-duplicate').style.display = 'none';
         document.getElementById('result-denied').style.display = 'none';
@@ -493,7 +493,15 @@ async function handleScannedCode(raw) {
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
         document.getElementById('result-allowed').classList.add('pulse');
         setTimeout(() => document.getElementById('result-allowed').classList.remove('pulse'), 400);
-        await updateDoc(doc(window._db, 'guests', guestData.docId), { scanned: true, scannedAt: new Date().toISOString() });
+      } else {
+        // 'already' or 'not_found'
+        document.getElementById('result-name-dup').textContent = guestData.name;
+        document.getElementById('result-allowed').style.display = 'none';
+        document.getElementById('result-duplicate').style.display = 'block';
+        document.getElementById('result-denied').style.display = 'none';
+        document.getElementById('camera-status').textContent = '⚠️ Already checked in!';
+        playBeep(false);
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       }
     } else {
       document.getElementById('result-allowed').style.display = 'none';
