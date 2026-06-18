@@ -6,6 +6,7 @@
 <title>نظام دعوات الزفاف</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -245,7 +246,8 @@
     <div class="guest-list" id="guest-list">
       <div class="empty-state">No guests registered yet</div>
     </div>
-    <button class="btn btn-outline" style="margin-top:14px" onclick="exportCSV()">📥 Export List</button>
+    <button class="btn btn-outline" style="margin-top:14px" onclick="downloadAllQR()">📦 Download All Invitations (ZIP)</button>
+    <button class="btn btn-outline" style="margin-top:8px" onclick="exportCSV()">📥 Export List</button>
     <button class="btn btn-outline" style="margin-top:8px" onclick="clearAll()">🗑 Clear All Data</button>
     <button class="btn btn-outline" style="margin-top:8px" onclick="lockAdmin()">🔒 Logout</button>
   </div>
@@ -723,6 +725,115 @@ function downloadGuestQR(id, name) {
     showToast('📥 Saved: ' + name);
     document.body.removeChild(tempDiv);
   }, 300);
+}
+
+async function downloadAllQR() {
+  if (guests.length === 0) { showToast('⚠️ No guests to download'); return; }
+  showToast('⏳ Preparing ZIP... please wait');
+
+  const zip = new JSZip();
+  const total = guests.length;
+  let done = 0;
+
+  function generateCardForGuest(guest) {
+    return new Promise((resolve) => {
+      const tempDiv = document.createElement('div');
+      tempDiv.style.cssText = 'position:fixed;left:-9999px;top:-9999px;background:white;padding:12px;';
+      document.body.appendChild(tempDiv);
+
+      new QRCode(tempDiv, {
+        text: SITE_URL + '/?verify=' + guest.id,
+        width: 400, height: 400,
+        colorDark: '#0A0A0A', colorLight: '#FAFAF8',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+
+      setTimeout(() => {
+        const qrCanvas = tempDiv.querySelector('canvas');
+        if (!qrCanvas) { document.body.removeChild(tempDiv); resolve(null); return; }
+
+        const card = document.createElement('canvas');
+        card.width = 1000; card.height = 1400;
+        const ctx = card.getContext('2d');
+
+        ctx.fillStyle = '#FAFAF8';
+        ctx.fillRect(0, 0, 1000, 1400);
+        ctx.fillStyle = '#C9A84C';
+        ctx.fillRect(0, 0, 1000, 22);
+        ctx.fillRect(0, 1378, 1000, 22);
+        ctx.fillRect(0, 0, 6, 1400);
+        ctx.fillRect(994, 0, 6, 1400);
+
+        ctx.fillStyle = '#C9A84C';
+        ctx.font = 'bold 62px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('دعوة زفاف', 500, 110);
+
+        ctx.fillStyle = '#999';
+        ctx.font = '34px Arial';
+        ctx.fillText('الخميس ٣ سبتمبر ٢٠٢٦', 500, 168);
+
+        ctx.strokeStyle = '#C9A84C';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(300, 200); ctx.lineTo(700, 200); ctx.stroke();
+
+        ctx.drawImage(qrCanvas, 200, 225, 600, 600);
+
+        ctx.fillStyle = '#0A0A0A';
+        ctx.font = 'bold 54px Arial';
+        ctx.fillText(guest.name, 500, 910);
+
+        ctx.fillStyle = '#BBB';
+        ctx.font = '28px Arial';
+        ctx.fillText(guest.id, 500, 965);
+
+        ctx.strokeStyle = '#DDD';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(200, 1000); ctx.lineTo(800, 1000); ctx.stroke();
+
+        ctx.fillStyle = '#C9A84C';
+        ctx.font = 'bold 38px Arial';
+        ctx.fillText('Golden Halls', 500, 1065);
+
+        ctx.fillStyle = '#888';
+        ctx.font = '26px Arial';
+        ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1120);
+
+        ctx.fillStyle = '#666';
+        ctx.font = '24px Arial';
+        ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1175);
+
+        ctx.fillStyle = '#C9A84C';
+        ctx.font = '28px Arial';
+        ctx.fillText('✦', 80, 80);
+        ctx.fillText('✦', 920, 80);
+        ctx.fillText('✦', 80, 1350);
+        ctx.fillText('✦', 920, 1350);
+
+        const dataUrl = card.toDataURL('image/png');
+        const base64 = dataUrl.split(',')[1];
+        document.body.removeChild(tempDiv);
+        resolve({ name: 'Invitation-' + guest.name + '.png', data: base64 });
+      }, 350);
+    });
+  }
+
+  // Process in batches of 5 to avoid freezing
+  for (let i = 0; i < total; i += 5) {
+    const batch = guests.slice(i, i + 5);
+    const results = await Promise.all(batch.map(g => generateCardForGuest(g)));
+    results.forEach(r => { if (r) zip.file(r.name, r.data, { base64: true }); });
+    done += batch.length;
+    showToast('⏳ ' + Math.min(done, total) + ' / ' + total + ' done...');
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'Wedding-Invitations.zip';
+  link.click();
+  showToast('✅ ZIP downloaded! (' + total + ' invitations)');
 }
 
 function showToast(msg) {
