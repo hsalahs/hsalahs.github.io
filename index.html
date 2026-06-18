@@ -133,38 +133,6 @@
   <button class="nav-btn" onclick="showPage('admin', this)">⚙️ Admin</button>
 </nav>
 
-<!-- REGISTER -->
-<div class="page" id="page-register">
-  <div class="hero">
-    <div class="hero-ornament">✦ ✦ ✦</div>
-    <h1>دعوة زفاف</h1>
-    <p class="subtitle">3 September 2026</p>
-    <div class="gold-line"></div>
-  </div>
-  <div class="card">
-    <div class="card-title">🎟 سجّل اسمك لاستلام دعوتك</div>
-    <p style="text-align:center;color:#C9A84C;font-size:14px;margin-bottom:16px">💡 كل شخص له باركود خاص فيه</p>
-    <div class="form-group">
-      <label>الاسم الكامل</label>
-      <input type="text" id="guest-name" placeholder="مثال: محمد أحمد العمري">
-    </div>
-    <button class="btn" id="register-btn" onclick="registerGuest()">✨ استلم دعوتك</button>
-  </div>
-  <div id="qr-result">
-    <div class="card">
-      <div class="card-title" style="text-align:center">🎉 دعوتك جاهزة!</div>
-      <div class="qr-box">
-        <div id="qrcode"></div>
-        <div class="guest-name-display" id="display-name"></div>
-        <div class="guest-id" id="display-id"></div>
-      </div>
-      <p style="text-align:center;color:#666;font-size:13px;margin-bottom:14px">احتفظ بهذا الباركود — ستحتاجه عند الدخول</p>
-      <button class="btn" onclick="saveQR()">💾 حفظ الدعوة في الجوال</button>
-      <button class="btn btn-outline" onclick="resetRegistration()" style="font-size:13px">➕ تسجيل معزوم آخر</button>
-    </div>
-  </div>
-</div>
-
 <!-- SCANNER -->
 <div class="page active" id="page-scanner">
   <div class="hero">
@@ -290,139 +258,11 @@ function showPage(page, btn) {
   if (page === 'admin') renderAdmin();
 }
 
-async function registerGuest() {
-  const name = document.getElementById('guest-name').value.trim();
-  if (!name || name.length < 2) { showToast('⚠️ أدخل الاسم كاملاً'); return; }
 
-  const btn = document.getElementById('register-btn');
-  btn.disabled = true; btn.textContent = 'جاري التسجيل...';
 
-  try {
-    onDbReady(async () => {
-      const { addDoc, getDocs } = window._firestore;
-      const snapshot = await getDocs(window._guestsCol);
-      const exists = snapshot.docs.find(d => d.data().name === name);
-      if (exists) { showToast('⚠️ هذا الاسم مسجل مسبقاً'); btn.disabled = false; btn.textContent = '✨ استلم دعوتك'; return; }
 
-      const id = 'WD-' + Date.now().toString(36).toUpperCase();
-      await addDoc(window._guestsCol, { id, name, scanned: false, registeredAt: new Date().toISOString() });
 
-      document.getElementById('display-name').textContent = name;
-      document.getElementById('display-id').textContent = id;
 
-      document.getElementById('qrcode').innerHTML = '';
-      new QRCode(document.getElementById('qrcode'), {
-        text: SITE_URL + '/?verify=' + id,
-        width: 220, height: 220,
-        colorDark: '#0A0A0A', colorLight: '#FAFAF8',
-        correctLevel: QRCode.CorrectLevel.H
-      });
-
-      setTimeout(() => document.getElementById('qr-result').scrollIntoView({ behavior: 'smooth' }), 300);
-      showToast('✅ تم التسجيل بنجاح!');
-      btn.disabled = false; btn.textContent = '✨ استلم دعوتك';
-      document.getElementById('qr-result').style.display = 'block';
-    });
-  } catch(e) {
-    showToast('❌ خطأ في التسجيل'); btn.disabled = false; btn.textContent = '✨ استلم دعوتك';
-  }
-}
-
-function saveQR() {
-  const canvas = document.querySelector('#qrcode canvas');
-  if (!canvas) { showToast('⚠️ انتظر ثانية وحاول مجدداً'); return; }
-  const name = document.getElementById('display-name').textContent;
-  const id = document.getElementById('display-id').textContent;
-
-  const card = document.createElement('canvas');
-  card.width = 1000; card.height = 1400;
-  const ctx = card.getContext('2d');
-
-  // Background
-  ctx.fillStyle = '#FAFAF8';
-  ctx.fillRect(0, 0, 1000, 1400);
-
-  // Gold border bars
-  ctx.fillStyle = '#C9A84C';
-  ctx.fillRect(0, 0, 1000, 22);
-  ctx.fillRect(0, 1378, 1000, 22);
-
-  // Side gold lines
-  ctx.fillStyle = '#C9A84C';
-  ctx.fillRect(0, 0, 6, 1400);
-  ctx.fillRect(994, 0, 6, 1400);
-
-  // Title
-  ctx.fillStyle = '#C9A84C';
-  ctx.font = 'bold 62px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('دعوة زفاف', 500, 110);
-
-  // Date
-  ctx.fillStyle = '#999';
-  ctx.font = '34px Arial';
-  ctx.fillText('الخميس 3 سبتمبر 2026', 500, 168);
-
-  // Divider line
-  ctx.strokeStyle = '#C9A84C';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(300, 200); ctx.lineTo(700, 200); ctx.stroke();
-
-  // QR Code
-  ctx.drawImage(canvas, 200, 225, 600, 600);
-
-  // Guest name
-  ctx.fillStyle = '#0A0A0A';
-  ctx.font = 'bold 54px Arial';
-  ctx.fillText(name, 500, 910);
-
-  // Guest ID
-  ctx.fillStyle = '#BBB';
-  ctx.font = '28px Arial';
-  ctx.fillText(id, 500, 965);
-
-  // Divider
-  ctx.strokeStyle = '#DDD';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(200, 1000); ctx.lineTo(800, 1000); ctx.stroke();
-
-  // Venue name
-  ctx.fillStyle = '#C9A84C';
-  ctx.font = 'bold 38px Arial';
-  ctx.fillText('Golden Halls', 500, 1065);
-
-  // Single person notice
-  ctx.fillStyle = '#888';
-  ctx.font = '26px Arial';
-  ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1120);
-
-  // Keep this card
-  ctx.fillStyle = '#666';
-  ctx.font = '24px Arial';
-  ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1175);
-
-  // Corner ornaments
-  ctx.fillStyle = '#C9A84C';
-  ctx.font = '28px Arial';
-  ctx.fillText('✦', 80, 80);
-  ctx.fillText('✦', 920, 80);
-  ctx.fillText('✦', 80, 1350);
-  ctx.fillText('✦', 920, 1350);
-
-  const link = document.createElement('a');
-  link.download = 'Invitation-' + name + '.png';
-  link.href = card.toDataURL('image/png');
-  link.click();
-  showToast('📥 تم حفظ الدعوة!');
-}
-
-function resetRegistration() {
-  document.getElementById('qr-result').style.display = 'none';
-  document.getElementById('guest-name').value = '';
-  document.getElementById('guest-name').focus();
-  document.getElementById('register-btn').disabled = false;
-  document.getElementById('register-btn').textContent = '✨ استلم دعوتك';
-}
 
 function scanFromImage(input) {
   if (!input.files || !input.files[0]) return;
