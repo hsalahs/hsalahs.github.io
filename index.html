@@ -335,79 +335,132 @@ function saveQR() {
   const id = document.getElementById('display-id').textContent;
 
   const card = document.createElement('canvas');
-  card.width = 1000; card.height = 1400;
+  card.width = 1080; card.height = 1920;
   const ctx = card.getContext('2d');
 
-  // Background
+  // Gradient background
+  const gradient = ctx.createLinearGradient(0, 0, 1080, 1920);
+  gradient.addColorStop(0, '#1A1A2E');
+  gradient.addColorStop(1, '#16213E');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 1080, 1920);
+
+  // Top accent bar - Gold
+  ctx.fillStyle = '#C9A84C';
+  ctx.fillRect(0, 0, 1080, 8);
+
+  // Main card body
   ctx.fillStyle = '#FAFAF8';
-  ctx.fillRect(0, 0, 1000, 1400);
+  ctx.beginPath();
+  ctx.moveTo(40, 60);
+  ctx.lineTo(1040, 60);
+  ctx.quadraticCurveTo(1050, 60, 1050, 70);
+  ctx.lineTo(1050, 1850);
+  ctx.quadraticCurveTo(1050, 1860, 1040, 1860);
+  ctx.lineTo(40, 1860);
+  ctx.quadraticCurveTo(30, 1860, 30, 1850);
+  ctx.lineTo(30, 70);
+  ctx.quadraticCurveTo(30, 60, 40, 60);
+  ctx.fill();
 
-  // Gold border bars
-  ctx.fillStyle = '#C9A84C';
-  ctx.fillRect(0, 0, 1000, 22);
-  ctx.fillRect(0, 1378, 1000, 22);
-
-  // Side gold lines
-  ctx.fillStyle = '#C9A84C';
-  ctx.fillRect(0, 0, 6, 1400);
-  ctx.fillRect(994, 0, 6, 1400);
-
-  // Title
-  ctx.fillStyle = '#C9A84C';
-  ctx.font = 'bold 62px Arial';
+  // Content on card
+  ctx.fillStyle = '#0A0A0A';
+  ctx.font = 'bold 56px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('دعوة زفاف', 500, 110);
+  ctx.fillText('دعوة زفاف', 540, 150);
+
+  // Subtitle
+  ctx.fillStyle = '#C9A84C';
+  ctx.font = 'bold 32px Arial';
+  ctx.fillText('Golden Halls', 540, 220);
 
   // Date
-  ctx.fillStyle = '#999';
-  ctx.font = '34px Arial';
-  ctx.fillText('الخميس ٣ سبتمبر ٢٠٢٦', 500, 168);
+  ctx.fillStyle = '#666';
+  ctx.font = '28px Arial';
+  ctx.fillText('الخميس ٣ سبتمبر ٢٠٢٦', 540, 280);
 
-  // Divider line
+  // Divider
   ctx.strokeStyle = '#C9A84C';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(300, 200); ctx.lineTo(700, 200); ctx.stroke();
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(150, 320);
+  ctx.lineTo(930, 320);
+  ctx.stroke();
 
-  // QR Code
-  ctx.drawImage(canvas, 200, 225, 600, 600);
+  // Guest section label
+  ctx.fillStyle = '#888';
+  ctx.font = '18px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('ضيفنا', 100, 400);
 
   // Guest name
   ctx.fillStyle = '#0A0A0A';
-  ctx.font = 'bold 54px Arial';
-  ctx.fillText(name, 500, 910);
+  ctx.font = 'bold 52px Arial';
+  ctx.fillText(name, 100, 480);
 
-  // Guest ID
-  ctx.fillStyle = '#BBB';
-  ctx.font = '28px Arial';
-  ctx.fillText(id, 500, 965);
+  // QR Code
+  ctx.drawImage(canvas, 390, 550, 300, 300);
 
-  // Divider
+  // ID
+  ctx.fillStyle = '#C9A84C';
+  ctx.font = 'bold 24px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText(id, 540, 920);
+
+  // Divider 2
   ctx.strokeStyle = '#DDD';
   ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(200, 1000); ctx.lineTo(800, 1000); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(100, 960);
+  ctx.lineTo(980, 960);
+  ctx.stroke();
 
-  // Venue name
-  ctx.fillStyle = '#C9A84C';
-  ctx.font = 'bold 38px Arial';
-  ctx.fillText('Golden Halls', 500, 1065);
+  // Important info
+  ctx.fillStyle = '#0A0A0A';
+  ctx.font = '18px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('⚠️ معلومات مهمة', 540, 1030);
 
-  // Single person notice
-  ctx.fillStyle = '#888';
-  ctx.font = '26px Arial';
-  ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1120);
-
-  // Keep this card
   ctx.fillStyle = '#666';
-  ctx.font = '24px Arial';
-  ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1175);
+  ctx.font = '20px Arial';
+  ctx.fillText('هذا الباركود لشخص واحد فقط', 540, 1100);
+  ctx.fillText('احتفظ به بعناية للدخول', 540, 1160);
+  ctx.fillText('أبرزه عند البوابة', 540, 1220);
 
-  // Corner ornaments
+  // Divider 3
+  ctx.strokeStyle = '#DDD';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(100, 1280);
+  ctx.lineTo(980, 1280);
+  ctx.stroke();
+
+  // Venue info
   ctx.fillStyle = '#C9A84C';
-  ctx.font = '28px Arial';
-  ctx.fillText('✦', 80, 80);
-  ctx.fillText('✦', 920, 80);
-  ctx.fillText('✦', 80, 1350);
-  ctx.fillText('✦', 920, 1350);
+  ctx.font = 'bold 20px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('Golden Halls', 540, 1360);
+
+  ctx.fillStyle = '#888';
+  ctx.font = '18px Arial';
+  ctx.fillText('الخميس ٣ سبتمبر ٢٠٢٦', 540, 1410);
+
+  // Bottom ornament
+  ctx.fillStyle = '#C9A84C';
+  ctx.font = '32px Arial';
+  ctx.fillText('✦', 450, 1520);
+  ctx.fillText('✦', 540, 1520);
+  ctx.fillText('✦', 630, 1520);
+
+  // Footer
+  ctx.fillStyle = '#999';
+  ctx.font = '16px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('شكراً لقبول الدعوة', 540, 1650);
+
+  // Bottom bar
+  ctx.fillStyle = '#C9A84C';
+  ctx.fillRect(0, 1912, 1080, 8);
 
   const link = document.createElement('a');
   link.download = 'Invitation-' + name + '.png';
@@ -692,14 +745,13 @@ async function adminAddGuest() {
 }
 
 function downloadGuestQR(id, name) {
-  // Create a hidden QR code, render it, then build the invitation card
   const tempDiv = document.createElement('div');
   tempDiv.style.cssText = 'position:fixed;left:-9999px;top:-9999px;background:white;padding:12px;';
   document.body.appendChild(tempDiv);
 
   new QRCode(tempDiv, {
     text: SITE_URL + '/?verify=' + id,
-    width: 400, height: 400,
+    width: 300, height: 300,
     colorDark: '#0A0A0A', colorLight: '#FAFAF8',
     correctLevel: QRCode.CorrectLevel.H
   });
@@ -709,79 +761,134 @@ function downloadGuestQR(id, name) {
     if (!qrCanvas) { showToast('⚠️ Error generating QR'); document.body.removeChild(tempDiv); return; }
 
     const card = document.createElement('canvas');
-    card.width = 1000; card.height = 1400;
+    card.width = 1080; card.height = 1920;
     const ctx = card.getContext('2d');
 
-    // Background
+    // Gradient background
+    const gradient = ctx.createLinearGradient(0, 0, 1080, 1920);
+    gradient.addColorStop(0, '#1A1A2E');
+    gradient.addColorStop(1, '#16213E');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 1080, 1920);
+
+    // Top accent bar - Gold
+    ctx.fillStyle = '#C9A84C';
+    ctx.fillRect(0, 0, 1080, 8);
+
+    // Main card body with rounded corners effect
     ctx.fillStyle = '#FAFAF8';
-    ctx.fillRect(0, 0, 1000, 1400);
+    ctx.beginPath();
+    ctx.moveTo(40, 60);
+    ctx.lineTo(1040, 60);
+    ctx.quadraticCurveTo(1050, 60, 1050, 70);
+    ctx.lineTo(1050, 1850);
+    ctx.quadraticCurveTo(1050, 1860, 1040, 1860);
+    ctx.lineTo(40, 1860);
+    ctx.quadraticCurveTo(30, 1860, 30, 1850);
+    ctx.lineTo(30, 70);
+    ctx.quadraticCurveTo(30, 60, 40, 60);
+    ctx.fill();
 
-    // Gold border bars
-    ctx.fillStyle = '#C9A84C';
-    ctx.fillRect(0, 0, 1000, 22);
-    ctx.fillRect(0, 1378, 1000, 22);
-
-    // Side gold lines
-    ctx.fillStyle = '#C9A84C';
-    ctx.fillRect(0, 0, 6, 1400);
-    ctx.fillRect(994, 0, 6, 1400);
-
-    // Title
-    ctx.fillStyle = '#C9A84C';
-    ctx.font = 'bold 62px Arial';
+    // Content on card
+    ctx.fillStyle = '#0A0A0A';
+    ctx.font = 'bold 56px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('دعوة زفاف', 500, 110);
+    ctx.fillText('دعوة زفاف', 540, 150);
+
+    // Subtitle
+    ctx.fillStyle = '#C9A84C';
+    ctx.font = 'bold 32px Arial';
+    ctx.fillText('Golden Halls', 540, 220);
 
     // Date
-    ctx.fillStyle = '#999';
-    ctx.font = '34px Arial';
-    ctx.fillText('الخميس ٣ سبتمبر ٢٠٢٦', 500, 168);
-
-    // Divider line
-    ctx.strokeStyle = '#C9A84C';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(300, 200); ctx.lineTo(700, 200); ctx.stroke();
-
-    // QR Code
-    ctx.drawImage(qrCanvas, 200, 225, 600, 600);
-
-    // Guest name
-    ctx.fillStyle = '#0A0A0A';
-    ctx.font = 'bold 54px Arial';
-    ctx.fillText(name, 500, 910);
-
-    // Guest ID
-    ctx.fillStyle = '#BBB';
+    ctx.fillStyle = '#666';
     ctx.font = '28px Arial';
-    ctx.fillText(id, 500, 965);
+    ctx.fillText('الخميس ٣ سبتمبر ٢٠٢٦', 540, 280);
 
     // Divider
+    ctx.strokeStyle = '#C9A84C';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(150, 320);
+    ctx.lineTo(930, 320);
+    ctx.stroke();
+
+    // Guest section label
+    ctx.fillStyle = '#888';
+    ctx.font = '18px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('ضيفنا', 100, 400);
+
+    // Guest name - Large
+    ctx.fillStyle = '#0A0A0A';
+    ctx.font = 'bold 52px Arial';
+    ctx.fillText(name, 100, 480);
+
+    // QR Code - centered
+    ctx.drawImage(qrCanvas, 390, 550, 300, 300);
+
+    // ID below QR
+    ctx.fillStyle = '#C9A84C';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(id, 540, 920);
+
+    // Divider 2
     ctx.strokeStyle = '#DDD';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(200, 1000); ctx.lineTo(800, 1000); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(100, 960);
+    ctx.lineTo(980, 960);
+    ctx.stroke();
 
-    // Venue name
-    ctx.fillStyle = '#C9A84C';
-    ctx.font = 'bold 38px Arial';
-    ctx.fillText('Golden Halls', 500, 1065);
+    // Important info section
+    ctx.fillStyle = '#0A0A0A';
+    ctx.font = '18px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚠️ معلومات مهمة', 540, 1030);
 
-    // Single person notice
-    ctx.fillStyle = '#888';
-    ctx.font = '26px Arial';
-    ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1120);
-
-    // Keep this card
+    // Info bullets
     ctx.fillStyle = '#666';
-    ctx.font = '24px Arial';
-    ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1175);
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('هذا الباركود لشخص واحد فقط', 540, 1100);
+    ctx.fillText('احتفظ به بعناية للدخول', 540, 1160);
+    ctx.fillText('أبرزه عند البوابة', 540, 1220);
 
-    // Corner ornaments
+    // Divider 3
+    ctx.strokeStyle = '#DDD';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(100, 1280);
+    ctx.lineTo(980, 1280);
+    ctx.stroke();
+
+    // Venue info
     ctx.fillStyle = '#C9A84C';
-    ctx.font = '28px Arial';
-    ctx.fillText('✦', 80, 80);
-    ctx.fillText('✦', 920, 80);
-    ctx.fillText('✦', 80, 1350);
-    ctx.fillText('✦', 920, 1350);
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Golden Halls', 540, 1360);
+
+    ctx.fillStyle = '#888';
+    ctx.font = '18px Arial';
+    ctx.fillText('الخميس ٣ سبتمبر ٢٠٢٦', 540, 1410);
+
+    // Bottom ornament
+    ctx.fillStyle = '#C9A84C';
+    ctx.font = '32px Arial';
+    ctx.fillText('✦', 450, 1520);
+    ctx.fillText('✦', 540, 1520);
+    ctx.fillText('✦', 630, 1520);
+
+    // Footer message
+    ctx.fillStyle = '#999';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('شكراً لقبول الدعوة', 540, 1650);
+
+    // Bottom accent bar
+    ctx.fillStyle = '#C9A84C';
+    ctx.fillRect(0, 1912, 1080, 8);
 
     const link = document.createElement('a');
     link.download = 'Invitation-' + name + '.png';
