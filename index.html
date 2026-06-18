@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title> دعوة الزفاف</title>
+<title>نظام دعوات الزفاف</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
 <script type="module">
@@ -118,6 +118,11 @@
 
   .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--gold), var(--gold-light)); color: var(--black); padding: 14px 28px; border-radius: 50px; font-weight: 700; font-size: 14px; opacity: 0; transition: opacity 0.3s; z-index: 999; box-shadow: 0 8px 24px rgba(212, 175, 127, 0.3); }
   .toast.show { opacity: 1; }
+  .guest-item .dl-btn { background: none; border: 1px solid rgba(212,175,127,0.3); color: var(--gold); font-size: 13px; cursor: pointer; padding: 4px 10px; border-radius: 8px; transition: all 0.2s ease; white-space: nowrap; }
+  .guest-item .dl-btn:hover { background: rgba(212,175,127,0.1); border-color: var(--gold); }
+  .admin-add-form { display: flex; gap: 8px; margin-bottom: 14px; }
+  .admin-add-form input { flex: 1; }
+  .admin-add-form button { width: auto; padding: 14px 20px; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -233,6 +238,10 @@
       <div class="stat-box"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Total Guests</div></div>
       <div class="stat-box"><div class="stat-num" id="stat-scanned">0</div><div class="stat-label">Attended</div></div>
       <div class="stat-box"><div class="stat-num" id="stat-pending">0</div><div class="stat-label">Not Yet</div></div>
+    </div>
+    <div class="admin-add-form">
+      <input type="text" id="admin-guest-name" placeholder="Guest full name..." onkeydown="if(event.key==='Enter') adminAddGuest()">
+      <button class="btn" onclick="adminAddGuest()">➕ Add</button>
     </div>
     <div class="guest-list" id="guest-list">
       <div class="empty-state">No guests registered yet</div>
@@ -509,6 +518,7 @@ function renderAdmin() {
         <div class="gid">${g.id}</div>
       </div>
       <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ Attended' : 'Not Yet'}</span>
+      <button class="dl-btn" onclick="downloadGuestQR('${g.id}', '${g.name.replace(/'/g, "\\'")}')">💾 Save</button>
       <button class="del-btn" onclick="deleteGuest('${g.docId}', '${g.name}')">🗑</button>
     </div>
   `).join('');
@@ -541,6 +551,123 @@ function exportCSV() {
   link.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
   link.download = 'guests-list.csv';
   link.click();
+}
+
+async function adminAddGuest() {
+  const input = document.getElementById('admin-guest-name');
+  const name = input.value.trim();
+  if (!name || name.length < 2) { showToast('⚠️ Enter a valid name'); return; }
+  const exists = guests.find(g => g.name === name);
+  if (exists) { showToast('⚠️ Name already registered'); return; }
+  onDbReady(async () => {
+    const { addDoc } = window._firestore;
+    const id = 'WD-' + Date.now().toString(36).toUpperCase();
+    await addDoc(window._guestsCol, { id, name, scanned: false, registeredAt: new Date().toISOString() });
+    showToast('✅ ' + name + ' added!');
+    input.value = '';
+    input.focus();
+  });
+}
+
+function downloadGuestQR(id, name) {
+  // Create a hidden QR code, render it, then build the invitation card
+  const tempDiv = document.createElement('div');
+  tempDiv.style.cssText = 'position:fixed;left:-9999px;top:-9999px;background:white;padding:12px;';
+  document.body.appendChild(tempDiv);
+
+  new QRCode(tempDiv, {
+    text: SITE_URL + '/?verify=' + id,
+    width: 400, height: 400,
+    colorDark: '#0A0A0A', colorLight: '#FAFAF8',
+    correctLevel: QRCode.CorrectLevel.H
+  });
+
+  setTimeout(() => {
+    const qrCanvas = tempDiv.querySelector('canvas');
+    if (!qrCanvas) { showToast('⚠️ Error generating QR'); document.body.removeChild(tempDiv); return; }
+
+    const card = document.createElement('canvas');
+    card.width = 1000; card.height = 1400;
+    const ctx = card.getContext('2d');
+
+    // Background
+    ctx.fillStyle = '#FAFAF8';
+    ctx.fillRect(0, 0, 1000, 1400);
+
+    // Gold border bars
+    ctx.fillStyle = '#C9A84C';
+    ctx.fillRect(0, 0, 1000, 22);
+    ctx.fillRect(0, 1378, 1000, 22);
+
+    // Side gold lines
+    ctx.fillStyle = '#C9A84C';
+    ctx.fillRect(0, 0, 6, 1400);
+    ctx.fillRect(994, 0, 6, 1400);
+
+    // Title
+    ctx.fillStyle = '#C9A84C';
+    ctx.font = 'bold 62px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('دعوة زفاف', 500, 110);
+
+    // Date
+    ctx.fillStyle = '#999';
+    ctx.font = '34px Arial';
+    ctx.fillText('الخميس ٣ سبتمبر ٢٠٢٦', 500, 168);
+
+    // Divider line
+    ctx.strokeStyle = '#C9A84C';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(300, 200); ctx.lineTo(700, 200); ctx.stroke();
+
+    // QR Code
+    ctx.drawImage(qrCanvas, 200, 225, 600, 600);
+
+    // Guest name
+    ctx.fillStyle = '#0A0A0A';
+    ctx.font = 'bold 54px Arial';
+    ctx.fillText(name, 500, 910);
+
+    // Guest ID
+    ctx.fillStyle = '#BBB';
+    ctx.font = '28px Arial';
+    ctx.fillText(id, 500, 965);
+
+    // Divider
+    ctx.strokeStyle = '#DDD';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(200, 1000); ctx.lineTo(800, 1000); ctx.stroke();
+
+    // Venue name
+    ctx.fillStyle = '#C9A84C';
+    ctx.font = 'bold 38px Arial';
+    ctx.fillText('Golden Halls', 500, 1065);
+
+    // Single person notice
+    ctx.fillStyle = '#888';
+    ctx.font = '26px Arial';
+    ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1120);
+
+    // Keep this card
+    ctx.fillStyle = '#666';
+    ctx.font = '24px Arial';
+    ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1175);
+
+    // Corner ornaments
+    ctx.fillStyle = '#C9A84C';
+    ctx.font = '28px Arial';
+    ctx.fillText('✦', 80, 80);
+    ctx.fillText('✦', 920, 80);
+    ctx.fillText('✦', 80, 1350);
+    ctx.fillText('✦', 920, 1350);
+
+    const link = document.createElement('a');
+    link.download = 'Invitation-' + name + '.png';
+    link.href = card.toDataURL('image/png');
+    link.click();
+    showToast('📥 Saved: ' + name);
+    document.body.removeChild(tempDiv);
+  }, 300);
 }
 
 function showToast(msg) {
