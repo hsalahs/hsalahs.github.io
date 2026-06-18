@@ -302,7 +302,7 @@ async function checkManualCode() {
 async function handleScannedCode(raw) {
   let val = raw.trim();
   if (val.includes('verify=')) val = val.split('verify=')[1].split('&')[0];
-  const match = val.match(/WD-[A-Z0-9]+/);
+  const match = val.match(/WD-[A-Za-z0-9]+/);
   if (match) val = match[0];
   val = val.toUpperCase();
   if (!val.startsWith('WD-')) return;
@@ -320,7 +320,7 @@ async function handleScannedCode(raw) {
     let docId = null;
     
     if (guests.length > 0) {
-      const found = guests.find(g => g.id === val);
+      const found = guests.find(g => g.id.toUpperCase() === val);
       if (found) {
         guestData = found;
         docId = found.docId;
@@ -330,7 +330,7 @@ async function handleScannedCode(raw) {
     // Fallback to Firebase if not found locally
     if (!guestData) {
       const snapshot = await getDocs(window._guestsCol);
-      const docFound = snapshot.docs.find(d => d.data().id === val);
+      const docFound = snapshot.docs.find(d => d.data().id.toUpperCase() === val);
       if (docFound) {
         guestData = docFound.data();
         docId = docFound.id;
@@ -828,7 +828,7 @@ window.addEventListener('load', () => {
       const { getDocs, doc, updateDoc } = window._firestore;
       const val = verifyId.toUpperCase();
       const snapshot = await getDocs(window._guestsCol);
-      const docFound = snapshot.docs.find(d => d.data().id === val);
+      const docFound = snapshot.docs.find(d => d.data().id.toUpperCase() === val);
       if (docFound) {
         const guest = docFound.data();
         if (guest.scanned) {
