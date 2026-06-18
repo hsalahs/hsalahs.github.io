@@ -233,6 +233,8 @@ let unsubscribe = null;
 let qrScanner = null;
 let lastScanned = null;
 let scanCooldown = false;
+let searchQuery = '';
+let audioCtx = null;
 
 function onDbReady(cb) {
   if (window._dbReady) cb();
@@ -241,7 +243,7 @@ function onDbReady(cb) {
 
 onDbReady(() => {
   const { onSnapshot } = window._firestore;
-  onSnapshot(window._guestsCol, (snapshot) => {
+  unsubscribe = onSnapshot(window._guestsCol, (snapshot) => {
     guests = snapshot.docs.map(d => ({ docId: d.id, ...d.data() }));
     if (document.getElementById('admin-content').style.display === 'block') renderAdmin();
   });
@@ -266,16 +268,29 @@ async function startCamera() {
   const status = document.getElementById('camera-status');
   const video = document.getElementById('camera-video');
   status.textContent = 'Starting camera...';
-  try {
-    qrScanner = new QrScanner(video, result => {
-      if (!scanCooldown) handleScannedCode(result.data);
-    }, { returnDetailedScanResult: true, preferredCamera: 'environment' });
-    await qrScanner.start();
-    document.getElementById('camera-wrapper').style.display = 'block';
-    document.getElementById('start-camera-btn').style.display = 'none';
-    status.textContent = 'Point camera at QR code';
-  } catch(e) {
-    status.textContent = '⚠️ Could not access camera';
+
+  let retries = 2;
+  while (retries >= 0) {
+    try {
+      qrScanner = new QrScanner(video, result => {
+        if (!scanCooldown) handleScannedCode(result.data);
+      }, { returnDetailedScanResult: true, preferredCamera: 'environment' });
+      await qrScanner.start();
+      document.getElementById('camera-wrapper').style.display = 'block';
+      document.getElementById('start-camera-btn').style.display = 'none';
+      status.textContent = 'Point camera at QR code';
+      return; // success
+    } catch(e) {
+      // Clean up failed attempt before retrying
+      if (qrScanner) { try { qrScanner.destroy(); } catch(_) {} qrScanner = null; }
+      retries--;
+      if (retries < 0) {
+        status.textContent = '⚠️ Could not access camera. Check permissions or use manual entry below.';
+      } else {
+        status.textContent = 'Retrying camera...';
+        await new Promise(r => setTimeout(r, 800));
+      }
+    }
   }
 }
 
@@ -345,6 +360,10 @@ async function handleScannedCode(raw) {
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
         document.getElementById('result-allowed').classList.add('pulse');
         setTimeout(() => document.getElementById('result-allowed').classList.remove('pulse'), 400);
+        // Update local array immediately so admin reflects it without waiting
+        const idx = guests.findIndex(g => g.docId === docId);
+        if (idx !== -1) guests[idx] = { ...guests[idx], scanned: true, scannedAt: new Date().toISOString() };
+        if (document.getElementById('admin-content').style.display === 'block') renderAdmin();
       } else {
         document.getElementById('result-name-dup').textContent = guestData.name;
         document.getElementById('result-allowed').style.display = 'none';
@@ -376,9 +395,14 @@ async function handleScannedCode(raw) {
   }, 3000);
 }
 
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
 function playBeep(success) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.connect(g); g.connect(ctx.destination);
@@ -417,6 +441,10 @@ function lockAdmin() {
   document.getElementById('admin-pass').value = '';
 }
 
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function renderAdmin() {
   const total = guests.length;
   const scanned = guests.filter(g => g.scanned).length;
@@ -425,47 +453,33 @@ function renderAdmin() {
   document.getElementById('stat-pending').textContent = total - scanned;
 
   const list = document.getElementById('guest-list');
-  if (total === 0) { list.innerHTML = '<div class="empty-state">No guests registered yet</div>'; return; }
 
-  list.innerHTML = guests.map((g) => `
-    <div class="guest-item">
-      <div style="flex:1;min-width:0">
-        <div class="name">${g.name}</div>
-        <div class="gid">${g.id}</div>
-      </div>
-      <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ Attended' : 'Not Yet'}</span>
-      <button class="dl-btn" onclick="downloadGuestQR('${g.id}', '${g.name.replace(/'/g, "\\'")}')">💾 Save</button>
-      <button class="del-btn" onclick="deleteGuest('${g.docId}', '${g.name}')">🗑</button>
-    </div>
-  `).join('');
-}
-function searchGuests() {
-  const searchText = document.getElementById('admin-search').value.toLowerCase();
-  const list = document.getElementById('guest-list');
-  
-  if (!searchText) {
-    renderAdmin(); // Show all if search is empty
-    return;
-  }
-  
-  const filtered = guests.filter(g => g.name.toLowerCase().includes(searchText));
-  
+  // Respect active search filter
+  const filtered = searchQuery.trim()
+    ? guests.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : guests;
+
   if (filtered.length === 0) {
-    list.innerHTML = '<div class="empty-state">No guests found</div>';
+    list.innerHTML = `<div class="empty-state">${searchQuery ? 'No guests found' : 'No guests registered yet'}</div>`;
     return;
   }
-  
+
   list.innerHTML = filtered.map((g) => `
     <div class="guest-item">
       <div style="flex:1;min-width:0">
-        <div class="name">${g.name}</div>
+        <div class="name">${escapeHtml(g.name)}</div>
         <div class="gid">${g.id}</div>
       </div>
       <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ Attended' : 'Not Yet'}</span>
-      <button class="dl-btn" onclick="downloadGuestQR('${g.id}', '${g.name.replace(/'/g, "\\'")}')">💾 Save</button>
-      <button class="del-btn" onclick="deleteGuest('${g.docId}', '${g.name}')">🗑</button>
+      <button class="dl-btn" onclick="downloadGuestQR('${g.id}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">💾 Save</button>
+      <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeHtml(g.name)}')">🗑</button>
     </div>
   `).join('');
+}
+
+function searchGuests() {
+  searchQuery = document.getElementById('admin-search').value;
+  renderAdmin();
 }
 
 
@@ -586,107 +600,116 @@ async function adminAddGuest() {
   });
 }
 
-function downloadGuestQR(id, name) {
-  // Create a hidden QR code, render it, then build the invitation card
-  const tempDiv = document.createElement('div');
-  tempDiv.style.cssText = 'position:fixed;left:-9999px;top:-9999px;background:white;padding:12px;';
-  document.body.appendChild(tempDiv);
+// ============================================================
+//  ONE shared function to draw the invitation card.
+//  Returns a Promise that resolves to a <canvas>.
+//  Both single-download and ZIP-download use this — no duplication.
+// ============================================================
+function buildInvitationCard(guest) {
+  return new Promise((resolve) => {
+    const tempDiv = document.createElement('div');
+    tempDiv.style.cssText = 'position:fixed;left:-9999px;top:-9999px;background:white;padding:12px;';
+    document.body.appendChild(tempDiv);
 
-  new QRCode(tempDiv, {
-    text: SITE_URL + '/?verify=' + id,
-    width: 400, height: 400,
-    colorDark: '#0A0A0A', colorLight: '#FAFAF8',
-    correctLevel: QRCode.CorrectLevel.H
+    new QRCode(tempDiv, {
+      text: SITE_URL + '/?verify=' + guest.id,
+      width: 400, height: 400,
+      colorDark: '#0A0A0A', colorLight: '#FAFAF8',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+
+    setTimeout(() => {
+      const qrCanvas = tempDiv.querySelector('canvas');
+      if (!qrCanvas) { document.body.removeChild(tempDiv); resolve(null); return; }
+
+      const card = document.createElement('canvas');
+      card.width = 1000; card.height = 1400;
+      const ctx = card.getContext('2d');
+
+      // Background
+      ctx.fillStyle = '#FAFAF8';
+      ctx.fillRect(0, 0, 1000, 1400);
+
+      // Gold border bars + sides
+      ctx.fillStyle = '#C9A84C';
+      ctx.fillRect(0, 0, 1000, 22);
+      ctx.fillRect(0, 1378, 1000, 22);
+      ctx.fillRect(0, 0, 6, 1400);
+      ctx.fillRect(994, 0, 6, 1400);
+
+      // Title
+      ctx.fillStyle = '#C9A84C';
+      ctx.font = 'bold 62px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('دعوة زفاف', 500, 110);
+
+      // Date
+      ctx.fillStyle = '#999';
+      ctx.font = '34px Arial';
+      ctx.fillText('الخميس 3 سبتمبر 2026', 500, 168);
+
+      // Divider
+      ctx.strokeStyle = '#C9A84C';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(300, 200); ctx.lineTo(700, 200); ctx.stroke();
+
+      // QR
+      ctx.drawImage(qrCanvas, 200, 225, 600, 600);
+
+      // Name
+      ctx.fillStyle = '#0A0A0A';
+      ctx.font = 'bold 54px Arial';
+      ctx.fillText(guest.name, 500, 910);
+
+      // ID
+      ctx.fillStyle = '#BBB';
+      ctx.font = '28px Arial';
+      ctx.fillText(guest.id, 500, 965);
+
+      // Divider
+      ctx.strokeStyle = '#DDD';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(200, 1000); ctx.lineTo(800, 1000); ctx.stroke();
+
+      // Venue
+      ctx.fillStyle = '#C9A84C';
+      ctx.font = 'bold 38px Arial';
+      ctx.fillText('Golden Halls', 500, 1065);
+
+      // Notices
+      ctx.fillStyle = '#888';
+      ctx.font = '26px Arial';
+      ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1120);
+      ctx.fillStyle = '#666';
+      ctx.font = '24px Arial';
+      ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1175);
+
+      // Corner ornaments
+      ctx.fillStyle = '#C9A84C';
+      ctx.font = '28px Arial';
+      ctx.fillText('✦', 80, 80);
+      ctx.fillText('✦', 920, 80);
+      ctx.fillText('✦', 80, 1350);
+      ctx.fillText('✦', 920, 1350);
+
+      document.body.removeChild(tempDiv);
+      resolve(card);
+    }, 300);
   });
-
-  setTimeout(() => {
-    const qrCanvas = tempDiv.querySelector('canvas');
-    if (!qrCanvas) { showToast('⚠️ Error generating QR'); document.body.removeChild(tempDiv); return; }
-
-    const card = document.createElement('canvas');
-    card.width = 1000; card.height = 1400;
-    const ctx = card.getContext('2d');
-
-    // Background
-    ctx.fillStyle = '#FAFAF8';
-    ctx.fillRect(0, 0, 1000, 1400);
-
-    // Gold border bars
-    ctx.fillStyle = '#C9A84C';
-    ctx.fillRect(0, 0, 1000, 22);
-    ctx.fillRect(0, 1378, 1000, 22);
-
-    // Side gold lines
-    ctx.fillStyle = '#C9A84C';
-    ctx.fillRect(0, 0, 6, 1400);
-    ctx.fillRect(994, 0, 6, 1400);
-
-    // Title
-    ctx.fillStyle = '#C9A84C';
-    ctx.font = 'bold 62px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('دعوة زفاف', 500, 110);
-
-    // Date
-    ctx.fillStyle = '#999';
-    ctx.font = '34px Arial';
-    ctx.fillText('الخميس 3 سبتمبر 2026', 500, 168);
-
-    // Divider line
-    ctx.strokeStyle = '#C9A84C';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(300, 200); ctx.lineTo(700, 200); ctx.stroke();
-
-    // QR Code
-    ctx.drawImage(qrCanvas, 200, 225, 600, 600);
-
-    // Guest name
-    ctx.fillStyle = '#0A0A0A';
-    ctx.font = 'bold 54px Arial';
-    ctx.fillText(name, 500, 910);
-
-    // Guest ID
-    ctx.fillStyle = '#BBB';
-    ctx.font = '28px Arial';
-    ctx.fillText(id, 500, 965);
-
-    // Divider
-    ctx.strokeStyle = '#DDD';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(200, 1000); ctx.lineTo(800, 1000); ctx.stroke();
-
-    // Venue name
-    ctx.fillStyle = '#C9A84C';
-    ctx.font = 'bold 38px Arial';
-    ctx.fillText('Golden Halls', 500, 1065);
-
-    // Single person notice
-    ctx.fillStyle = '#888';
-    ctx.font = '26px Arial';
-    ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1120);
-
-    // Keep this card
-    ctx.fillStyle = '#666';
-    ctx.font = '24px Arial';
-    ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1175);
-
-    // Corner ornaments
-    ctx.fillStyle = '#C9A84C';
-    ctx.font = '28px Arial';
-    ctx.fillText('✦', 80, 80);
-    ctx.fillText('✦', 920, 80);
-    ctx.fillText('✦', 80, 1350);
-    ctx.fillText('✦', 920, 1350);
-
-    const link = document.createElement('a');
-    link.download = 'Invitation-' + name + '.png';
-    link.href = card.toDataURL('image/png');
-    link.click();
-    showToast('📥 Saved: ' + name);
-    document.body.removeChild(tempDiv);
-  }, 300);
 }
 
+// Download a single guest's invitation
+async function downloadGuestQR(id, name) {
+  const card = await buildInvitationCard({ id, name });
+  if (!card) { showToast('⚠️ Error generating QR'); return; }
+  const link = document.createElement('a');
+  link.download = 'Invitation-' + name + '.png';
+  link.href = card.toDataURL('image/png');
+  link.click();
+  showToast('📥 Saved: ' + name);
+}
+
+// Download all invitations as a ZIP
 async function downloadAllQR() {
   if (guests.length === 0) { showToast('⚠️ No guests to download'); return; }
   showToast('⏳ Preparing ZIP... please wait');
@@ -695,94 +718,16 @@ async function downloadAllQR() {
   const total = guests.length;
   let done = 0;
 
-  function generateCardForGuest(guest) {
-    return new Promise((resolve) => {
-      const tempDiv = document.createElement('div');
-      tempDiv.style.cssText = 'position:fixed;left:-9999px;top:-9999px;background:white;padding:12px;';
-      document.body.appendChild(tempDiv);
-
-      new QRCode(tempDiv, {
-        text: SITE_URL + '/?verify=' + guest.id,
-        width: 400, height: 400,
-        colorDark: '#0A0A0A', colorLight: '#FAFAF8',
-        correctLevel: QRCode.CorrectLevel.H
-      });
-
-      setTimeout(() => {
-        const qrCanvas = tempDiv.querySelector('canvas');
-        if (!qrCanvas) { document.body.removeChild(tempDiv); resolve(null); return; }
-
-        const card = document.createElement('canvas');
-        card.width = 1000; card.height = 1400;
-        const ctx = card.getContext('2d');
-
-        ctx.fillStyle = '#FAFAF8';
-        ctx.fillRect(0, 0, 1000, 1400);
-        ctx.fillStyle = '#C9A84C';
-        ctx.fillRect(0, 0, 1000, 22);
-        ctx.fillRect(0, 1378, 1000, 22);
-        ctx.fillRect(0, 0, 6, 1400);
-        ctx.fillRect(994, 0, 6, 1400);
-
-        ctx.fillStyle = '#C9A84C';
-        ctx.font = 'bold 62px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('دعوة زفاف', 500, 110);
-
-        ctx.fillStyle = '#999';
-        ctx.font = '34px Arial';
-        ctx.fillText('الخميس 3 سبتمبر 2026', 500, 168);
-
-        ctx.strokeStyle = '#C9A84C';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(300, 200); ctx.lineTo(700, 200); ctx.stroke();
-
-        ctx.drawImage(qrCanvas, 200, 225, 600, 600);
-
-        ctx.fillStyle = '#0A0A0A';
-        ctx.font = 'bold 54px Arial';
-        ctx.fillText(guest.name, 500, 910);
-
-        ctx.fillStyle = '#BBB';
-        ctx.font = '28px Arial';
-        ctx.fillText(guest.id, 500, 965);
-
-        ctx.strokeStyle = '#DDD';
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(200, 1000); ctx.lineTo(800, 1000); ctx.stroke();
-
-        ctx.fillStyle = '#C9A84C';
-        ctx.font = 'bold 38px Arial';
-        ctx.fillText('Golden Halls', 500, 1065);
-
-        ctx.fillStyle = '#888';
-        ctx.font = '26px Arial';
-        ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1120);
-
-        ctx.fillStyle = '#666';
-        ctx.font = '24px Arial';
-        ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1175);
-
-        ctx.fillStyle = '#C9A84C';
-        ctx.font = '28px Arial';
-        ctx.fillText('✦', 80, 80);
-        ctx.fillText('✦', 920, 80);
-        ctx.fillText('✦', 80, 1350);
-        ctx.fillText('✦', 920, 1350);
-
-        const dataUrl = card.toDataURL('image/png');
-        const base64 = dataUrl.split(',')[1];
-        document.body.removeChild(tempDiv);
-        resolve({ name: 'Invitation-' + guest.name + '.png', data: base64 });
-      }, 350);
-    });
-  }
-
-  // Process in batches of 5 to avoid freezing
+  // Process in batches of 5 to avoid freezing the browser
   for (let i = 0; i < total; i += 5) {
     const batch = guests.slice(i, i + 5);
-    const results = await Promise.all(batch.map(g => generateCardForGuest(g)));
-    results.forEach(r => { if (r) zip.file(r.name, r.data, { base64: true }); });
+    const cards = await Promise.all(batch.map(g => buildInvitationCard(g)));
+    cards.forEach((card, idx) => {
+      if (card) {
+        const base64 = card.toDataURL('image/png').split(',')[1];
+        zip.file('Invitation-' + batch[idx].name + '.png', base64, { base64: true });
+      }
+    });
     done += batch.length;
     showToast('⏳ ' + Math.min(done, total) + ' / ' + total + ' done...');
     await new Promise(r => setTimeout(r, 100));
@@ -811,29 +756,42 @@ window.addEventListener('load', () => {
     document.getElementById('page-scanner').classList.add('active');
     document.querySelectorAll('.nav-btn')[0].classList.add('active');
     onDbReady(async () => {
-      const { getDocs, doc, updateDoc } = window._firestore;
-      const val = verifyId.toUpperCase();
-      const snapshot = await getDocs(window._guestsCol);
-      const docFound = snapshot.docs.find(d => d.data().id.toUpperCase() === val);
-      if (docFound) {
-        const guest = docFound.data();
-        if (guest.scanned) {
-          document.getElementById('result-name-dup').textContent = guest.name;
-          document.getElementById('result-duplicate').style.display = 'block';
-          document.getElementById('camera-status').textContent = '⚠️ Already checked in!';
+      try {
+        const { getDocs, doc, updateDoc } = window._firestore;
+        const val = verifyId.toUpperCase();
+        const snapshot = await getDocs(window._guestsCol);
+        const docFound = snapshot.docs.find(d => d.data().id.toUpperCase() === val);
+        if (docFound) {
+          const guest = docFound.data();
+          if (guest.scanned) {
+            document.getElementById('result-name-dup').textContent = guest.name;
+            document.getElementById('result-duplicate').style.display = 'block';
+            document.getElementById('camera-status').textContent = '⚠️ Already checked in!';
+          } else {
+            document.getElementById('result-name-ok').textContent = guest.name;
+            document.getElementById('result-allowed').style.display = 'block';
+            document.getElementById('camera-status').textContent = '✅ Access Allowed';
+            await updateDoc(doc(window._db, 'guests', docFound.id), { scanned: true, scannedAt: new Date().toISOString() });
+            const idx = guests.findIndex(g => g.docId === docFound.id);
+            if (idx !== -1) guests[idx] = { ...guests[idx], scanned: true };
+          }
         } else {
-          document.getElementById('result-name-ok').textContent = guest.name;
-          document.getElementById('result-allowed').style.display = 'block';
-          document.getElementById('camera-status').textContent = '✅ Access Allowed';
-          await updateDoc(doc(window._db, 'guests', docFound.id), { scanned: true, scannedAt: new Date().toISOString() });
+          document.getElementById('result-denied').style.display = 'block';
+          document.getElementById('camera-status').textContent = '❌ QR Code not registered';
         }
-      } else {
-        document.getElementById('result-denied').style.display = 'block';
-        document.getElementById('camera-status').textContent = '❌ QR Code not registered';
+      } catch(e) {
+        console.error(e);
+        document.getElementById('camera-status').textContent = '⚠️ Connection error';
       }
     });
     window.history.replaceState({}, '', '/');
   }
+});
+
+// Cleanup on page unload to free Firebase listener and camera
+window.addEventListener('beforeunload', () => {
+  if (unsubscribe) unsubscribe();
+  if (qrScanner) { try { qrScanner.destroy(); } catch(e) {} qrScanner = null; }
 });
 </script>
 </body>
