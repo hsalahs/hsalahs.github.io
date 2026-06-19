@@ -63,6 +63,12 @@
   input::placeholder { color: #555; }
 
   .btn { width: 100%; padding: 15px 24px; background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%); color: var(--black); border: none; border-radius: 12px; font-family: 'Tajawal', sans-serif; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); margin-bottom: 10px; box-shadow: 0 4px 16px rgba(212, 175, 127, 0.25); }
+  .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .action-grid .btn-sm { width: 100%; padding: 11px 10px; font-size: 13px; font-weight: 600; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(212,175,127,0.3); color: var(--gold); cursor: pointer; transition: all 0.2s ease; font-family: 'Tajawal', sans-serif; }
+  .action-grid .btn-sm:hover { background: rgba(212,175,127,0.1); border-color: var(--gold); }
+  .action-grid .btn-sm.danger { border-color: rgba(220,80,80,0.4); color: #e57373; }
+  .action-grid .btn-sm.danger:hover { background: rgba(220,80,80,0.12); border-color: #e57373; }
+  .action-grid .full { grid-column: 1 / -1; }
   .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(212, 175, 127, 0.35); }
   .btn:active { transform: translateY(0); }
   .btn:disabled { background: #333; color: #666; cursor: not-allowed; box-shadow: none; }
@@ -216,12 +222,14 @@
     <div class="guest-list" id="guest-list">
       <div class="empty-state">No guests registered yet</div>
     </div>
-    <button class="btn btn-outline" style="margin-top:14px" onclick="downloadAllQR()">📦 Download All Invitations (ZIP)</button>
-    <button class="btn btn-outline" style="margin-top:8px" onclick="exportCSV()">📥 Export List</button>
-    <button class="btn btn-outline" style="margin-top:8px" onclick="document.getElementById('csv-import').click()">📂 Import from CSV</button>
-    <input type="file" id="csv-import" accept=".csv,.xlsx,.xls,.txt,.tsv" onchange="importCSV(event)" style="display:none;">
-    <button class="btn btn-outline" style="margin-top:8px" onclick="clearAll()">🗑 Clear All Data</button>
-    <button class="btn btn-outline" style="margin-top:8px" onclick="lockAdmin()">🔒 Logout</button>
+    <div class="action-grid">
+      <button class="btn-sm full" onclick="downloadAllQR()">📦 Download All Invitations (ZIP)</button>
+      <button class="btn-sm" onclick="exportCSV()">📥 Export List</button>
+      <button class="btn-sm" onclick="document.getElementById('csv-import').click()">📂 Import CSV</button>
+      <input type="file" id="csv-import" accept=".csv,.xlsx,.xls,.txt,.tsv" onchange="importCSV(event)" style="display:none;">
+      <button class="btn-sm danger" onclick="clearAll()">🗑 Clear All</button>
+      <button class="btn-sm danger" onclick="lockAdmin()">🔒 Logout</button>
+    </div>
   </div>
 </div>
 
