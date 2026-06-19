@@ -85,12 +85,6 @@
 
   .message { text-align: center; color: var(--gold); font-size: 14px; margin-bottom: 16px; padding: 14px; background: rgba(212, 175, 127, 0.08); border-radius: 10px; border-left: 3px solid var(--gold); }
 
-  #qr-result { display: none; }
-  .qr-box { text-align: center; padding: 28px; background: linear-gradient(135deg, var(--white) 0%, #F5F5F5 100%); border-radius: 18px; margin: 18px 0; box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
-  #qrcode { display: inline-block; padding: 12px; background: white; border-radius: 12px; }
-  .guest-name-display { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--black); font-weight: 700; margin-top: 16px; }
-  .guest-id { font-size: 12px; color: #999; margin-top: 6px; direction: ltr; }
-
   .camera-wrapper { position: relative; width: 100%; max-width: 320px; margin: 0 auto 16px; border-radius: 16px; overflow: hidden; border: 2px solid var(--gold); background: #000; aspect-ratio: 1; }
   #camera-video { width: 100%; height: 100%; object-fit: cover; display: block; }
   .scan-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
@@ -193,7 +187,6 @@
         <div class="scan-line"></div>
       </div>
     </div>
-    <canvas id="scan-canvas" style="display:none"></canvas>
     <div class="result-card allowed" id="result-allowed">
       <div class="result-icon">✅</div>
       <div class="result-name" id="result-name-ok"></div>
@@ -248,6 +241,7 @@
     </div>
     <div class="action-grid">
       <button class="btn-sm full" onclick="downloadAllQR()">📦 Download All Invitations (ZIP)</button>
+      <button class="btn-sm full" onclick="askRange()">📥 Download a Range (e.g. 1–100)</button>
       <button class="btn-sm" onclick="exportCSV()">📥 Export List</button>
       <button class="btn-sm" onclick="document.getElementById('csv-import').click()">📂 Import CSV</button>
       <input type="file" id="csv-import" accept=".csv,.xlsx,.xls,.txt,.tsv" onchange="importCSV(event)" style="display:none;">
@@ -797,17 +791,31 @@ async function downloadGuestQR(id, name) {
 }
 
 // Download all invitations as a ZIP
-async function downloadAllQR() {
+// Download invitations as ZIP.
+// Optional from/to (1-based, inclusive) to download a range only — avoids
+// rendering hundreds of cards at once on a phone. No args = download all.
+async function downloadAllQR(from, to) {
   if (guests.length === 0) { showToast('⚠️ No guests to download'); return; }
+
+  // Decide which guests to export
+  let list = guests;
+  let label = '';
+  if (from && to) {
+    if (from > to || from < 1) { showToast('⚠️ Check the range numbers'); return; }
+    list = guests.slice(from - 1, to);   // 1-based to 0-based
+    label = '-' + from + '-' + to;
+    if (list.length === 0) { showToast('⚠️ No guests in this range'); return; }
+  }
+
   showToast('⏳ Preparing ZIP... please wait');
 
   const zip = new JSZip();
-  const total = guests.length;
+  const total = list.length;
   let done = 0;
 
   // Process in batches of 5 to avoid freezing the browser
   for (let i = 0; i < total; i += 5) {
-    const batch = guests.slice(i, i + 5);
+    const batch = list.slice(i, i + 5);
     const cards = await Promise.all(batch.map(g => buildInvitationCard(g)));
     cards.forEach((card, idx) => {
       if (card) {
@@ -823,9 +831,29 @@ async function downloadAllQR() {
   const blob = await zip.generateAsync({ type: 'blob' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = 'Wedding-Invitations.zip';
+  link.download = 'Wedding-Invitations' + label + '.zip';
   link.click();
   showToast('✅ ZIP downloaded! (' + total + ' invitations)');
+}
+
+// Ask the user for a range via simple prompts, then download it
+function askRange() {
+  const total = guests.length;
+  if (total === 0) { showToast('⚠️ No guests yet'); return; }
+
+  const fromStr = prompt('Download from which number? (1 - ' + total + ')', '1');
+  if (fromStr === null) return; // cancelled
+  const from = parseInt(fromStr);
+
+  const toStr = prompt('To which number? (' + (from || 1) + ' - ' + total + ')', String(Math.min(from + 99, total)));
+  if (toStr === null) return; // cancelled
+  const to = parseInt(toStr);
+
+  if (!from || !to || from < 1 || to < from) {
+    showToast('⚠️ Invalid range. Try again.');
+    return;
+  }
+  downloadAllQR(from, to);
 }
 
 function showToast(msg) {
