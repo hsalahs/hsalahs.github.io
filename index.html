@@ -244,7 +244,7 @@
       <input type="text" id="admin-search" placeholder="🔍 Search by name..." onkeyup="searchGuests()">
     </div>
     <div class="guest-list" id="guest-list">
-      <div class="empty-state">No guests registered yet</div>
+      <div class="empty-state">⏳ Loading guests...</div>
     </div>
     <div class="action-grid">
       <button class="btn-sm full" onclick="downloadAllQR()">📦 Download All Invitations (ZIP)</button>
@@ -270,6 +270,7 @@ let lastScanned = null;
 let scanCooldown = false;
 let searchQuery = '';
 let audioCtx = null;
+let dataLoaded = false;
 
 function onDbReady(cb) {
   if (window._dbReady) cb();
@@ -280,8 +281,12 @@ onDbReady(() => {
   const { onSnapshot } = window._firestore;
   unsubscribe = onSnapshot(window._guestsCol, (snapshot) => {
     guests = snapshot.docs.map(d => ({ docId: d.id, ...d.data() }));
+    dataLoaded = true;
     updateCounter();
-    if (document.getElementById('admin-content').style.display === 'block') renderAdmin();
+    // Always refresh the admin list when data changes, as long as admin is unlocked
+    if (document.getElementById('admin-content') && document.getElementById('admin-content').style.display === 'block') {
+      renderAdmin();
+    }
   });
 });
 
@@ -518,7 +523,11 @@ function renderAdmin() {
     : guests;
 
   if (filtered.length === 0) {
-    list.innerHTML = `<div class="empty-state">${searchQuery ? 'No guests found' : 'No guests registered yet'}</div>`;
+    let msg;
+    if (searchQuery) msg = 'No guests found';
+    else if (!dataLoaded) msg = '⏳ Loading guests...';
+    else msg = 'No guests registered yet';
+    list.innerHTML = `<div class="empty-state">${msg}</div>`;
     return;
   }
 
