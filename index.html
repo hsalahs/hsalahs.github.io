@@ -442,6 +442,7 @@ function resetScan() {
 function checkPass() {
   const pass = document.getElementById('admin-pass').value;
   if (pass === ADMIN_PASS) {
+    sessionStorage.setItem('wd_admin', '1');
     document.getElementById('admin-lock').style.display = 'none';
     document.getElementById('admin-content').style.display = 'block';
     renderAdmin();
@@ -449,9 +450,19 @@ function checkPass() {
 }
 
 function lockAdmin() {
+  sessionStorage.removeItem('wd_admin');
   document.getElementById('admin-lock').style.display = 'block';
   document.getElementById('admin-content').style.display = 'none';
   document.getElementById('admin-pass').value = '';
+}
+
+// Keep admin unlocked across page refresh (same browser tab session)
+function restoreAdminSession() {
+  if (sessionStorage.getItem('wd_admin') === '1') {
+    document.getElementById('admin-lock').style.display = 'none';
+    document.getElementById('admin-content').style.display = 'block';
+    renderAdmin();
+  }
 }
 
 function escapeHtml(str) {
@@ -791,6 +802,7 @@ function showToast(msg) {
 }
 
 window.addEventListener('load', () => {
+  restoreAdminSession();
   const params = new URLSearchParams(window.location.search);
   const verifyId = params.get('verify');
   if (verifyId) {
