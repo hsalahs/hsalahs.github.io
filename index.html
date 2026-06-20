@@ -261,13 +261,13 @@
       <div class="empty-state">⏳ Loading guests...</div>
     </div>
     <div class="action-grid">
-      <button class="btn-sm full" onclick="downloadAllQR()">📦 Download All Invitations (ZIP)</button>
-      <button class="btn-sm full" onclick="askRange()">📥 Download a Range (e.g. 1–100)</button>
-      <button class="btn-sm" onclick="exportCSV()">📥 Export List</button>
-      <button class="btn-sm" onclick="document.getElementById('csv-import').click()">📂 Import CSV</button>
+      <button id="btn-download-all" class="btn-sm full" onclick="downloadAllQR()">📦 Download All Invitations (ZIP)</button>
+      <button id="btn-range" class="btn-sm full" onclick="askRange()">📥 Download a Range (e.g. 1–100)</button>
+      <button id="btn-export" class="btn-sm" onclick="exportCSV()">📥 Export List</button>
+      <button id="btn-import" class="btn-sm" onclick="document.getElementById('csv-import').click()">📂 Import CSV</button>
       <input type="file" id="csv-import" accept=".csv,.xlsx,.xls,.txt,.tsv" onchange="importCSV(event)" style="display:none;">
-      <button class="btn-sm danger" onclick="clearAll()">🗑 Clear All</button>
-      <button class="btn-sm danger" onclick="lockAdmin()">🔒 Logout</button>
+      <button id="btn-clear" class="btn-sm danger" onclick="clearAll()">🗑 Clear All</button>
+      <button id="btn-logout" class="btn-sm danger" onclick="lockAdmin()">🔒 Logout</button>
     </div>
   </div>
 </div>
@@ -276,6 +276,7 @@
 
 <script>
 const ADMIN_PASS = '19921995';
+const SECURITY_PASS = 'security2026';
 const SITE_URL = 'https://hsalahs.github.io';
 
 let guests = [];
@@ -286,6 +287,7 @@ let scanCooldown = false;
 let searchQuery = '';
 let audioCtx = null;
 let dataLoaded = false;
+let adminLevel = 0; // 0 = guest, 1 = security staff (limited), 2 = full admin
 
 function onDbReady(cb) {
   if (window._dbReady) cb();
@@ -486,14 +488,26 @@ function resetScan() {
 function checkPass() {
   const pass = document.getElementById('admin-pass').value;
   if (pass === ADMIN_PASS) {
+    adminLevel = 2; // Full admin
+    sessionStorage.setItem('wd_admin', '2');
+    document.getElementById('admin-lock').style.display = 'none';
+    document.getElementById('admin-content').style.display = 'block';
+    renderAdmin();
+    showToast('🔐 Full Admin Access');
+  } else if (pass === SECURITY_PASS) {
+    adminLevel = 1; // Security staff (limited)
     sessionStorage.setItem('wd_admin', '1');
     document.getElementById('admin-lock').style.display = 'none';
     document.getElementById('admin-content').style.display = 'block';
     renderAdmin();
-  } else { showToast('❌ Incorrect password'); }
+    showToast('👮 Security Staff Access');
+  } else {
+    showToast('❌ Incorrect password');
+  }
 }
 
 function lockAdmin() {
+  adminLevel = 0;
   sessionStorage.removeItem('wd_admin');
   document.getElementById('admin-lock').style.display = 'block';
   document.getElementById('admin-content').style.display = 'none';
@@ -502,7 +516,9 @@ function lockAdmin() {
 
 // Keep admin unlocked across page refresh (same browser tab session)
 function restoreAdminSession() {
-  if (sessionStorage.getItem('wd_admin') === '1') {
+  const level = sessionStorage.getItem('wd_admin');
+  if (level === '1' || level === '2') {
+    adminLevel = parseInt(level);
     document.getElementById('admin-lock').style.display = 'none';
     document.getElementById('admin-content').style.display = 'block';
     renderAdmin();
@@ -558,6 +574,18 @@ function renderAdmin() {
       <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeHtml(g.name)}')">🗑</button>
     </div>
   `).join('');
+  updateSecurityButtons();
+}
+
+// Hide/show buttons based on admin level
+function updateSecurityButtons() {
+  const isFullAdmin = (adminLevel === 2);
+  document.getElementById('btn-download-all').style.display = isFullAdmin ? 'block' : 'none';
+  document.getElementById('btn-range').style.display = isFullAdmin ? 'block' : 'none';
+  document.getElementById('btn-export').style.display = isFullAdmin ? 'block' : 'none';
+  document.getElementById('btn-import').style.display = isFullAdmin ? 'block' : 'none';
+  document.getElementById('btn-clear').style.display = isFullAdmin ? 'block' : 'none';
+  document.getElementById('btn-logout').style.display = 'block'; // Always visible for both levels
 }
 
 // Manually mark a guest as attended (for guests who forgot their QR).
@@ -596,6 +624,7 @@ async function deleteGuest(docId, name) {
 }
 
 async function clearAll() {
+  if (adminLevel !== 2) { showToast('❌ Not authorized'); return; }
   if (!confirm('Are you sure? All data will be permanently deleted.')) return;
   onDbReady(async () => {
     const { doc, deleteDoc, getDocs } = window._firestore;
@@ -606,6 +635,7 @@ async function clearAll() {
 }
 
 function exportCSV() {
+  if (adminLevel !== 2) { showToast('❌ Not authorized'); return; }
   const rows = [['Name', 'Code', 'Attendance', 'Registered At']];
   guests.forEach(g => rows.push([g.name, g.id, g.scanned ? 'Attended' : 'Not Yet', g.registeredAt]));
   const csv = rows.map(r => r.join(',')).join('\n');
@@ -616,6 +646,7 @@ function exportCSV() {
 }
 
 async function importCSV(event) {
+  if (adminLevel !== 2) { showToast('❌ Not authorized'); return; }
   const file = event.target.files[0];
   if (!file) return;
   
@@ -816,6 +847,7 @@ async function downloadGuestQR(id, name) {
 // Optional from/to (1-based, inclusive) to download a range only — avoids
 // rendering hundreds of cards at once on a phone. No args = download all.
 async function downloadAllQR(from, to) {
+  if (adminLevel !== 2) { showToast('❌ Not authorized'); return; }
   if (guests.length === 0) { showToast('⚠️ No guests to download'); return; }
 
   // Decide which guests to export
