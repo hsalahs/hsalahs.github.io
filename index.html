@@ -15,7 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, addDoc, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAeygMBPsJdXO76susC4Tk5rwTfZLUq5VE",
@@ -32,20 +32,22 @@
 
   window._db = db;
   window._guestsCol = guestsCol;
-  window._firestore = { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, runTransaction };
+  window._firestore = { collection, addDoc, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, runTransaction };
   window._dbReady = true;
   window.dispatchEvent(new Event('dbReady'));
 </script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Tajawal:wght@300;400;500;700&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  /* ===== THEME SYSTEM — 4 luxury palettes ===== */
+  /* ===== THEME SYSTEM — 5 luxury palettes ===== */
   /* Theme 1: Royal Gold (default) */
   :root, [data-theme="gold"] {
     --gold: #E0BC7A; --gold-light: #F3E0BC; --gold-deep: #C99B4A;
     --bg-base: #0A0A0A; --bg-1: #0C0C0C; --bg-2: #060606;
     --glow-1: rgba(var(--accent-rgb),0.10); --glow-2: rgba(201,155,74,0.08); --glow-3: rgba(var(--accent-rgb),0.05);
     --accent-rgb: 224,188,122; --white: #FAF8F4;
+    --text-main: #FAF8F4; --text-soft: #B8B4AC;
+    --glass-bg-1: rgba(255,255,255,0.06); --glass-bg-2: rgba(255,255,255,0.02); --glass-border: rgba(var(--accent-rgb),0.18); --glass-inset: rgba(255,255,255,0.06);
   }
   /* Theme 2: Rose Elegance */
   [data-theme="rose"] {
@@ -53,6 +55,8 @@
     --bg-base: #14090C; --bg-1: #1A0C10; --bg-2: #0E0608;
     --glow-1: rgba(232,180,184,0.12); --glow-2: rgba(201,135,154,0.10); --glow-3: rgba(232,180,184,0.06);
     --accent-rgb: 232,180,184; --white: #FAF4F4;
+    --text-main: #FAF4F4; --text-soft: #C9B4B6;
+    --glass-bg-1: rgba(255,255,255,0.06); --glass-bg-2: rgba(255,255,255,0.02); --glass-border: rgba(var(--accent-rgb),0.18); --glass-inset: rgba(255,255,255,0.06);
   }
   /* Theme 3: Emerald Luxe */
   [data-theme="emerald"] {
@@ -60,6 +64,8 @@
     --bg-base: #07120E; --bg-1: #0A1812; --bg-2: #040C08;
     --glow-1: rgba(var(--accent-rgb),0.10); --glow-2: rgba(46,125,90,0.14); --glow-3: rgba(var(--accent-rgb),0.05);
     --accent-rgb: 212,175,127; --white: #F4FAF6;
+    --text-main: #F4FAF6; --text-soft: #AEC2B7;
+    --glass-bg-1: rgba(255,255,255,0.06); --glass-bg-2: rgba(255,255,255,0.02); --glass-border: rgba(var(--accent-rgb),0.18); --glass-inset: rgba(255,255,255,0.06);
   }
   /* Theme 4: Midnight Sapphire */
   [data-theme="sapphire"] {
@@ -67,9 +73,20 @@
     --bg-base: #080C16; --bg-1: #0C1220; --bg-2: #04060E;
     --glow-1: rgba(184,198,224,0.10); --glow-2: rgba(138,157,201,0.12); --glow-3: rgba(184,198,224,0.06);
     --accent-rgb: 184,198,224; --white: #F4F6FA;
+    --text-main: #F4F6FA; --text-soft: #AEB7C9;
+    --glass-bg-1: rgba(255,255,255,0.06); --glass-bg-2: rgba(255,255,255,0.02); --glass-border: rgba(var(--accent-rgb),0.18); --glass-inset: rgba(255,255,255,0.06);
+  }
+  /* Theme 5: Ivory & Champagne — warm off-white, light luxury */
+  [data-theme="ivory"] {
+    --gold: #B08D57; --gold-light: #8A6D3F; --gold-deep: #9C7A45;
+    --bg-base: #F6F1E7; --bg-1: #FAF6EE; --bg-2: #EFE7D6;
+    --glow-1: rgba(176,141,87,0.10); --glow-2: rgba(176,141,87,0.07); --glow-3: rgba(176,141,87,0.05);
+    --accent-rgb: 176,141,87; --white: #2A2419;
+    --text-main: #2A2419; --text-soft: #7A7060;
+    --glass-bg-1: rgba(255,255,255,0.55); --glass-bg-2: rgba(255,255,255,0.30); --glass-border: rgba(var(--accent-rgb),0.25); --glass-inset: rgba(255,255,255,0.5);
   }
 
-  body { font-family: 'Tajawal', sans-serif; background: var(--bg-base); color: var(--white); min-height: 100vh; overflow-x: hidden; position: relative; transition: background 0.6s ease; }
+  body { font-family: 'Tajawal', sans-serif; background: var(--bg-base); color: var(--text-main); min-height: 100vh; overflow-x: hidden; position: relative; transition: background 0.6s ease, color 0.6s ease; }
   body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; transition: opacity 0.6s ease;
     background:
       radial-gradient(ellipse 80% 50% at 50% -10%, var(--glow-1), transparent 60%),
@@ -79,7 +96,7 @@
   body > * { position: relative; z-index: 1; }
 
   nav { display: flex; justify-content: center; gap: 12px; padding: 20px 16px; background: rgba(26,26,26,0.8); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(var(--accent-rgb), 0.2); flex-wrap: wrap; position: sticky; top: 0; z-index: 100; }
-  .nav-btn { padding: 12px 28px; border: 1.5px solid rgba(var(--accent-rgb), 0.3); background: rgba(255,255,255,0.02); color: #999; border-radius: 50px; cursor: pointer; font-family: 'Tajawal', sans-serif; font-size: 14px; font-weight: 500; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+  .nav-btn { padding: 12px 28px; border: 1.5px solid rgba(var(--accent-rgb), 0.3); background: rgba(255,255,255,0.02); color: var(--text-soft); border-radius: 50px; cursor: pointer; font-family: 'Tajawal', sans-serif; font-size: 14px; font-weight: 500; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
   .nav-btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(var(--accent-rgb), 0.05); }
   .nav-btn.active { background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%); color: var(--bg-base); border-color: var(--gold); font-weight: 700; box-shadow: 0 8px 32px rgba(var(--accent-rgb), 0.25); }
   .nav-btn.nav-refresh { padding: 12px 14px; font-size: 16px; }
@@ -93,10 +110,10 @@
   .hero-ornament { font-size: 24px; color: var(--gold); letter-spacing: 10px; margin-bottom: 8px; animation: float 3s ease-in-out infinite; }
   @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
   .hero h1 { font-family: 'Playfair Display', serif; font-size: 32px; font-weight: 700; color: var(--gold-light); letter-spacing: 1.5px; margin-bottom: 6px; text-shadow: 0 2px 20px rgba(var(--accent-rgb),0.25); }
-  .hero .subtitle { font-size: 12px; color: #888; letter-spacing: 2px; text-transform: uppercase; }
+  .hero .subtitle { font-size: 12px; color: var(--text-soft); letter-spacing: 2px; text-transform: uppercase; }
   .gold-line { width: 64px; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); margin: 12px auto; }
 
-  .card { background: linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); border: 1px solid rgba(var(--accent-rgb),0.18); border-radius: 20px; padding: 28px; margin-bottom: 18px; backdrop-filter: blur(20px) saturate(120%); -webkit-backdrop-filter: blur(20px) saturate(120%); box-shadow: 0 8px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06); transition: all 0.4s ease; }
+  .card { background: linear-gradient(145deg, var(--glass-bg-1), var(--glass-bg-2)); border: 1px solid var(--glass-border); border-radius: 20px; padding: 28px; margin-bottom: 18px; backdrop-filter: blur(20px) saturate(120%); -webkit-backdrop-filter: blur(20px) saturate(120%); box-shadow: 0 8px 40px rgba(0,0,0,0.18), inset 0 1px 0 var(--glass-inset); transition: all 0.4s ease; }
   .card:hover { border-color: rgba(var(--accent-rgb), 0.35); box-shadow: 0 12px 48px rgba(var(--accent-rgb), 0.15); }
   .card-title { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; color: var(--gold-light); margin-bottom: 18px; text-align: center; }
 
@@ -122,9 +139,10 @@
   .theme-dot.t-rose { background: linear-gradient(135deg, #E8B4B8, #C9879A); }
   .theme-dot.t-emerald { background: linear-gradient(135deg, #2E7D5A, #D4AF7F); }
   .theme-dot.t-sapphire { background: linear-gradient(135deg, #8A9DC9, #B8C6E0); }
+  .theme-dot.t-ivory { background: linear-gradient(135deg, #F6F1E7, #D9C9A8); }
   .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(var(--accent-rgb), 0.35); }
   .btn:active { transform: translateY(0); }
-  .btn:disabled { background: #333; color: #666; cursor: not-allowed; box-shadow: none; }
+  .btn:disabled { background: #333; color: var(--text-soft); cursor: not-allowed; box-shadow: none; }
   .btn-outline { background: transparent; border: 1.5px solid var(--gold); color: var(--gold); margin-top: 10px; box-shadow: none; }
   .btn-outline:hover { background: rgba(var(--accent-rgb), 0.1); box-shadow: 0 4px 16px rgba(var(--accent-rgb), 0.2); }
 
@@ -136,7 +154,7 @@
   .scan-frame { width: 65%; height: 65%; border: 2px solid var(--gold); border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); }
   .scan-line { position: absolute; width: 65%; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); animation: scanLine 2s linear infinite; }
   @keyframes scanLine { 0% { top: 17.5%; } 100% { top: 82.5%; } }
-  .camera-status { font-size: 13px; color: #666; margin-bottom: 14px; min-height: 20px; text-align: center; }
+  .camera-status { font-size: 13px; color: var(--text-soft); margin-bottom: 14px; min-height: 20px; text-align: center; }
 
   .result-card { display: none; padding: 24px; border-radius: 16px; margin-top: 16px; text-align: center; animation: slideUp 0.4s ease-out; }
   @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -145,7 +163,7 @@
   .result-card.denied { background: linear-gradient(135deg, rgba(244, 67, 54, 0.12), rgba(244, 67, 54, 0.04)); border: 1px solid rgba(244, 67, 54, 0.3); }
   .result-icon { font-size: 48px; margin-bottom: 12px; }
   .result-name { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: var(--gold-light); margin-bottom: 8px; }
-  .result-status { font-size: 14px; color: #999; }
+  .result-status { font-size: 14px; color: var(--text-soft); }
   .result-status.ok { color: #4CAF50; }
   .result-status.dup { color: var(--gold); }
   .result-status.err { color: #F44336; }
@@ -153,22 +171,22 @@
   .admin-lock { text-align: center; padding: 60px 20px; }
   .admin-lock h2 { font-size: 20px; color: var(--gold); margin-bottom: 20px; }
   .stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 18px; }
-  .stat-box { background: linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); border: 1px solid rgba(var(--accent-rgb),0.18); border-radius: 16px; padding: 16px; text-align: center; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); transition: all 0.3s ease; }
+  .stat-box { background: linear-gradient(145deg, var(--glass-bg-1), var(--glass-bg-2)); border: 1px solid var(--glass-border); border-radius: 16px; padding: 16px; text-align: center; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: inset 0 1px 0 var(--glass-inset); transition: all 0.3s ease; }
   .stat-box:hover { border-color: rgba(var(--accent-rgb), 0.35); }
   .stat-num { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 700; background: linear-gradient(135deg, var(--gold-light), var(--gold), var(--gold-deep)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-  .stat-label { font-size: 11px; color: #888; margin-top: 6px; }
-  .guest-list { background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(var(--accent-rgb),0.18); border-radius: 18px; overflow: hidden; max-height: 60vh; overflow-y: auto; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); }
+  .stat-label { font-size: 11px; color: var(--text-soft); margin-top: 6px; }
+  .guest-list { background: linear-gradient(145deg, var(--glass-bg-1), var(--glass-bg-2)); border: 1px solid var(--glass-border); border-radius: 18px; overflow: hidden; max-height: 60vh; overflow-y: auto; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: inset 0 1px 0 var(--glass-inset); }
   .guest-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgba(var(--accent-rgb), 0.08); gap: 10px; transition: background 0.2s ease; }
   .guest-item:hover { background: rgba(var(--accent-rgb), 0.05); }
   .guest-item:last-child { border-bottom: none; }
   .guest-item .name { color: var(--white); font-size: 14px; font-weight: 500; }
-  .guest-item .gid { color: #666; font-size: 11px; direction: ltr; }
+  .guest-item .gid { color: var(--text-soft); font-size: 11px; direction: ltr; }
   .badge { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
   .badge.scanned { background: rgba(76, 175, 80, 0.15); color: #4CAF50; }
-  .badge.pending { background: rgba(255,255,255,0.05); color: #888; }
+  .badge.pending { background: rgba(255,255,255,0.05); color: var(--text-soft); }
   .del-btn { background: none; border: none; color: #F44336; font-size: 18px; cursor: pointer; padding: 4px 8px; transition: all 0.2s ease; }
   .del-btn:hover { transform: scale(1.2); }
-  .empty-state { text-align: center; padding: 40px 20px; color: #666; font-size: 14px; }
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--text-soft); font-size: 14px; }
 
   .toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%) translateY(-24px); background: linear-gradient(135deg, var(--gold), var(--gold-light)); color: var(--bg-base); padding: 16px 32px; border-radius: 50px; font-weight: 700; font-size: 15.5px; opacity: 0; transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.2,0.8,0.2,1); z-index: 99999; box-shadow: 0 10px 36px rgba(var(--accent-rgb), 0.45), 0 2px 10px rgba(0,0,0,0.3); pointer-events: none; max-width: 90vw; text-align: center; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -302,6 +320,7 @@
       <button class="theme-dot t-rose" onclick="setTheme('rose')" title="Rose Elegance"></button>
       <button class="theme-dot t-emerald" onclick="setTheme('emerald')" title="Emerald Luxe"></button>
       <button class="theme-dot t-sapphire" onclick="setTheme('sapphire')" title="Midnight Sapphire"></button>
+      <button class="theme-dot t-ivory" onclick="setTheme('ivory')" title="Ivory & Champagne"></button>
     </div>
     <div class="admin-add-form">
       <input type="text" id="admin-guest-name" placeholder="Guest full name..." onkeydown="if(event.key==='Enter') adminAddGuest()">
@@ -578,17 +597,35 @@ function restoreAdminSession() {
   }
 }
 
-// Switch the visual theme and remember the choice
+// Switch the visual theme. Saved to Firebase so every device updates together.
 function setTheme(name) {
   document.body.setAttribute('data-theme', name);
-  try { localStorage.setItem('wd_theme', name); } catch(e) {}
+  try { localStorage.setItem('wd_theme', name); } catch(e) {} // instant local fallback
+  onDbReady(async () => {
+    const { doc, setDoc } = window._firestore;
+    try {
+      await setDoc(doc(window._db, 'settings', 'app'), { theme: name }, { merge: true });
+    } catch(e) { console.error('Theme sync failed', e); }
+  });
 }
 
-// Restore the saved theme on load (defaults to gold)
+// Restore the saved theme on load, then listen live so every device
+// switches together the moment anyone changes it.
 function restoreTheme() {
   let saved = 'gold';
   try { saved = localStorage.getItem('wd_theme') || 'gold'; } catch(e) {}
-  document.body.setAttribute('data-theme', saved);
+  document.body.setAttribute('data-theme', saved); // instant paint, no flash
+
+  onDbReady(() => {
+    const { doc, onSnapshot } = window._firestore;
+    onSnapshot(doc(window._db, 'settings', 'app'), (snap) => {
+      if (snap.exists() && snap.data().theme) {
+        const theme = snap.data().theme;
+        document.body.setAttribute('data-theme', theme);
+        try { localStorage.setItem('wd_theme', theme); } catch(e) {}
+      }
+    });
+  });
 }
 
 function escapeHtml(str) {
@@ -813,7 +850,8 @@ function buildInvitationCard(guest) {
       gold:     { accent: '#C9A84C', accentLight: '#E0BC7A' },
       rose:     { accent: '#C9879A', accentLight: '#E8B4B8' },
       emerald:  { accent: '#2E7D5A', accentLight: '#D4AF7F' },
-      sapphire: { accent: '#5A6FA0', accentLight: '#8A9DC9' }
+      sapphire: { accent: '#5A6FA0', accentLight: '#8A9DC9' },
+      ivory:    { accent: '#9C7A45', accentLight: '#B08D57' }
     };
     const GOLD = (themeColors[theme] || themeColors.gold).accent;
 
