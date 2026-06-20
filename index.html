@@ -287,7 +287,7 @@
       <div class="stat-box"><div class="stat-num" id="stat-scanned">0</div><div class="stat-label">Attended</div></div>
       <div class="stat-box"><div class="stat-num" id="stat-pending">0</div><div class="stat-label">Not Yet</div></div>
     </div>
-    <div class="theme-switcher">
+    <div class="theme-switcher" id="theme-switcher">
       <span class="theme-label">🎨 Theme</span>
       <button class="theme-dot t-gold" onclick="setTheme('gold')" title="Royal Gold"></button>
       <button class="theme-dot t-rose" onclick="setTheme('rose')" title="Rose Elegance"></button>
@@ -643,6 +643,7 @@ function updateSecurityButtons() {
   document.getElementById('btn-import').style.display = isFullAdmin ? 'block' : 'none';
   document.getElementById('btn-clear').style.display = isFullAdmin ? 'block' : 'none';
   document.getElementById('btn-logout').style.display = 'block'; // Always visible for both levels
+  document.getElementById('theme-switcher').style.display = isFullAdmin ? 'flex' : 'none';
 }
 
 // Manually mark a guest as attended (for guests who forgot their QR).
