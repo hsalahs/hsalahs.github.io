@@ -25,9 +25,11 @@
     messagingSenderId: "149053298560",
     appId: "1:149053298560:web:b93d2395bcb0e51d7a9365"
   };
+
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const guestsCol = collection(db, 'guests');
+
   window._db = db;
   window._guestsCol = guestsCol;
   window._firestore = { collection, addDoc, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, runTransaction };
