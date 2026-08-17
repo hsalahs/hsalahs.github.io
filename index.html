@@ -750,10 +750,15 @@ function exportCSV() {
   const rows = [['Name', 'Code', 'Attendance', 'Registered At']];
   guests.forEach(g => rows.push([g.name, g.id, g.scanned ? 'Attended' : 'Not Yet', g.registeredAt]));
   const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURIComponent(csv);
+  link.href = url;
   link.download = 'guests-list.csv';
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 async function importCSV(event) {
@@ -1037,15 +1042,28 @@ function buildInvitationCard(guest) {
   });
 }
 
-// Download a single guest's invitation
+// Download a single guest's invitation.
+// Uses a Blob (not a long data: URL) because iOS Safari often refuses
+// to save very long data: links. Spaces in the name are replaced with
+// underscores for the same reason — the Arabic name itself is kept.
 async function downloadGuestQR(id, name) {
   const card = await buildInvitationCard({ id, name });
   if (!card) { showToast('⚠️ Error generating QR'); return; }
-  const link = document.createElement('a');
-  link.download = 'Invitation-' + name + '.png';
-  link.href = card.toDataURL('image/png');
-  link.click();
-  showToast('📥 Saved: ' + name);
+
+  const safeName = String(name).trim().replace(/[\s\/\\:*?"<>|]+/g, '_');
+
+  card.toBlob((blob) => {
+    if (!blob) { showToast('⚠️ Error generating QR'); return; }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = 'Invitation-' + safeName + '.png';
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    showToast('📥 Saved: ' + name);
+  }, 'image/png');
 }
 
 // Download all invitations as a ZIP
