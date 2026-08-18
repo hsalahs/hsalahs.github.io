@@ -12,7 +12,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, addDoc, doc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDbjJtLLDniHbALfUhzQ-UiN2j5txR8PGM",
@@ -28,7 +28,7 @@
   window._db = db;
   window._guestsCol = collection(db, 'guests');
   window._requestsCol = collection(db, 'requests');
-  window._firestore = { collection, addDoc, doc, onSnapshot };
+  window._firestore = { collection, addDoc, doc, onSnapshot, query, where };
   window._dbReady = true;
   window.dispatchEvent(new Event('dbReady'));
 </script>
@@ -252,6 +252,7 @@ async function submitRequest() {
       myReqId = reqId;
       showToast('✅ تم إرسال طلبك');
       render();
+      startLiveData();
     } catch (e) {
       console.error(e);
       showToast('⚠️ تعذّر الإرسال، حاول مرة ثانية');
@@ -492,23 +493,29 @@ function buildInvitationCard(guest) {
 }
 
 // ---- Live data ----
-onDbReady(() => {
-  const { onSnapshot } = window._firestore;
+// Only listen to THIS guest's own request + guest records — not the whole
+// collection. Every open guest tab used to stream all 300+ records live,
+// which is unnecessary cost and exposes other guests' data client-side.
+function startLiveData() {
+  if (!myReqId) return; // no ID in URL yet — nothing to listen to
+  onDbReady(() => {
+    const { onSnapshot, query, where } = window._firestore;
 
-  onSnapshot(window._requestsCol, (snap) => {
-    requests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
-    render();
-  });
+    onSnapshot(query(window._requestsCol, where('reqId', '==', myReqId)), (snap) => {
+      requests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+      render();
+    });
 
-  onSnapshot(window._guestsCol, (snap) => {
-    guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
-    render();
+    onSnapshot(query(window._guestsCol, where('reqId', '==', myReqId)), (snap) => {
+      guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+      render();
+    });
   });
-});
+}
 
 window.addEventListener('load', () => {
   myReqId = readIdFromUrl();
-  if (myReqId) render();
+  if (myReqId) { render(); startLiveData(); }
 });
 </script>
 
