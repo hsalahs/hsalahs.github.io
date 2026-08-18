@@ -172,6 +172,10 @@
   .admin-lock h2 { font-size: 20px; color: var(--gold); margin-bottom: 20px; }
   .stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 18px; }
   .stat-box { background: linear-gradient(145deg, var(--glass-bg-1), var(--glass-bg-2)); border: 1px solid var(--glass-border); border-radius: 16px; padding: 16px; text-align: center; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: inset 0 1px 0 var(--glass-inset); transition: all 0.3s ease; }
+  .stat-box.tappable { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .stat-box.tappable:active { transform: scale(0.97); }
+  .stat-box.active-filter { border-color: var(--gold); background: linear-gradient(145deg, rgba(var(--accent-rgb),0.20), rgba(var(--accent-rgb),0.07)); box-shadow: 0 0 0 1px var(--gold), 0 6px 22px rgba(var(--accent-rgb),0.28); }
+  .stat-box.active-filter .stat-label { color: var(--gold); font-weight: 700; }
   .stat-box:hover { border-color: rgba(var(--accent-rgb), 0.35); }
   .stat-num { font-family: 'Playfair Display', serif; font-size: 30px; font-weight: 700; background: linear-gradient(135deg, var(--gold-light), var(--gold), var(--gold-deep)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
   .stat-label { font-size: 11px; color: var(--text-soft); margin-top: 6px; }
@@ -313,9 +317,9 @@
       <div class="gold-line"></div>
     </div>
     <div class="stats-row">
-      <div class="stat-box"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Total Guests</div></div>
-      <div class="stat-box"><div class="stat-num" id="stat-scanned">0</div><div class="stat-label">Attended</div></div>
-      <div class="stat-box"><div class="stat-num" id="stat-pending">0</div><div class="stat-label">Not Yet</div></div>
+      <div class="stat-box" id="box-all" onclick="setStatusFilter('all')"><div class="stat-num" id="stat-total">0</div><div class="stat-label">Total Guests</div></div>
+      <div class="stat-box" id="box-attended" onclick="setStatusFilter('attended')"><div class="stat-num" id="stat-scanned">0</div><div class="stat-label">Attended</div></div>
+      <div class="stat-box" id="box-pending" onclick="setStatusFilter('pending')"><div class="stat-num" id="stat-pending">0</div><div class="stat-label">Not Yet</div></div>
     </div>
     <div class="theme-switcher" id="theme-switcher">
       <span class="theme-label">🎨 Theme</span>
@@ -368,6 +372,8 @@ let adminLevel = 0; // 0 = locked, 1 = security staff, 3 = helper, 4 = bride, 2 
 // Who is logged in. New guests are tagged with this, so each person can
 // find their own guests later regardless of list order or when they added them.
 let currentOwner = null;
+// Which attendance status the admin list is filtered by: 'all' | 'attended' | 'pending'
+let statusFilter = 'all';
 
 function onDbReady(cb) {
   if (window._dbReady) cb();
@@ -592,6 +598,7 @@ function checkPass() {
 function lockAdmin() {
   adminLevel = 0;
   currentOwner = null;
+  statusFilter = 'all';
   sessionStorage.removeItem('wd_admin');
   sessionStorage.removeItem('wd_owner');
   document.getElementById('admin-lock').style.display = 'block';
@@ -671,6 +678,25 @@ function visibleGuests() {
   return guests;
 }
 
+// Tapping a stat box filters the list below it. Tapping the active one
+// again clears the filter. Only the admin and the door staff use this.
+function setStatusFilter(mode) {
+  if (![1, 2].includes(adminLevel)) return;
+  statusFilter = (statusFilter === mode) ? 'all' : mode;
+  renderAdmin();
+}
+
+// Show which stat box is currently acting as the filter
+function highlightActiveFilter() {
+  const map = { all: 'box-all', attended: 'box-attended', pending: 'box-pending' };
+  ['box-all', 'box-attended', 'box-pending'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('active-filter', map[statusFilter] === id && statusFilter !== 'all');
+    el.classList.toggle('tappable', [1, 2].includes(adminLevel));
+  });
+}
+
 function renderAdmin() {
   const mine = visibleGuests();
   const total = mine.length;
@@ -681,15 +707,23 @@ function renderAdmin() {
 
   const list = document.getElementById('guest-list');
 
-  // Respect active search filter
-  const filtered = searchQuery.trim()
-    ? mine.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : mine;
+  // Apply the status filter (tapping a stat box), then the search box
+  let filtered = mine;
+  if (statusFilter === 'attended')      filtered = filtered.filter(g => g.scanned);
+  else if (statusFilter === 'pending')  filtered = filtered.filter(g => !g.scanned);
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter(g => g.name.toLowerCase().includes(q));
+  }
+
+  highlightActiveFilter();
 
   if (filtered.length === 0) {
     let msg;
     if (searchQuery) msg = 'لا توجد نتائج';
     else if (!dataLoaded) msg = '⏳ جاري التحميل...';
+    else if (statusFilter === 'attended') msg = 'لا أحد وصل بعد';
+    else if (statusFilter === 'pending') msg = '🎉 الجميع وصلوا';
     else msg = 'لا يوجد ضيوف بعد';
     list.innerHTML = `<div class="empty-state">${msg}</div>`;
     updateSecurityButtons();
