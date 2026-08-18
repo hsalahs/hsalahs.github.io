@@ -163,7 +163,7 @@ input[type=number] { text-align: center; }
 
   <!-- Registration form -->
   <div class="card" id="form-card">
-    <div class="card-title">تسجيل الحضور</div>
+    <div class="card-title">تسجيل</div>
 
     <label for="g-name">الاسم الكامل</label>
     <input type="text" id="g-name" placeholder="اكتب اسمك هنا" autocomplete="name">
@@ -174,10 +174,10 @@ input[type=number] { text-align: center; }
     <label for="g-companions">عدد المرافقين (غيرك)</label>
     <input type="number" id="g-companions" value="0" min="0" max="10" dir="ltr">
 
-    <button class="btn" id="submit-btn" onclick="submitRequest()">إرسال الطلب ✉️</button>
+    <button class="btn" id="submit-btn" onclick="submitRequest()">إرسال ✉️</button>
 
     <p class="note">
-      سيصلك الباركود على بريدك الإلكتروني بعد مراجعة الطلب.<br>
+      سيصلك الباركود على بريدك الإلكتروني.<br>
       <strong>يرجى تفقّد بريد الرسائل غير المرغوبة (Spam)</strong>
     </p>
   </div>
@@ -218,9 +218,12 @@ function escapeHtml(str) {
                     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Remember this device's request so the guest sees their status when they return
-function rememberRequest(id) { try { localStorage.setItem('wd_req', id); } catch(e) {} }
-function recallRequest() { try { return localStorage.getItem('wd_req'); } catch(e) { return null; } }
+// The request is identified by the ?id= parameter in the personal link
+// sent by email — not by remembering the device. That way the barcode
+// opens from any phone, and this page stays reusable for the next guest.
+function readIdFromUrl() {
+  try { return new URLSearchParams(window.location.search).get('id'); } catch(e) { return null; }
+}
 
 // ---- Submit ----
 async function submitRequest() {
@@ -247,19 +250,22 @@ async function submitRequest() {
         createdAt: new Date().toISOString()
       });
       myReqId = reqId;
-      rememberRequest(reqId);
       showToast('✅ تم إرسال طلبك');
       render();
     } catch (e) {
       console.error(e);
       showToast('⚠️ تعذّر الإرسال، حاول مرة ثانية');
       btn.disabled = false;
-      btn.textContent = 'إرسال الطلب ✉️';
+      btn.textContent = 'إرسال ✉️';
     }
   });
 }
 
 // ---- Status view ----
+// Only shown when the visitor arrived through their personal link
+// (?id=REQ-XXXX), which is what the approval email contains. A plain
+// visit always shows an empty form, so the same phone can register
+// several people one after another.
 function render() {
   if (!myReqId) return;
   const req = requests.find(r => r.reqId === myReqId);
@@ -277,7 +283,7 @@ function render() {
         <div class="icon">⏳</div>
         <div class="msg">شكراً ${escapeHtml(req.name)}<br>تم استلام طلبك بنجاح</div>
         <div class="sub">
-          سيصلك الباركود على بريدك الإلكتروني بعد المراجعة.<br>
+          سيصلك الباركود على بريدك الإلكتروني.<br>
           <strong>تفقّد بريد الرسائل غير المرغوبة (Spam)</strong> إن لم تجده.
         </div>
       </div>`;
@@ -287,7 +293,7 @@ function render() {
 
   // Approved
   const mine = guests.filter(g => g.reqId === myReqId);
-  document.getElementById('status-title').textContent = 'دعوتك جاهزة 🎉';
+  document.getElementById('status-title').textContent = 'باركودك جاهز 🎉';
 
   if (renderedPasses) return;   // don't redraw the cards on every snapshot
   renderedPasses = true;
@@ -295,8 +301,11 @@ function render() {
   body.innerHTML = `
     <div class="status">
       <div class="icon">✅</div>
-      <div class="msg">تمت الموافقة على طلبك</div>
-      <div class="sub">احتفظ بالباركود وأبرزه عند البوابة</div>
+      <div class="msg">تفضّل باركودك</div>
+      <div class="sub">
+        احتفظ بالباركود وأبرزه عند البوابة.<br>
+        وصلتك نسخة أيضاً على بريدك الإلكتروني.
+      </div>
     </div>
     <div id="passes"></div>`;
 
@@ -483,7 +492,7 @@ onDbReady(() => {
 });
 
 window.addEventListener('load', () => {
-  myReqId = recallRequest();
+  myReqId = readIdFromUrl();
   if (myReqId) render();
 });
 </script>
