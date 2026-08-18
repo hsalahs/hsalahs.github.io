@@ -1166,8 +1166,14 @@ function buildInvitationCard(guest) {
         ]).catch(() => {})
       : Promise.resolve();
 
-    fontsReady.then(() => setTimeout(() => {
+    function waitForQr(retriesLeft) {
       const qrCanvas = tempDiv.querySelector('canvas');
+      if (qrCanvas) return Promise.resolve(qrCanvas);
+      if (retriesLeft <= 0) return Promise.resolve(null);
+      return new Promise(r => setTimeout(r, 100)).then(() => waitForQr(retriesLeft - 1));
+    }
+
+    fontsReady.then(() => waitForQr(30)).then((qrCanvas) => new Promise(r => setTimeout(() => r(qrCanvas), 80))).then((qrCanvas) => {
       if (!qrCanvas) { document.body.removeChild(tempDiv); resolve(null); return; }
 
       const card = document.createElement('canvas');
@@ -1279,7 +1285,7 @@ function buildInvitationCard(guest) {
 
       document.body.removeChild(tempDiv);
       resolve(card);
-    }, 300));
+    });
   });
 }
 
