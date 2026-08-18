@@ -660,8 +660,14 @@ function updateCounter() {
 // The bride only sees the ones she added herself; everyone else sees all.
 // Guests added before this feature existed have no `owner`, so they stay
 // with the admin side and never leak into the bride's list.
+// The guests the current user is allowed to see.
+//  · bride  → only the ones she added
+//  · helper → the groom's side: her own additions plus the original list
+//             (older guests have no `owner` field, so they count as groom's side)
+//  · admin / security → everyone
 function visibleGuests() {
   if (adminLevel === 4) return guests.filter(g => g.owner === 'bride');
+  if (adminLevel === 3) return guests.filter(g => g.owner !== 'bride');
   return guests;
 }
 
@@ -725,11 +731,11 @@ function updateSecurityButtons() {
   document.getElementById('btn-logout').style.display = 'block'; // Always visible
   document.getElementById('theme-switcher').style.display = isFullAdmin ? 'flex' : 'none';
 
-  // Label the bulk button clearly for people who only see their own guests
+  // Label the bulk button clearly for people who only see part of the list
   const dlAll = document.getElementById('btn-download-all');
-  dlAll.textContent = (adminLevel === 4)
-    ? '📥 حمّل دعوات ضيوفي (ZIP)'
-    : '📦 Download All Invitations (ZIP)';
+  if (adminLevel === 4)      dlAll.textContent = '📥 حمّل دعوات ضيوفي (ZIP)';
+  else if (adminLevel === 3) dlAll.textContent = '📥 حمّل دعوات أهل العريس (ZIP)';
+  else                        dlAll.textContent = '📦 Download All Invitations (ZIP)';
 }
 
 // Manually mark a guest as attended (for guests who forgot their QR).
