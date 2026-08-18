@@ -352,6 +352,7 @@
 <script>
 const ADMIN_PASS = '19921995';
 const SECURITY_PASS = 'security2026';
+const HELPER_PASS = '1992';
 const SITE_URL = 'https://hsalahs.github.io';
 
 let guests = [];
@@ -362,7 +363,7 @@ let scanCooldown = false;
 let searchQuery = '';
 let audioCtx = null;
 let dataLoaded = false;
-let adminLevel = 0; // 0 = guest, 1 = security staff (limited), 2 = full admin
+let adminLevel = 0; // 0 = locked, 1 = security staff, 3 = helper (data entry), 2 = full admin
 
 function onDbReady(cb) {
   if (window._dbReady) cb();
@@ -568,16 +569,23 @@ function checkPass() {
     document.getElementById('admin-lock').style.display = 'none';
     document.getElementById('admin-content').style.display = 'block';
     renderAdmin();
-    showToast('🔐 Full Admin Access');
+    showToast('🔐 دخول المدير — كل الصلاحيات');
+  } else if (pass === HELPER_PASS) {
+    adminLevel = 3; // Helper: add/delete guests + download invitations
+    sessionStorage.setItem('wd_admin', '3');
+    document.getElementById('admin-lock').style.display = 'none';
+    document.getElementById('admin-content').style.display = 'block';
+    renderAdmin();
+    showToast('📝 دخول المساعد — إضافة وتحميل الدعوات');
   } else if (pass === SECURITY_PASS) {
     adminLevel = 1; // Security staff (limited)
     sessionStorage.setItem('wd_admin', '1');
     document.getElementById('admin-lock').style.display = 'none';
     document.getElementById('admin-content').style.display = 'block';
     renderAdmin();
-    showToast('👮 Security Staff Access');
+    showToast('👮 دخول الأمن');
   } else {
-    showToast('❌ Incorrect password');
+    showToast('❌ كلمة المرور غير صحيحة');
   }
 }
 
@@ -592,7 +600,7 @@ function lockAdmin() {
 // Keep admin unlocked across page refresh (same browser tab session)
 function restoreAdminSession() {
   const level = sessionStorage.getItem('wd_admin');
-  if (level === '1' || level === '2') {
+  if (level === '1' || level === '2' || level === '3') {
     adminLevel = parseInt(level);
     document.getElementById('admin-lock').style.display = 'none';
     document.getElementById('admin-content').style.display = 'block';
@@ -680,9 +688,9 @@ function renderAdmin() {
         <div class="gid">${g.id}</div>
       </div>
       <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ Attended' : 'Not Yet'}</span>
-      ${g.scanned
+      ${adminLevel === 3 ? '' : (g.scanned
         ? `<button class="undo-btn" onclick="undoAttended('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">↩️ Undo</button>`
-        : `<button class="attend-btn" onclick="markAttended('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">✓ Attend</button>`}
+        : `<button class="attend-btn" onclick="markAttended('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">✓ Attend</button>`)}
       <button class="dl-btn" onclick="downloadGuestQR('${g.id}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">💾 Save</button>
       <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeHtml(g.name)}')">🗑</button>
     </div>
@@ -694,18 +702,20 @@ function renderAdmin() {
 // Hide/show buttons based on admin level
 function updateSecurityButtons() {
   const isFullAdmin = (adminLevel === 2);
-  document.getElementById('btn-download-all').style.display = isFullAdmin ? 'block' : 'none';
-  document.getElementById('btn-range').style.display = isFullAdmin ? 'block' : 'none';
+  const canDownload = (adminLevel === 2 || adminLevel === 3); // admin + helper
+  document.getElementById('btn-download-all').style.display = canDownload ? 'block' : 'none';
+  document.getElementById('btn-range').style.display = canDownload ? 'block' : 'none';
   document.getElementById('btn-export').style.display = isFullAdmin ? 'block' : 'none';
   document.getElementById('btn-import').style.display = isFullAdmin ? 'block' : 'none';
   document.getElementById('btn-clear').style.display = isFullAdmin ? 'block' : 'none';
-  document.getElementById('btn-logout').style.display = 'block'; // Always visible for both levels
+  document.getElementById('btn-logout').style.display = 'block'; // Always visible
   document.getElementById('theme-switcher').style.display = isFullAdmin ? 'flex' : 'none';
 }
 
 // Manually mark a guest as attended (for guests who forgot their QR).
 // Same effect as scanning their barcode, so a later duplicate scan is blocked.
 async function markAttended(docId, name) {
+  if (adminLevel === 3) { showToast('❌ غير مصرح'); return; }
   if (!confirm('تأكيد الحضور\n\n' + name + '\n\nهل وصل فعلاً؟')) return;
   try {
     const { doc, updateDoc } = window._firestore;
@@ -725,6 +735,7 @@ async function markAttended(docId, name) {
 // Undo an attendance mark (for taps made by mistake).
 // Puts the guest back to "Not Yet" so their QR works again at the gate.
 async function undoAttended(docId, name) {
+  if (adminLevel === 3) { showToast('❌ غير مصرح'); return; }
   if (!confirm('التراجع عن الحضور\n\n' + name + '\n\nسيرجع لحالة "لم يصل" ويقدر يدخل بالباركود من جديد.')) return;
   try {
     const { doc, updateDoc } = window._firestore;
@@ -758,7 +769,7 @@ async function deleteGuest(docId, name) {
 }
 
 async function clearAll() {
-  if (adminLevel !== 2) { showToast('❌ Not authorized'); return; }
+  if (adminLevel !== 2) { showToast('❌ غير مصرح'); return; }
   if (!confirm('⚠️ تحذير: حذف جميع البيانات\n\nسيتم حذف كل الضيوف نهائياً ولا يمكن التراجع.\n\nهل أنت متأكد تماماً؟')) return;
   onDbReady(async () => {
     const { doc, deleteDoc, getDocs } = window._firestore;
@@ -769,7 +780,7 @@ async function clearAll() {
 }
 
 function exportCSV() {
-  if (adminLevel !== 2) { showToast('❌ Not authorized'); return; }
+  if (adminLevel !== 2) { showToast('❌ غير مصرح'); return; }
   const rows = [['Name', 'Code', 'Attendance', 'Registered At']];
   guests.forEach(g => rows.push([g.name, g.id, g.scanned ? 'Attended' : 'Not Yet', g.registeredAt]));
   const csv = rows.map(r => r.join(',')).join('\n');
@@ -785,7 +796,7 @@ function exportCSV() {
 }
 
 async function importCSV(event) {
-  if (adminLevel !== 2) { showToast('❌ Not authorized'); return; }
+  if (adminLevel !== 2) { showToast('❌ غير مصرح'); return; }
   const file = event.target.files[0];
   if (!file) return;
   
@@ -1065,27 +1076,44 @@ function buildInvitationCard(guest) {
   });
 }
 
-// Download a single guest's invitation.
-// Uses a Blob (not a long data: URL) because iOS Safari often refuses
-// to save very long data: links. Spaces in the name are replaced with
-// underscores for the same reason — the Arabic name itself is kept.
+// Save/share one guest's invitation.
+// On iPhone/iPad the browser often blocks a plain download, so we open the
+// native share sheet instead — from there it can be saved to Photos or sent
+// straight to the guest on WhatsApp. Everywhere else it downloads normally.
 async function downloadGuestQR(id, name) {
   const card = await buildInvitationCard({ id, name });
-  if (!card) { showToast('⚠️ Error generating QR'); return; }
+  if (!card) { showToast('⚠️ تعذّر إنشاء الدعوة'); return; }
 
   const safeName = String(name).trim().replace(/[\s\/\\:*?"<>|]+/g, '_');
+  const fileName = 'Invitation-' + safeName + '.png';
 
-  card.toBlob((blob) => {
-    if (!blob) { showToast('⚠️ Error generating QR'); return; }
+  card.toBlob(async (blob) => {
+    if (!blob) { showToast('⚠️ تعذّر إنشاء الدعوة'); return; }
+
+    // Preferred path on iOS: native share sheet (Save to Photos / WhatsApp)
+    try {
+      const file = new File([blob], fileName, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: name });
+        showToast('✅ ' + name);
+        return;
+      }
+    } catch (e) {
+      // User cancelled the share sheet — don't fall through to a download
+      if (e && e.name === 'AbortError') return;
+      // Anything else: fall back to the normal download below
+    }
+
+    // Fallback: regular download (desktop, Android, older browsers)
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.download = 'Invitation-' + safeName + '.png';
+    link.download = fileName;
     link.href = url;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-    showToast('📥 Saved: ' + name);
+    showToast('📥 تم حفظ دعوة ' + name);
   }, 'image/png');
 }
 
@@ -1094,7 +1122,7 @@ async function downloadGuestQR(id, name) {
 // Optional from/to (1-based, inclusive) to download a range only — avoids
 // rendering hundreds of cards at once on a phone. No args = download all.
 async function downloadAllQR(from, to) {
-  if (adminLevel !== 2) { showToast('❌ Not authorized'); return; }
+  if (adminLevel !== 2 && adminLevel !== 3) { showToast('❌ غير مصرح'); return; }
   if (guests.length === 0) { showToast('⚠️ No guests to download'); return; }
 
   // Decide which guests to export
