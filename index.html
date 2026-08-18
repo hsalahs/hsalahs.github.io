@@ -675,8 +675,8 @@ function checkPass() {
 
   adminLevel = role.level;
   currentOwner = role.owner;
-  sessionStorage.setItem('wd_admin', String(role.level));
-  sessionStorage.setItem('wd_owner', role.owner);
+  localStorage.setItem('wd_admin', String(role.level));
+  localStorage.setItem('wd_owner', role.owner);
   document.getElementById('admin-lock').style.display = 'none';
   document.getElementById('admin-content').style.display = 'block';
   renderAdmin();
@@ -687,8 +687,8 @@ function lockAdmin() {
   adminLevel = 0;
   currentOwner = null;
   statusFilter = 'all';
-  sessionStorage.removeItem('wd_admin');
-  sessionStorage.removeItem('wd_owner');
+  localStorage.removeItem('wd_admin');
+  localStorage.removeItem('wd_owner');
   document.getElementById('admin-lock').style.display = 'block';
   document.getElementById('admin-content').style.display = 'none';
   document.getElementById('admin-pass').value = '';
@@ -698,10 +698,10 @@ function lockAdmin() {
 
 // Keep admin unlocked across page refresh (same browser tab session)
 function restoreAdminSession() {
-  const level = sessionStorage.getItem('wd_admin');
+  const level = localStorage.getItem('wd_admin');
   if (['1', '2', '3', '4'].includes(level)) {
     adminLevel = parseInt(level);
-    currentOwner = sessionStorage.getItem('wd_owner');
+    currentOwner = localStorage.getItem('wd_owner');
     document.getElementById('admin-lock').style.display = 'none';
     document.getElementById('admin-content').style.display = 'block';
     document.getElementById('public-gate').style.display = 'none';
@@ -1479,10 +1479,10 @@ window.addEventListener('load', () => {
   restoreAdminSession();
   const params = new URLSearchParams(window.location.search);
 
-  // Secret staff entry: only ?staff=1 reveals the password box on the
+  // Secret staff entry: only ?staff=7 reveals the password box on the
   // public gate. No visible button — nothing for a guest to notice or
   // tap around with.
-  if (params.get('staff') === '1') {
+  if (params.get('staff') === '7') {
     document.getElementById('gate-login').style.display = 'flex';
     window.history.replaceState({}, '', '/');
   }
