@@ -714,9 +714,21 @@ function updateCounter() {
 //             (older guests have no `owner` field, so they count as groom's side)
 //  · admin / security → everyone
 function visibleGuests() {
-  if (adminLevel === 4) return guests.filter(g => g.owner === 'bride');
-  if (adminLevel === 3) return guests.filter(g => g.owner !== 'bride');
-  return guests;
+  let list;
+  if (adminLevel === 4) list = guests.filter(g => g.owner === 'bride');
+  else if (adminLevel === 3) list = guests.filter(g => g.owner !== 'bride');
+  else list = guests;
+
+  // Numeric names (like "1", "2", "150") sort by value first, in order;
+  // then everyone else sorts alphabetically after them.
+  return [...list].sort((a, b) => {
+    const aNum = /^\d+$/.test(a.name.trim());
+    const bNum = /^\d+$/.test(b.name.trim());
+    if (aNum && bNum) return parseInt(a.name, 10) - parseInt(b.name, 10);
+    if (aNum) return -1;
+    if (bNum) return 1;
+    return a.name.localeCompare(b.name, 'ar');
+  });
 }
 
 // Tapping a stat box filters the list below it. Tapping the active one
