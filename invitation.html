@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0A0A0A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>دعوة زفاف | Wedding Invitation</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAeygMBPsJdXO76susC4Tk5rwTfZLUq5VE",
+    authDomain: "wedding-qr-27f3c.firebaseapp.com",
+    projectId: "wedding-qr-27f3c",
+    storageBucket: "wedding-qr-27f3c.firebasestorage.app",
+    messagingSenderId: "149053298560",
+    appId: "1:149053298560:web:b93d2395bcb0e51d7a9365"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window._db = db;
+  window._guestsCol = collection(db, 'guests');
+  window._requestsCol = collection(db, 'requests');
+  window._firestore = { collection, addDoc, doc, onSnapshot };
+  window._dbReady = true;
+  window.dispatchEvent(new Event('dbReady'));
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Tajawal:wght@300;400;500;700&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --gold: #E0BC7A; --gold-light: #F3E0BC; --gold-deep: #C99B4A;
+  --bg-base: #0A0A0A; --bg-1: #0C0C0C; --bg-2: #060606;
+  --accent-rgb: 224,188,122;
+  --text-main: #FAF8F4; --text-soft: #B8B4AC;
+  --glass-bg-1: rgba(255,255,255,0.06); --glass-bg-2: rgba(255,255,255,0.02);
+  --glass-border: rgba(var(--accent-rgb),0.18); --glass-inset: rgba(255,255,255,0.06);
+}
+
+body {
+  font-family: 'Tajawal', sans-serif; background: var(--bg-base); color: var(--text-main);
+  min-height: 100vh; overflow-x: hidden; position: relative; padding: 0 0 40px;
+}
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(var(--accent-rgb),0.10), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(201,155,74,0.08), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 0% 80%, rgba(var(--accent-rgb),0.05), transparent 50%),
+    linear-gradient(160deg, var(--bg-1) 0%, var(--bg-base) 50%, var(--bg-2) 100%);
+}
+body > * { position: relative; z-index: 1; }
+
+.wrap { max-width: 480px; margin: 0 auto; padding: 0 18px; }
+
+/* ---- Hero ---- */
+.hero { text-align: center; padding: 46px 20px 26px; }
+.hero-rings { margin-bottom: 18px; filter: drop-shadow(0 6px 26px rgba(var(--accent-rgb),0.42)); animation: float 3.5s ease-in-out infinite; }
+@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.hero h1 { font-family: 'Playfair Display', serif; font-size: 34px; font-weight: 700; color: var(--gold-light); letter-spacing: 1.5px; margin-bottom: 6px; text-shadow: 0 2px 22px rgba(var(--accent-rgb),0.28); }
+.hero .sub { font-size: 13px; color: var(--gold); letter-spacing: 5px; text-transform: uppercase; opacity: 0.85; }
+.gold-line { width: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); margin: 18px auto 0; animation: grow 1.4s ease-out 0.3s forwards; }
+@keyframes grow { to { width: 140px; } }
+
+.event-line { text-align: center; color: var(--text-soft); font-size: 14.5px; line-height: 2; margin-bottom: 8px; }
+.event-line strong { color: var(--gold); font-weight: 700; }
+
+/* ---- Card ---- */
+.card {
+  background: linear-gradient(145deg, var(--glass-bg-1), var(--glass-bg-2));
+  border: 1px solid var(--glass-border); border-radius: 20px; padding: 26px 22px; margin-bottom: 18px;
+  backdrop-filter: blur(20px) saturate(120%); -webkit-backdrop-filter: blur(20px) saturate(120%);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.35), inset 0 1px 0 var(--glass-inset);
+  animation: rise 0.6s cubic-bezier(0.2,0.8,0.2,1);
+}
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+.card-title { font-family: 'Playfair Display', serif; font-size: 23px; font-weight: 700; color: var(--gold-light); margin-bottom: 20px; text-align: center; }
+
+label { display: block; color: var(--text-soft); font-size: 13px; margin: 0 2px 7px; }
+input {
+  width: 100%; padding: 14px 16px; margin-bottom: 16px; border-radius: 12px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(var(--accent-rgb),0.22);
+  color: var(--text-main); font-size: 15.5px; font-family: 'Tajawal', sans-serif; transition: border-color 0.25s ease;
+}
+input:focus { outline: none; border-color: var(--gold); }
+input::placeholder { color: #6f6a62; }
+input[type=number] { text-align: center; }
+
+.btn {
+  width: 100%; padding: 16px 24px; border: none; border-radius: 14px; cursor: pointer;
+  background: linear-gradient(135deg, var(--gold-deep) 0%, var(--gold) 45%, var(--gold-light) 100%);
+  color: #2a1d05; font-family: 'Tajawal', sans-serif; font-size: 16px; font-weight: 700;
+  box-shadow: 0 6px 24px rgba(var(--accent-rgb),0.35), inset 0 1px 0 rgba(255,255,255,0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.btn:active { transform: translateY(1px); box-shadow: 0 3px 12px rgba(var(--accent-rgb),0.3); }
+.btn[disabled] { opacity: 0.55; cursor: default; }
+
+.note { color: var(--text-soft); font-size: 12.5px; line-height: 2; text-align: center; margin-top: 16px; }
+.note strong { color: var(--gold); }
+
+/* ---- Status ---- */
+.status { text-align: center; padding: 6px 2px 2px; }
+.status .icon { font-size: 46px; margin-bottom: 12px; }
+.status .msg { font-size: 16px; line-height: 1.9; }
+.status .sub { color: var(--text-soft); font-size: 13.5px; margin-top: 12px; line-height: 2; }
+.status .sub strong { color: var(--gold); }
+
+.pass { margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(var(--accent-rgb),0.15); }
+.pass-name { color: var(--gold); font-weight: 700; font-size: 15.5px; margin-bottom: 10px; }
+.pass img { width: 100%; max-width: 300px; border-radius: 12px; display: block; margin: 0 auto 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.45); }
+
+.toast {
+  position: fixed; top: 24px; left: 50%; transform: translateX(-50%) translateY(-24px);
+  background: linear-gradient(135deg, var(--gold), var(--gold-light)); color: var(--bg-base);
+  padding: 15px 30px; border-radius: 50px; font-weight: 700; font-size: 15px; opacity: 0;
+  transition: opacity .35s ease, transform .35s cubic-bezier(0.2,0.8,0.2,1); z-index: 9999;
+  box-shadow: 0 10px 36px rgba(var(--accent-rgb),0.45); pointer-events: none; max-width: 90vw; text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.footer { text-align: center; color: var(--text-soft); font-size: 11.5px; margin-top: 26px; opacity: 0.6; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="hero-rings">
+      <svg viewBox="0 0 140 90" width="112" height="72" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="ringGold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#F3E0BC"/>
+            <stop offset="0.5" stop-color="#E0BC7A"/>
+            <stop offset="1" stop-color="#C99B4A"/>
+          </linearGradient>
+        </defs>
+        <circle cx="52" cy="50" r="30" stroke="url(#ringGold)" stroke-width="5"/>
+        <circle cx="88" cy="50" r="30" stroke="url(#ringGold)" stroke-width="5"/>
+        <path d="M70 22 L74 31 L83 32 L76 39 L78 48 L70 43 L62 48 L64 39 L57 32 L66 31 Z" fill="url(#ringGold)"/>
+      </svg>
+    </div>
+    <h1>دعوة زفاف</h1>
+    <div class="sub">Wedding Invitation</div>
+    <div class="gold-line"></div>
+  </div>
+
+  <div class="event-line">
+    <strong>الخميس ٣ سبتمبر ٢٠٢٦</strong><br>
+    Golden Halls
+  </div>
+
+  <!-- Registration form -->
+  <div class="card" id="form-card">
+    <div class="card-title">تسجيل الحضور</div>
+
+    <label for="g-name">الاسم الكامل</label>
+    <input type="text" id="g-name" placeholder="اكتب اسمك هنا" autocomplete="name">
+
+    <label for="g-email">البريد الإلكتروني</label>
+    <input type="email" id="g-email" placeholder="example@email.com" dir="ltr" autocomplete="email">
+
+    <label for="g-companions">عدد المرافقين (غيرك)</label>
+    <input type="number" id="g-companions" value="0" min="0" max="10" dir="ltr">
+
+    <button class="btn" id="submit-btn" onclick="submitRequest()">إرسال الطلب ✉️</button>
+
+    <p class="note">
+      سيصلك الباركود على بريدك الإلكتروني بعد مراجعة الطلب.<br>
+      <strong>يرجى تفقّد بريد الرسائل غير المرغوبة (Spam)</strong>
+    </p>
+  </div>
+
+  <!-- Status shown after submitting, and on later visits -->
+  <div class="card" id="status-card" style="display:none">
+    <div class="card-title" id="status-title">حالة طلبك</div>
+    <div id="status-body"></div>
+  </div>
+
+  <div class="footer">Golden Halls · 2026</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SITE_URL = 'https://hsalahs.github.io';
+
+let myReqId = null;
+let requests = [];
+let guests = [];
+let renderedPasses = false;
+
+function onDbReady(cb) {
+  if (window._dbReady) cb();
+  else window.addEventListener('dbReady', cb);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Remember this device's request so the guest sees their status when they return
+function rememberRequest(id) { try { localStorage.setItem('wd_req', id); } catch(e) {} }
+function recallRequest() { try { return localStorage.getItem('wd_req'); } catch(e) { return null; } }
+
+// ---- Submit ----
+async function submitRequest() {
+  const name = document.getElementById('g-name').value.trim();
+  const email = document.getElementById('g-email').value.trim();
+  const companions = parseInt(document.getElementById('g-companions').value) || 0;
+
+  if (name.length < 3) { showToast('⚠️ اكتب اسمك الكامل'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('⚠️ البريد الإلكتروني غير صحيح'); return; }
+  if (companions < 0 || companions > 10) { showToast('⚠️ عدد المرافقين غير صحيح'); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'جاري الإرسال...';
+
+  onDbReady(async () => {
+    try {
+      const { addDoc } = window._firestore;
+      const reqId = 'REQ-' + Math.random().toString(36).substr(2, 8).toUpperCase()
+                            + Date.now().toString(36).toUpperCase().substr(-4);
+      await addDoc(window._requestsCol, {
+        reqId, name, email, companions,
+        approved: false,
+        createdAt: new Date().toISOString()
+      });
+      myReqId = reqId;
+      rememberRequest(reqId);
+      showToast('✅ تم إرسال طلبك');
+      render();
+    } catch (e) {
+      console.error(e);
+      showToast('⚠️ تعذّر الإرسال، حاول مرة ثانية');
+      btn.disabled = false;
+      btn.textContent = 'إرسال الطلب ✉️';
+    }
+  });
+}
+
+// ---- Status view ----
+function render() {
+  if (!myReqId) return;
+  const req = requests.find(r => r.reqId === myReqId);
+  if (!req) return;
+
+  document.getElementById('form-card').style.display = 'none';
+  const card = document.getElementById('status-card');
+  card.style.display = 'block';
+  const body = document.getElementById('status-body');
+
+  if (!req.approved) {
+    document.getElementById('status-title').textContent = 'طلبك قيد المراجعة';
+    body.innerHTML = `
+      <div class="status">
+        <div class="icon">⏳</div>
+        <div class="msg">شكراً ${escapeHtml(req.name)}<br>تم استلام طلبك بنجاح</div>
+        <div class="sub">
+          سيصلك الباركود على بريدك الإلكتروني بعد المراجعة.<br>
+          <strong>تفقّد بريد الرسائل غير المرغوبة (Spam)</strong> إن لم تجده.
+        </div>
+      </div>`;
+    renderedPasses = false;
+    return;
+  }
+
+  // Approved
+  const mine = guests.filter(g => g.reqId === myReqId);
+  document.getElementById('status-title').textContent = 'دعوتك جاهزة 🎉';
+
+  if (renderedPasses) return;   // don't redraw the cards on every snapshot
+  renderedPasses = true;
+
+  body.innerHTML = `
+    <div class="status">
+      <div class="icon">✅</div>
+      <div class="msg">تمت الموافقة على طلبك</div>
+      <div class="sub">احتفظ بالباركود وأبرزه عند البوابة</div>
+    </div>
+    <div id="passes"></div>`;
+
+  const holder = document.getElementById('passes');
+  mine.forEach(g => {
+    const box = document.createElement('div');
+    box.className = 'pass';
+    box.innerHTML = `<div class="pass-name">${escapeHtml(g.name)}</div>`;
+    holder.appendChild(box);
+
+    buildInvitationCard(g).then(card => {
+      if (!card) return;
+      const img = new Image();
+      img.src = card.toDataURL('image/png');
+      box.appendChild(img);
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = '💾 حفظ الدعوة';
+      btn.onclick = () => savePass(card, g.name);
+      box.appendChild(btn);
+    });
+  });
+}
+
+// Save/share one pass — share sheet on iOS, download elsewhere
+function savePass(card, name) {
+  const safeName = String(name).trim().replace(/[\s\/\\:*?"<>|]+/g, '_');
+  const fileName = 'Invitation-' + safeName + '.png';
+  card.toBlob(async (blob) => {
+    if (!blob) { showToast('⚠️ تعذّر الحفظ'); return; }
+    try {
+      const file = new File([blob], fileName, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: name });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.download = fileName; a.href = url;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    showToast('📥 تم الحفظ');
+  }, 'image/png');
+}
+
+// ---- Invitation card (same design as the main system) ----
+function drawSparkle(ctx, x, y, size, color) {
+  ctx.save(); ctx.fillStyle = color; ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.quadraticCurveTo(x + size * 0.18, y - size * 0.18, x + size, y);
+  ctx.quadraticCurveTo(x + size * 0.18, y + size * 0.18, x, y + size);
+  ctx.quadraticCurveTo(x - size * 0.18, y + size * 0.18, x - size, y);
+  ctx.quadraticCurveTo(x - size * 0.18, y - size * 0.18, x, y - size);
+  ctx.fill(); ctx.restore();
+}
+function drawFadedLine(ctx, x1, x2, y, color) {
+  const g = ctx.createLinearGradient(x1, y, x2, y);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.5, color); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.strokeStyle = g; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+}
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  return 'rgba(' + parseInt(h.substring(0,2),16) + ',' + parseInt(h.substring(2,4),16) + ',' + parseInt(h.substring(4,6),16) + ',' + alpha + ')';
+}
+
+function buildInvitationCard(guest) {
+  return new Promise((resolve) => {
+    const GOLD = '#C9A84C';
+    const GOLD_LIGHT = '#E0BC7A';
+
+    const tmp = document.createElement('div');
+    tmp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;background:white;padding:12px;';
+    document.body.appendChild(tmp);
+
+    new QRCode(tmp, {
+      text: SITE_URL + '/?verify=' + guest.id,
+      width: 400, height: 400,
+      colorDark: '#0A0A0A', colorLight: '#FAFAF8',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+
+    const fontsReady = (document.fonts && document.fonts.load)
+      ? Promise.all([
+          document.fonts.load('bold 62px Tajawal'),
+          document.fonts.load('bold 38px "Playfair Display"')
+        ]).catch(() => {})
+      : Promise.resolve();
+
+    fontsReady.then(() => setTimeout(() => {
+      const qr = tmp.querySelector('canvas');
+      if (!qr) { document.body.removeChild(tmp); resolve(null); return; }
+
+      const card = document.createElement('canvas');
+      card.width = 1000; card.height = 1400;
+      const ctx = card.getContext('2d');
+
+      ctx.fillStyle = '#FAFAF8';
+      ctx.fillRect(0, 0, 1000, 1400);
+
+      const glow = ctx.createRadialGradient(500, 530, 60, 500, 530, 520);
+      glow.addColorStop(0, hexToRgba(GOLD, 0.10));
+      glow.addColorStop(1, hexToRgba(GOLD, 0));
+      ctx.fillStyle = glow; ctx.fillRect(0, 150, 1000, 800);
+
+      ctx.fillStyle = GOLD;
+      ctx.fillRect(0, 0, 1000, 22); ctx.fillRect(0, 1378, 1000, 22);
+      ctx.fillRect(0, 0, 6, 1400); ctx.fillRect(994, 0, 6, 1400);
+
+      ctx.strokeStyle = hexToRgba(GOLD, 0.35); ctx.lineWidth = 1.5;
+      ctx.strokeRect(42, 42, 916, 1316);
+
+      const tg = ctx.createLinearGradient(300, 0, 700, 0);
+      tg.addColorStop(0, GOLD); tg.addColorStop(0.5, GOLD_LIGHT); tg.addColorStop(1, GOLD);
+      ctx.fillStyle = tg; ctx.font = 'bold 62px Tajawal, Arial'; ctx.textAlign = 'center';
+      ctx.fillText('دعوة زفاف', 500, 118);
+
+      ctx.fillStyle = '#999'; ctx.font = '34px Tajawal, Arial';
+      ctx.fillText('الخميس 3 سبتمبر 2026', 500, 172);
+
+      drawFadedLine(ctx, 280, 720, 205, GOLD);
+
+      const qx = 180, qy = 232, qw = 640, qh = 640, rr = 28;
+      ctx.save(); ctx.beginPath();
+      ctx.moveTo(qx + rr, qy);
+      ctx.arcTo(qx + qw, qy, qx + qw, qy + qh, rr);
+      ctx.arcTo(qx + qw, qy + qh, qx, qy + qh, rr);
+      ctx.arcTo(qx, qy + qh, qx, qy, rr);
+      ctx.arcTo(qx, qy, qx + qw, qy, rr);
+      ctx.closePath();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.shadowColor = 'rgba(0,0,0,0.10)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 6;
+      ctx.fill(); ctx.restore();
+      ctx.strokeStyle = hexToRgba(GOLD, 0.5); ctx.lineWidth = 1.5; ctx.stroke();
+
+      ctx.drawImage(qr, 220, 272, 560, 560);
+
+      ctx.fillStyle = '#0A0A0A'; ctx.font = 'bold 54px Tajawal, Arial';
+      ctx.fillText(guest.name, 500, 940);
+
+      ctx.fillStyle = '#B0AAA0'; ctx.font = '28px "Playfair Display", Arial';
+      ctx.fillText(guest.id, 500, 992);
+
+      drawFadedLine(ctx, 220, 780, 1028, 'rgba(0,0,0,0.18)');
+
+      ctx.fillStyle = GOLD; ctx.font = 'bold 38px "Playfair Display", Arial';
+      ctx.fillText('Golden Halls', 500, 1088);
+      ctx.strokeStyle = hexToRgba(GOLD, 0.55); ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(300, 1076); ctx.lineTo(360, 1076); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(640, 1076); ctx.lineTo(700, 1076); ctx.stroke();
+
+      ctx.fillStyle = '#888'; ctx.font = '26px Tajawal, Arial';
+      ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1148);
+      ctx.fillStyle = '#666'; ctx.font = '24px Tajawal, Arial';
+      ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1200);
+
+      drawSparkle(ctx, 92, 92, 16, GOLD);
+      drawSparkle(ctx, 908, 92, 16, GOLD);
+      drawSparkle(ctx, 92, 1308, 16, GOLD);
+      drawSparkle(ctx, 908, 1308, 16, GOLD);
+
+      document.body.removeChild(tmp);
+      resolve(card);
+    }, 300));
+  });
+}
+
+// ---- Live data ----
+onDbReady(() => {
+  const { onSnapshot } = window._firestore;
+
+  onSnapshot(window._requestsCol, (snap) => {
+    requests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    render();
+  });
+
+  onSnapshot(window._guestsCol, (snap) => {
+    guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    render();
+  });
+});
+
+window.addEventListener('load', () => {
+  myReqId = recallRequest();
+  if (myReqId) render();
+});
+</script>
+
+</body>
+</html>
