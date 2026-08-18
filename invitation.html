@@ -295,6 +295,11 @@ function render() {
   const mine = guests.filter(g => g.reqId === myReqId);
   document.getElementById('status-title').textContent = 'باركودك جاهز 🎉';
 
+  // Guests can arrive from Firestore slightly after the approval flag —
+  // don't lock the "already rendered" flag until we actually have
+  // someone to draw, otherwise an empty snapshot permanently blocks
+  // the real one that follows.
+  if (mine.length === 0) return;
   if (renderedPasses) return;   // don't redraw the cards on every snapshot
   renderedPasses = true;
 
