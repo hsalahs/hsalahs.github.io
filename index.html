@@ -1070,7 +1070,7 @@ async function rejectRequest(docId, name) {
 async function adminAddGuest() {
   const input = document.getElementById('admin-guest-name');
   const name = input.value.trim();
-  if (!name || name.length < 2) { showToast('⚠️ اكتب اسماً صحيحاً'); return; }
+  if (!name) { showToast('⚠️ اكتب اسماً صحيحاً'); return; }
   // Only block duplicates within this person's own list. The same name can
   // legitimately exist on both sides of the family — two different people,
   // each needing their own invitation.
