@@ -194,6 +194,8 @@
   .guest-item .dl-btn { background: none; border: 1px solid rgba(var(--accent-rgb),0.3); color: var(--gold); font-size: 13px; cursor: pointer; padding: 4px 10px; border-radius: 8px; transition: all 0.2s ease; white-space: nowrap; }
   .guest-item .dl-btn:hover { background: rgba(var(--accent-rgb),0.1); border-color: var(--gold); }
   .guest-item .attend-btn { background: rgba(76,175,80,0.12); border: 1px solid rgba(76,175,80,0.5); color: #4CAF50; font-size: 13px; cursor: pointer; padding: 4px 10px; border-radius: 8px; transition: all 0.2s ease; white-space: nowrap; }
+  .guest-item .undo-btn { background: rgba(255,152,0,0.10); border: 1px solid rgba(255,152,0,0.40); color: #FF9800; font-size: 13px; cursor: pointer; padding: 4px 10px; border-radius: 8px; transition: all 0.2s ease; white-space: nowrap; opacity: 0.85; }
+  .guest-item .undo-btn:hover { opacity: 1; background: rgba(255,152,0,0.18); }
   .guest-item .attend-btn:hover { background: rgba(76,175,80,0.25); border-color: #4CAF50; }
   .admin-add-form { display: flex; gap: 8px; margin-bottom: 14px; }
   .admin-add-form input { flex: 1; }
@@ -678,7 +680,9 @@ function renderAdmin() {
         <div class="gid">${g.id}</div>
       </div>
       <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ Attended' : 'Not Yet'}</span>
-      ${g.scanned ? '' : `<button class="attend-btn" onclick="markAttended('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">✓ Attend</button>`}
+      ${g.scanned
+        ? `<button class="undo-btn" onclick="undoAttended('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">↩️ Undo</button>`
+        : `<button class="attend-btn" onclick="markAttended('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">✓ Attend</button>`}
       <button class="dl-btn" onclick="downloadGuestQR('${g.id}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">💾 Save</button>
       <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeHtml(g.name)}')">🗑</button>
     </div>
@@ -702,7 +706,7 @@ function updateSecurityButtons() {
 // Manually mark a guest as attended (for guests who forgot their QR).
 // Same effect as scanning their barcode, so a later duplicate scan is blocked.
 async function markAttended(docId, name) {
-  if (!confirm('Mark ' + name + ' as attended? This counts as entry.')) return;
+  if (!confirm('تأكيد الحضور\n\n' + name + '\n\nهل وصل فعلاً؟')) return;
   try {
     const { doc, updateDoc } = window._firestore;
     await updateDoc(doc(window._db, 'guests', docId), { scanned: true, scannedAt: new Date().toISOString() });
@@ -711,10 +715,29 @@ async function markAttended(docId, name) {
     if (idx !== -1) guests[idx] = { ...guests[idx], scanned: true, scannedAt: new Date().toISOString() };
     updateCounter();
     renderAdmin();
-    showToast('✅ ' + name + ' marked as attended');
+    showToast('✅ تم تسجيل حضور ' + name);
   } catch(e) {
     console.error(e);
-    showToast('⚠️ Could not update. Try again.');
+    showToast('⚠️ تعذّر التحديث، حاول مرة ثانية');
+  }
+}
+
+// Undo an attendance mark (for taps made by mistake).
+// Puts the guest back to "Not Yet" so their QR works again at the gate.
+async function undoAttended(docId, name) {
+  if (!confirm('التراجع عن الحضور\n\n' + name + '\n\nسيرجع لحالة "لم يصل" ويقدر يدخل بالباركود من جديد.')) return;
+  try {
+    const { doc, updateDoc } = window._firestore;
+    await updateDoc(doc(window._db, 'guests', docId), { scanned: false, scannedAt: null });
+    // Update local array immediately
+    const idx = guests.findIndex(g => g.docId === docId);
+    if (idx !== -1) guests[idx] = { ...guests[idx], scanned: false, scannedAt: null };
+    updateCounter();
+    renderAdmin();
+    showToast('↩️ تم التراجع — ' + name + ' لم يصل');
+  } catch(e) {
+    console.error(e);
+    showToast('⚠️ تعذّر التحديث، حاول مرة ثانية');
   }
 }
 
@@ -726,17 +749,17 @@ function searchGuests() {
 
 
 async function deleteGuest(docId, name) {
-  if (!confirm('Delete ' + name + '?')) return;
+  if (!confirm('حذف الضيف نهائياً\n\n' + name + '\n\nهل أنت متأكد؟')) return;
   onDbReady(async () => {
     const { doc, deleteDoc } = window._firestore;
     await deleteDoc(doc(window._db, 'guests', docId));
-    showToast('✅ Guest deleted');
+    showToast('✅ تم حذف الضيف');
   });
 }
 
 async function clearAll() {
   if (adminLevel !== 2) { showToast('❌ Not authorized'); return; }
-  if (!confirm('Are you sure? All data will be permanently deleted.')) return;
+  if (!confirm('⚠️ تحذير: حذف جميع البيانات\n\nسيتم حذف كل الضيوف نهائياً ولا يمكن التراجع.\n\nهل أنت متأكد تماماً؟')) return;
   onDbReady(async () => {
     const { doc, deleteDoc, getDocs } = window._firestore;
     const snapshot = await getDocs(window._guestsCol);
