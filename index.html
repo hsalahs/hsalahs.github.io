@@ -861,7 +861,8 @@ async function importCSV(event) {
       const batch = names.slice(i, i + batchSize);
       batches.push(
         Promise.all(batch.map(async (name) => {
-          const exists = guests.find(g => g.name === name);
+          // Duplicates are judged within this person's own list only
+          const exists = visibleGuests().find(g => g.name === name);
           if (exists) {
             duplicates++;
             return;
@@ -893,8 +894,11 @@ async function adminAddGuest() {
   const input = document.getElementById('admin-guest-name');
   const name = input.value.trim();
   if (!name || name.length < 2) { showToast('⚠️ اكتب اسماً صحيحاً'); return; }
-  const exists = guests.find(g => g.name === name);
-  if (exists) { showToast('⚠️ الاسم مسجّل مسبقاً'); return; }
+  // Only block duplicates within this person's own list. The same name can
+  // legitimately exist on both sides of the family — two different people,
+  // each needing their own invitation.
+  const exists = visibleGuests().find(g => g.name === name);
+  if (exists) { showToast('⚠️ الاسم موجود في قائمتك'); return; }
   onDbReady(async () => {
     const { addDoc } = window._firestore;
     const id = 'WD-' + Math.random().toString(36).substr(2, 9).toUpperCase() + Date.now().toString(36).toUpperCase().substr(-4);
