@@ -192,6 +192,17 @@
   .del-btn { background: none; border: none; color: #F44336; font-size: 18px; cursor: pointer; padding: 4px 8px; transition: all 0.2s ease; }
   .del-btn:hover { transform: scale(1.2); }
   .empty-state { text-align: center; padding: 40px 20px; color: var(--text-soft); font-size: 14px; }
+  /* Pending self-registration requests */
+  .nav-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 10px; background: #E5484D; color: #fff; font-size: 12px; font-weight: 700; vertical-align: middle; }
+  .pending-box { border: 1px solid rgba(229,72,77,0.45); background: rgba(229,72,77,0.07); border-radius: 16px; padding: 14px; margin-bottom: 16px; }
+  .pending-title { color: #E5484D; font-weight: 700; font-size: 15px; margin-bottom: 10px; text-align: center; }
+  .pending-item { display: flex; align-items: center; gap: 8px; padding: 10px 6px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .pending-item:last-child { border-bottom: none; }
+  .pending-info { flex: 1; min-width: 0; }
+  .pending-info .pname { font-weight: 700; font-size: 14px; }
+  .pending-info .pmail { color: var(--text-soft); font-size: 11.5px; direction: ltr; }
+  .approve-btn { background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.55); color: #4CAF50; font-size: 13px; padding: 6px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+  .reject-btn { background: rgba(229,72,77,0.12); border: 1px solid rgba(229,72,77,0.45); color: #E5484D; font-size: 13px; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
 
   .toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%) translateY(-24px); background: linear-gradient(135deg, var(--gold), var(--gold-light)); color: var(--bg-base); padding: 16px 32px; border-radius: 50px; font-weight: 700; font-size: 15.5px; opacity: 0; transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.2,0.8,0.2,1); z-index: 99999; box-shadow: 0 10px 36px rgba(var(--accent-rgb), 0.45), 0 2px 10px rgba(0,0,0,0.3); pointer-events: none; max-width: 90vw; text-align: center; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -334,6 +345,7 @@
       <button class="btn" onclick="adminAddGuest()">➕ Add</button>
     </div>
     <div class="admin-add-form">
+      <div id="pending-section"></div>
       <input type="text" id="admin-search" placeholder="🔍 Search by name..." onkeyup="searchGuests()">
     </div>
     <div class="guest-list" id="guest-list">
@@ -361,6 +373,7 @@ const BRIDE_PASS = '1995';
 const SITE_URL = 'https://hsalahs.github.io';
 
 let guests = [];
+let requests = [];   // self-registration requests waiting for approval
 let unsubscribe = null;
 let qrScanner = null;
 let lastScanned = null;
@@ -381,7 +394,7 @@ function onDbReady(cb) {
 }
 
 onDbReady(() => {
-  const { onSnapshot } = window._firestore;
+  const { onSnapshot, collection } = window._firestore;
   unsubscribe = onSnapshot(window._guestsCol, (snapshot) => {
     guests = snapshot.docs.map(d => ({ docId: d.id, ...d.data() }));
     dataLoaded = true;
@@ -390,6 +403,12 @@ onDbReady(() => {
     if (document.getElementById('admin-content') && document.getElementById('admin-content').style.display === 'block') {
       renderAdmin();
     }
+  });
+
+  // Guest self-registration requests (from invitation.html)
+  onSnapshot(collection(window._db, 'requests'), (snapshot) => {
+    requests = snapshot.docs.map(d => ({ docId: d.id, ...d.data() }));
+    renderPendingRequests();
   });
 });
 
@@ -717,6 +736,7 @@ function renderAdmin() {
   }
 
   highlightActiveFilter();
+  renderPendingRequests();
 
   if (filtered.length === 0) {
     let msg;
@@ -928,6 +948,99 @@ async function importCSV(event) {
     }
   };
   reader.readAsText(file);
+}
+
+// ============================================================
+// SELF-REGISTRATION APPROVAL
+// Guests register through invitation.html. Nothing is issued until
+// the family approves — then a barcode is created for the guest and
+// for each companion they listed.
+// ============================================================
+
+function renderPendingRequests() {
+  const box = document.getElementById('pending-section');
+  if (!box) return;
+
+  // Only the family approves requests
+  if (![2, 3, 4].includes(adminLevel)) { box.innerHTML = ''; updateNavBadge(); return; }
+
+  const pending = requests.filter(r => !r.approved);
+  if (pending.length === 0) { box.innerHTML = ''; updateNavBadge(); return; }
+
+  box.innerHTML = `
+    <div class="pending-box">
+      <div class="pending-title">🔔 طلبات جديدة بانتظار الموافقة (${pending.length})</div>
+      ${pending.map(r => `
+        <div class="pending-item">
+          <div class="pending-info">
+            <div class="pname">${escapeHtml(r.name)}${r.companions > 0 ? ` <span style="color:var(--text-soft);font-weight:400">+${r.companions} مرافق</span>` : ''}</div>
+            <div class="pmail">${escapeHtml(r.email || '')}</div>
+          </div>
+          <button class="approve-btn" onclick="approveRequest('${r.docId}')">✓ موافقة</button>
+          <button class="reject-btn" onclick="rejectRequest('${r.docId}', '${escapeHtml(r.name).replace(/'/g, "\\'")}')">🗑</button>
+        </div>`).join('')}
+    </div>`;
+  updateNavBadge();
+}
+
+// Red count on the Admin nav button so pending requests are never missed
+function updateNavBadge() {
+  const btn = document.querySelector('.nav-btn[onclick*="admin"]');
+  if (!btn) return;
+  const pending = requests.filter(r => !r.approved).length;
+  const show = pending > 0 && [2, 3, 4].includes(adminLevel);
+  btn.innerHTML = (show ? `<span class="nav-badge">${pending}</span>` : '') + '⚙️ Admin';
+}
+
+async function approveRequest(docId) {
+  if (![2, 3, 4].includes(adminLevel)) { showToast('❌ غير مصرح'); return; }
+  const req = requests.find(r => r.docId === docId);
+  if (!req) return;
+
+  const total = 1 + (req.companions || 0);
+  if (!confirm(`الموافقة على الطلب\n\n${req.name}\n\nسيتم إصدار ${total} باركود.`)) return;
+
+  onDbReady(async () => {
+    try {
+      const { addDoc, doc, updateDoc } = window._firestore;
+      const newId = () => 'WD-' + Math.random().toString(36).substr(2, 9).toUpperCase() + Date.now().toString(36).toUpperCase().substr(-4);
+
+      const people = [req.name];
+      for (let i = 1; i <= (req.companions || 0); i++) people.push(`${req.name} - مرافق ${i}`);
+
+      for (const personName of people) {
+        await addDoc(window._guestsCol, {
+          id: newId(),
+          name: personName,
+          scanned: false,
+          registeredAt: new Date().toISOString(),
+          owner: currentOwner || 'admin',
+          email: req.email || '',
+          reqId: req.reqId
+        });
+      }
+
+      await updateDoc(doc(window._db, 'requests', docId), {
+        approved: true,
+        approvedAt: new Date().toISOString()
+      });
+
+      showToast(`✅ تمت الموافقة — ${total} باركود`);
+    } catch(e) {
+      console.error(e);
+      showToast('⚠️ تعذّر التنفيذ، حاول مرة ثانية');
+    }
+  });
+}
+
+async function rejectRequest(docId, name) {
+  if (![2, 3, 4].includes(adminLevel)) { showToast('❌ غير مصرح'); return; }
+  if (!confirm(`حذف الطلب\n\n${name}\n\nهل أنت متأكد؟`)) return;
+  onDbReady(async () => {
+    const { doc, deleteDoc } = window._firestore;
+    await deleteDoc(doc(window._db, 'requests', docId));
+    showToast('🗑 تم حذف الطلب');
+  });
 }
 
 async function adminAddGuest() {
