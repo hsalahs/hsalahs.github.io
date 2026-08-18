@@ -235,6 +235,18 @@
 </head>
 <body>
 
+<!-- Shown ONLY when an old guest QR link (?verify=...) is opened directly in a
+     browser — e.g. someone scanned it with a regular phone camera. No
+     attendance data, no admin UI, no check-in. Just a friendly static
+     message with the event details. -->
+<div id="old-link-notice" style="display:none; position:fixed; inset:0; z-index:9999; background:#0A0A0A; color:#FAF8F4; font-family:'Tajawal', system-ui, Arial; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px;" dir="rtl">
+  <div style="font-size:26px; font-weight:700; color:#E0BC7A; margin-bottom:6px;">دعوة زفاف</div>
+  <div style="font-size:12px; color:#B8B4AC; letter-spacing:3px; margin-bottom:28px;">WEDDING INVITATION</div>
+  <div style="font-size:17px; margin-bottom:10px;">نتشرف بحضوركم 🎉</div>
+  <div style="font-size:15px; color:#E0BC7A; margin-bottom:6px;">الخميس ٣ سبتمبر ٢٠٢٦</div>
+  <div style="font-size:14px; color:#B8B4AC;">Golden Halls</div>
+</div>
+
 <div id="splash">
   <div class="splash-inner">
     <div class="splash-rings">
@@ -1162,7 +1174,7 @@ function buildInvitationCard(guest) {
     document.body.appendChild(tempDiv);
 
     new QRCode(tempDiv, {
-      text: SITE_URL + '/?verify=' + guest.id,
+      text: guest.id,
       width: 400, height: 400,
       colorDark: '#0A0A0A', colorLight: '#FAFAF8',
       correctLevel: QRCode.CorrectLevel.H
@@ -1429,40 +1441,15 @@ window.addEventListener('load', () => {
   const params = new URLSearchParams(window.location.search);
   const verifyId = params.get('verify');
   if (verifyId) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('page-scanner').classList.add('active');
-    document.querySelectorAll('.nav-btn')[0].classList.add('active');
-    onDbReady(async () => {
-      try {
-        const { getDocs, doc, updateDoc } = window._firestore;
-        const val = verifyId.toUpperCase();
-        const snapshot = await getDocs(window._guestsCol);
-        const docFound = snapshot.docs.find(d => d.data().id.toUpperCase() === val);
-        if (docFound) {
-          const guest = docFound.data();
-          if (guest.scanned) {
-            document.getElementById('result-name-dup').textContent = guest.name;
-            document.getElementById('result-duplicate').style.display = 'block';
-            document.getElementById('camera-status').textContent = '⚠️ Already checked in!';
-          } else {
-            document.getElementById('result-name-ok').textContent = guest.name;
-            document.getElementById('result-allowed').style.display = 'block';
-            document.getElementById('camera-status').textContent = '✅ Access Allowed';
-            await updateDoc(doc(window._db, 'guests', docFound.id), { scanned: true, scannedAt: new Date().toISOString() });
-            const idx = guests.findIndex(g => g.docId === docFound.id);
-            if (idx !== -1) guests[idx] = { ...guests[idx], scanned: true };
-          }
-        } else {
-          document.getElementById('result-denied').style.display = 'block';
-          document.getElementById('camera-status').textContent = '❌ QR Code not registered';
-        }
-      } catch(e) {
-        console.error(e);
-        document.getElementById('camera-status').textContent = '⚠️ Connection error';
-      }
-    });
+    // Security fix: opening this link in an ordinary browser (e.g. scanning
+    // the guest's QR with a normal phone camera) must NEVER check anyone
+    // in or reveal admin/attendance info. Only the in-app scanner (Admin →
+    // Scan), which staff opens deliberately, is allowed to check guests in.
+    document.getElementById('old-link-notice').style.display = 'flex';
+    const splash = document.getElementById('splash');
+    if (splash) splash.style.display = 'none';
     window.history.replaceState({}, '', '/');
+    return;
   }
 });
 
