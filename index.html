@@ -269,6 +269,25 @@
   </div>
 </div>
 
+<!-- Public gate: this is what anyone sees by default (no session), including
+     someone who just visits the bare site URL. The real scanner + admin
+     tools only render after a role password is entered — they are never
+     public. -->
+<div id="public-gate" style="position:fixed; inset:0; z-index:500; background:#0A0A0A; color:#FAF8F4; font-family:'Tajawal', system-ui, Arial; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px;" dir="rtl">
+  <div style="font-size:26px; font-weight:700; color:#E0BC7A; margin-bottom:6px;">دعوة زفاف</div>
+  <div style="font-size:12px; color:#B8B4AC; letter-spacing:3px; margin-bottom:28px;">WEDDING INVITATION</div>
+  <div style="font-size:17px; margin-bottom:10px;">نتشرف بحضوركم 🎉</div>
+  <div style="font-size:15px; color:#E0BC7A; margin-bottom:6px;">الخميس ٣ سبتمبر ٢٠٢٦</div>
+  <div style="font-size:14px; color:#B8B4AC;">Golden Halls</div>
+
+  <div id="gate-login" style="display:none; flex-direction:column; align-items:center; gap:10px; margin-top:36px; width:100%; max-width:280px;">
+    <input type="password" id="gate-pass" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter') gateLogin()"
+      style="width:100%; padding:12px; border-radius:10px; border:1px solid #3a3630; background:#151310; color:#FAF8F4; text-align:center;">
+    <button onclick="gateLogin()" class="btn" style="width:100%">دخول</button>
+  </div>
+</div>
+
+<div id="app-content" style="display:none">
 <nav>
   <button class="nav-btn active" onclick="showPage('scanner', this)">📱 Scan</button>
   <button class="nav-btn" onclick="showPage('admin', this)">⚙️ Admin</button>
@@ -374,6 +393,8 @@
       <button id="btn-logout" class="btn-sm danger" onclick="lockAdmin()">🔒 Logout</button>
     </div>
   </div>
+</div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -624,6 +645,20 @@ function resetScan() {
   document.getElementById('result-denied').style.display = 'none';
 }
 
+// The public gate uses the same role passwords as the Admin tab —
+// entering a valid password here unlocks the whole app for this tab/session.
+function gateLogin() {
+  const pass = document.getElementById('gate-pass').value;
+  document.getElementById('admin-pass').value = pass;
+  checkPass();
+  if (adminLevel !== 0) {
+    document.getElementById('public-gate').style.display = 'none';
+    document.getElementById('app-content').style.display = 'block';
+  } else {
+    document.getElementById('gate-pass').value = '';
+  }
+}
+
 function checkPass() {
   const pass = document.getElementById('admin-pass').value;
 
@@ -657,6 +692,8 @@ function lockAdmin() {
   document.getElementById('admin-lock').style.display = 'block';
   document.getElementById('admin-content').style.display = 'none';
   document.getElementById('admin-pass').value = '';
+  document.getElementById('app-content').style.display = 'none';
+  document.getElementById('public-gate').style.display = 'flex';
 }
 
 // Keep admin unlocked across page refresh (same browser tab session)
@@ -667,6 +704,8 @@ function restoreAdminSession() {
     currentOwner = sessionStorage.getItem('wd_owner');
     document.getElementById('admin-lock').style.display = 'none';
     document.getElementById('admin-content').style.display = 'block';
+    document.getElementById('public-gate').style.display = 'none';
+    document.getElementById('app-content').style.display = 'block';
     renderAdmin();
   }
 }
@@ -1439,6 +1478,15 @@ window.addEventListener('load', () => {
   }, 2200);
   restoreAdminSession();
   const params = new URLSearchParams(window.location.search);
+
+  // Secret staff entry: only ?staff=1 reveals the password box on the
+  // public gate. No visible button — nothing for a guest to notice or
+  // tap around with.
+  if (params.get('staff') === '1') {
+    document.getElementById('gate-login').style.display = 'flex';
+    window.history.replaceState({}, '', '/');
+  }
+
   const verifyId = params.get('verify');
   if (verifyId) {
     // Security fix: opening this link in an ordinary browser (e.g. scanning
