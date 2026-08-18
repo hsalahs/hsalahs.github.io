@@ -391,15 +391,25 @@ function buildInvitationCard(guest) {
       correctLevel: QRCode.CorrectLevel.H
     });
 
-    const fontsReady = (document.fonts && document.fonts.load)
+    const fontsReady = (document.fonts && document.fonts.ready)
       ? Promise.all([
           document.fonts.load('bold 62px Tajawal'),
-          document.fonts.load('bold 38px "Playfair Display"')
+          document.fonts.load('bold 38px "Playfair Display"'),
+          document.fonts.ready
         ]).catch(() => {})
       : Promise.resolve();
 
-    fontsReady.then(() => setTimeout(() => {
+    // Wait for the QR canvas to actually appear instead of a fixed delay —
+    // slower devices/networks (first font load, weak connection) can take
+    // longer than a fixed timeout, which silently failed before.
+    function waitForQr(retriesLeft) {
       const qr = tmp.querySelector('canvas');
+      if (qr) return Promise.resolve(qr);
+      if (retriesLeft <= 0) return Promise.resolve(null);
+      return new Promise(r => setTimeout(r, 100)).then(() => waitForQr(retriesLeft - 1));
+    }
+
+    fontsReady.then(() => waitForQr(30)).then((qr) => new Promise(r => setTimeout(() => r(qr), 80))).then((qr) => {
       if (!qr) { document.body.removeChild(tmp); resolve(null); return; }
 
       const card = document.createElement('canvas');
@@ -472,7 +482,7 @@ function buildInvitationCard(guest) {
 
       document.body.removeChild(tmp);
       resolve(card);
-    }, 300));
+    });
   });
 }
 
