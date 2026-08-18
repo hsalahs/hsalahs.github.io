@@ -13,6 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, addDoc, getDocs, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -371,6 +372,27 @@ const SECURITY_PASS = 'security2026';
 const HELPER_PASS = '1992';
 const BRIDE_PASS = '1995';
 const SITE_URL = 'https://hsalahs.github.io';
+
+// EmailJS — sends the guest their personal invitation link after approval
+const EMAILJS_PUBLIC_KEY = 'GAr6CcOiDqo-Mc3m5';
+const EMAILJS_SERVICE_ID = 'service_p73iqlk';
+const EMAILJS_TEMPLATE_ID = 'template_axylvqm';
+if (window.emailjs) emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+
+// Sends the "your barcode is ready" email to a single guest request.
+// Never blocks the approval flow — failures are logged, not thrown.
+async function sendInvitationEmail(req) {
+  if (!req.email || !window.emailjs) return;
+  try {
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_name: req.name,
+      to_email: req.email,
+      invite_link: SITE_URL + '/invitation.html?id=' + req.reqId
+    });
+  } catch (e) {
+    console.error('EmailJS send failed:', e);
+  }
+}
 
 let guests = [];
 let requests = [];   // self-registration requests waiting for approval
@@ -1024,6 +1046,8 @@ async function approveRequest(docId) {
         approved: true,
         approvedAt: new Date().toISOString()
       });
+
+      sendInvitationEmail(req);
 
       showToast(`✅ تمت الموافقة — ${total} باركود`);
     } catch(e) {
