@@ -390,7 +390,7 @@ function buildInvitationCard(guest) {
     document.body.appendChild(tmp);
 
     new QRCode(tmp, {
-      text: SITE_URL + '/?verify=' + guest.id,
+      text: guest.id,
       width: 400, height: 400,
       colorDark: '#0A0A0A', colorLight: '#FAFAF8',
       correctLevel: QRCode.CorrectLevel.H
