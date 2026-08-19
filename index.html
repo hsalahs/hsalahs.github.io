@@ -1451,6 +1451,19 @@ async function downloadAllQR(from, to) {
   const total = list.length;
   let done = 0;
 
+  // Guests can share the same display name (e.g. plain numbers like "1",
+  // "2"), and a name could theoretically contain a slash or other char
+  // that breaks a filename or creates an unintended sub-folder inside the
+  // zip. Without this, a duplicate name would silently overwrite the
+  // earlier guest's card in the zip — losing their invitation entirely.
+  const usedNames = new Map();
+  function safeFileName(name) {
+    const clean = String(name || 'Guest').replace(/[\/\\:*?"<>|]/g, '-').trim() || 'Guest';
+    const count = (usedNames.get(clean) || 0) + 1;
+    usedNames.set(clean, count);
+    return count === 1 ? clean : clean + ' (' + count + ')';
+  }
+
   // Process in batches of 5 to avoid freezing the browser
   for (let i = 0; i < total; i += 5) {
     const batch = list.slice(i, i + 5);
@@ -1458,7 +1471,7 @@ async function downloadAllQR(from, to) {
     cards.forEach((card, idx) => {
       if (card) {
         const base64 = card.toDataURL('image/png').split(',')[1];
-        zip.file('Invitation-' + batch[idx].name + '.png', base64, { base64: true });
+        zip.file('Invitation-' + safeFileName(batch[idx].name) + '.png', base64, { base64: true });
       }
     });
     done += batch.length;
