@@ -273,17 +273,30 @@
      someone who just visits the bare site URL. The real scanner + admin
      tools only render after a role password is entered — they are never
      public. -->
-<div id="public-gate" style="position:fixed; inset:0; z-index:500; background:#0A0A0A; color:#FAF8F4; font-family:'Tajawal', system-ui, Arial; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px;" dir="rtl">
-  <div style="font-size:26px; font-weight:700; color:#E0BC7A; margin-bottom:6px;">دعوة زفاف</div>
-  <div style="font-size:12px; color:#B8B4AC; letter-spacing:3px; margin-bottom:28px;">WEDDING INVITATION</div>
-  <div style="font-size:17px; margin-bottom:10px;">نتشرف بحضوركم 🎉</div>
-  <div style="font-size:15px; color:#E0BC7A; margin-bottom:6px;">الخميس ٣ سبتمبر ٢٠٢٦</div>
-  <div style="font-size:14px; color:#B8B4AC;">Golden Halls</div>
+<div id="public-gate" style="position:fixed; inset:0; z-index:500; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); color:#FAF8F4; font-family:'Tajawal', system-ui, Arial; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px;" dir="rtl">
+  <div style="width:100%; max-width:380px; background:rgba(255,255,255,0.035); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid rgba(224,188,122,0.35); border-radius:22px; padding:42px 30px; box-shadow:0 8px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);">
 
-  <div id="gate-login" style="display:none; flex-direction:column; align-items:center; gap:10px; margin-top:36px; width:100%; max-width:280px;">
-    <input type="password" id="gate-pass" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter') gateLogin()"
-      style="width:100%; padding:12px; border-radius:10px; border:1px solid #3a3630; background:#151310; color:#FAF8F4; text-align:center;">
-    <button onclick="gateLogin()" class="btn" style="width:100%">دخول</button>
+    <div style="font-size:27px; font-weight:700; color:#E0BC7A; margin-bottom:6px; letter-spacing:0.5px;">دعوة زفاف</div>
+    <div style="font-size:11px; color:#8a857a; letter-spacing:3.5px; margin-bottom:26px;">WEDDING INVITATION</div>
+
+    <div style="width:64px; height:1px; background:linear-gradient(90deg, transparent, #E0BC7A, transparent); margin:0 auto 26px;"></div>
+
+    <div style="font-size:17px; margin-bottom:22px; color:#FAF8F4;">نتشرف بحضوركم 🎉</div>
+
+    <div style="font-size:15.5px; color:#E0BC7A; font-weight:600; margin-bottom:5px;">الخميس ٣ سبتمبر ٢٠٢٦</div>
+    <div style="font-size:13.5px; color:#B8B4AC; margin-bottom:10px;">Golden Halls</div>
+    <div style="font-size:12.5px; color:#c9a86a; margin-bottom:26px;">يبدأ الاستقبال الساعة ٨:٠٠ مساءً</div>
+
+    <div style="width:64px; height:1px; background:linear-gradient(90deg, transparent, #E0BC7A, transparent); margin:0 auto 20px;"></div>
+
+    <div style="font-size:11.5px; color:#6f6a62; line-height:1.9;">هذا الباركود مخصص للتحقق عند البوابة<br>من قبل المنظمين</div>
+
+    <div id="gate-login" style="display:none; flex-direction:column; align-items:center; gap:10px; margin-top:30px; width:100%;">
+      <input type="password" id="gate-pass" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter') gateLogin()"
+        style="width:100%; padding:12px; border-radius:10px; border:1px solid #3a3630; background:#151310; color:#FAF8F4; text-align:center;">
+      <button onclick="gateLogin()" class="btn" style="width:100%">دخول</button>
+    </div>
+
   </div>
 </div>
 
