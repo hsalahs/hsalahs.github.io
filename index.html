@@ -454,20 +454,22 @@ function onDbReady(cb) {
 onDbReady(() => {
   const { onSnapshot, collection } = window._firestore;
 
-  function showConnectionBanner() {
+  // Track each listener's connection state separately — the banner must
+  // stay visible if EITHER stream is broken, not just clear because the
+  // other one happened to succeed.
+  let guestsOK = true;
+  let requestsOK = true;
+  function refreshConnectionBanner() {
     const b = document.getElementById('connection-banner');
-    if (b) b.style.display = 'block';
-  }
-  function hideConnectionBanner() {
-    const b = document.getElementById('connection-banner');
-    if (b) b.style.display = 'none';
+    if (b) b.style.display = (guestsOK && requestsOK) ? 'none' : 'block';
   }
 
   unsubscribe = onSnapshot(window._guestsCol, (snapshot) => {
     guests = snapshot.docs.map(d => ({ docId: d.id, ...d.data() }));
     dataLoaded = true;
     updateCounter();
-    hideConnectionBanner(); // a fresh snapshot means we're connected again
+    guestsOK = true;
+    refreshConnectionBanner();
     // Always refresh the admin list when data changes, as long as admin is unlocked
     if (document.getElementById('admin-content') && document.getElementById('admin-content').style.display === 'block') {
       renderAdmin();
@@ -477,17 +479,20 @@ onDbReady(() => {
     // problem visible so staff know to check their network instead of
     // assuming a guest's barcode is genuinely unregistered.
     console.error('guests onSnapshot error:', error);
-    showConnectionBanner();
+    guestsOK = false;
+    refreshConnectionBanner();
   });
 
   // Guest self-registration requests (from invitation.html)
   onSnapshot(collection(window._db, 'requests'), (snapshot) => {
     requests = snapshot.docs.map(d => ({ docId: d.id, ...d.data() }));
     renderPendingRequests();
-    hideConnectionBanner();
+    requestsOK = true;
+    refreshConnectionBanner();
   }, (error) => {
     console.error('requests onSnapshot error:', error);
-    showConnectionBanner();
+    requestsOK = false;
+    refreshConnectionBanner();
   });
 });
 
