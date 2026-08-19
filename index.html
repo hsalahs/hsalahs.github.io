@@ -288,14 +288,16 @@
 </div>
 
 <div id="app-content" style="display:none">
-<div id="connection-banner" style="display:none; position:sticky; top:0; z-index:200; background:#5a1a1a; color:#ffd7d7; text-align:center; padding:10px 16px; font-size:14px; font-weight:600;">
-  ⚠️ انقطع الاتصال بقاعدة البيانات — القائمة قد لا تكون محدّثة. تحقق من الإنترنت.
+<div style="position:sticky; top:0; z-index:200;">
+  <div id="connection-banner" style="display:none; background:#5a1a1a; color:#ffd7d7; text-align:center; padding:10px 16px; font-size:14px; font-weight:600;">
+    ⚠️ انقطع الاتصال بقاعدة البيانات — القائمة قد لا تكون محدّثة. تحقق من الإنترنت.
+  </div>
+  <nav style="position:static;">
+    <button class="nav-btn active" onclick="showPage('scanner', this)">📱 Scan</button>
+    <button class="nav-btn" onclick="showPage('admin', this)">⚙️ Admin</button>
+    <button class="nav-btn nav-refresh" onclick="location.reload()" title="Refresh">🔄</button>
+  </nav>
 </div>
-<nav>
-  <button class="nav-btn active" onclick="showPage('scanner', this)">📱 Scan</button>
-  <button class="nav-btn" onclick="showPage('admin', this)">⚙️ Admin</button>
-  <button class="nav-btn nav-refresh" onclick="location.reload()" title="Refresh">🔄</button>
-</nav>
 
 <!-- SCANNER -->
 <div class="page active" id="page-scanner">
