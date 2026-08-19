@@ -12,7 +12,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, addDoc, doc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, addDoc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDbjJtLLDniHbALfUhzQ-UiN2j5txR8PGM",
@@ -28,7 +28,7 @@
   window._db = db;
   window._guestsCol = collection(db, 'guests');
   window._requestsCol = collection(db, 'requests');
-  window._firestore = { collection, addDoc, doc, onSnapshot, query, where };
+  window._firestore = { collection, addDoc, onSnapshot, query, where };
   window._dbReady = true;
   window.dispatchEvent(new Event('dbReady'));
 </script>
@@ -194,8 +194,6 @@ input[type=number] { text-align: center; }
 <div class="toast" id="toast"></div>
 
 <script>
-const SITE_URL = 'https://hsalahs.github.io';
-
 let myReqId = null;
 let requests = [];
 let guests = [];
