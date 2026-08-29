@@ -276,40 +276,28 @@
 <div id="public-gate" style="position:fixed; inset:0; z-index:500; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); color:#FAF8F4; font-family:'Tajawal', system-ui, Arial; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px;" dir="rtl">
   <div style="width:100%; max-width:380px; background:rgba(255,255,255,0.035); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); border:1px solid rgba(224,188,122,0.35); border-radius:22px; padding:42px 30px; box-shadow:0 8px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);">
 
-    <!-- Normal welcome content — hidden when the admin has paused the site -->
-    <div id="gate-welcome-block">
-      <div style="font-family:'Playfair Display', serif; font-size:19px; color:#c9a86a; letter-spacing:1.5px; margin-bottom:10px;">حسن &amp; فاطمة</div>
-      <div style="font-size:27px; font-weight:700; color:#E0BC7A; margin-bottom:6px; letter-spacing:0.5px;">دعوة زفاف</div>
-      <div style="font-size:11px; color:#8a857a; letter-spacing:3.5px; margin-bottom:26px;">WEDDING INVITATION</div>
+    <div style="font-family:'Playfair Display', serif; font-size:19px; color:#c9a86a; letter-spacing:1.5px; margin-bottom:10px;">حسن &amp; فاطمة</div>
+    <div style="font-size:27px; font-weight:700; color:#E0BC7A; margin-bottom:6px; letter-spacing:0.5px;">دعوة زفاف</div>
+    <div style="font-size:11px; color:#8a857a; letter-spacing:3.5px; margin-bottom:26px;">WEDDING INVITATION</div>
 
-      <div style="width:64px; height:1px; background:linear-gradient(90deg, transparent, #E0BC7A, transparent); margin:0 auto 26px;"></div>
+    <div style="width:64px; height:1px; background:linear-gradient(90deg, transparent, #E0BC7A, transparent); margin:0 auto 26px;"></div>
 
-      <div style="font-size:17px; margin-bottom:22px; color:#FAF8F4;">نتشرف بحضوركم 🎉</div>
+    <div style="font-size:17px; margin-bottom:22px; color:#FAF8F4;">نتشرف بحضوركم 🎉</div>
 
-      <div style="font-size:15.5px; color:#E0BC7A; font-weight:600; margin-bottom:5px;">الخميس ٣ سبتمبر ٢٠٢٦</div>
-      <div style="font-size:13.5px; color:#B8B4AC; margin-bottom:10px;">Golden Halls</div>
-      <div style="font-size:12.5px; color:#c9a86a; margin-bottom:18px;">يبدأ الاستقبال الساعة ٨:٠٠ مساءً</div>
+    <div style="font-size:15.5px; color:#E0BC7A; font-weight:600; margin-bottom:5px;">الخميس ٣ سبتمبر ٢٠٢٦</div>
+    <div style="font-size:13.5px; color:#B8B4AC; margin-bottom:10px;">Golden Halls</div>
+    <div style="font-size:12.5px; color:#c9a86a; margin-bottom:18px;">يبدأ الاستقبال الساعة ٨:٠٠ مساءً</div>
 
-      <a href="https://maps.app.goo.gl/KQEQQtCqWTBtW4pE8?g_st=ic" target="_blank" rel="noopener"
-        style="display:inline-block; color:#E0BC7A; font-size:13px; text-decoration:none; border:1px solid rgba(224,188,122,0.4); border-radius:20px; padding:8px 18px; margin-bottom:22px;">
-        📍 موقع القاعة على الخريطة
-      </a>
+    <a href="https://maps.app.goo.gl/KQEQQtCqWTBtW4pE8?g_st=ic" target="_blank" rel="noopener"
+      style="display:inline-block; color:#E0BC7A; font-size:13px; text-decoration:none; border:1px solid rgba(224,188,122,0.4); border-radius:20px; padding:8px 18px; margin-bottom:22px;">
+      📍 موقع القاعة على الخريطة
+    </a>
 
-      <div id="gate-countdown" style="font-size:13px; color:#c9a86a; margin-bottom:26px; letter-spacing:0.3px;"></div>
+    <div id="gate-countdown" style="font-size:13px; color:#c9a86a; margin-bottom:26px; letter-spacing:0.3px;"></div>
 
-      <div style="width:64px; height:1px; background:linear-gradient(90deg, transparent, #E0BC7A, transparent); margin:0 auto 20px;"></div>
+    <div style="width:64px; height:1px; background:linear-gradient(90deg, transparent, #E0BC7A, transparent); margin:0 auto 20px;"></div>
 
-      <div style="font-size:11.5px; color:#6f6a62; line-height:1.9;">هذا الباركود مخصص للتحقق عند البوابة<br>من قبل المنظمين</div>
-    </div>
-
-    <!-- Shown instead of the welcome block while the admin has paused
-         the site. The password box below still works exactly the same,
-         so staff can always log in and flip it back on. -->
-    <div id="gate-paused-block" style="display:none;">
-      <div style="font-size:22px; font-weight:700; color:#E0BC7A; margin-bottom:14px;">⏸️</div>
-      <div style="font-size:16px; margin-bottom:10px; color:#FAF8F4;">الموقع متوقف مؤقتاً</div>
-      <div style="font-size:12.5px; color:#8a857a; line-height:1.9;">حاول مرة ثانية بعد قليل</div>
-    </div>
+    <div style="font-size:11.5px; color:#6f6a62; line-height:1.9;">هذا الباركود مخصص للتحقق عند البوابة<br>من قبل المنظمين</div>
 
     <div id="gate-login" style="display:none; flex-direction:column; align-items:center; gap:10px; margin-top:30px; width:100%;">
       <input type="password" id="gate-pass" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter') gateLogin()"
@@ -428,7 +416,6 @@
       <button id="btn-import" class="btn-sm" onclick="document.getElementById('csv-import').click()">📂 Import CSV</button>
       <input type="file" id="csv-import" accept=".csv,.xlsx,.xls,.txt,.tsv" onchange="importCSV(event)" style="display:none;">
       <button id="btn-clear" class="btn-sm danger" onclick="clearAll()">🗑 Clear All</button>
-      <button id="site-toggle-btn" class="btn-sm" style="display:none;">⏸️ إيقاف الموقع مؤقتاً</button>
       <button id="btn-logout" class="btn-sm danger" onclick="lockAdmin()">🔒 Logout</button>
     </div>
   </div>
@@ -490,8 +477,8 @@ function onDbReady(cb) {
 // The full guests + requests listeners are expensive (every open guest
 // tab used to stream them just from landing on the harmless public-gate
 // welcome screen, before ever logging in — a real source of wasted
-// Firestore reads). Now they only start once someone actually
-// authenticates as staff, not on every page load.
+// Firestore reads). They only start once someone actually authenticates
+// as staff, not on every page load.
 let dataListenersStarted = false;
 function startDataListeners() {
   if (dataListenersStarted) return;
@@ -801,10 +788,7 @@ function setTheme(name) {
 }
 
 // Restore the saved theme on load, then listen live so every device
-// switches together the moment anyone changes it. Also listens for the
-// site-wide enable/disable switch (siteEnabled), which lets the admin
-// pause the whole site — public gate AND guest invitation page stop
-// making any Firestore calls — without touching GitHub at all.
+// switches together the moment anyone changes it.
 function restoreTheme() {
   let saved = 'gold';
   try { saved = localStorage.getItem('wd_theme') || 'gold'; } catch(e) {}
@@ -818,50 +802,8 @@ function restoreTheme() {
         document.body.setAttribute('data-theme', theme);
         try { localStorage.setItem('wd_theme', theme); } catch(e) {}
       }
-      const enabled = !snap.exists() || snap.data().siteEnabled !== false;
-      applySiteEnabledState(enabled);
     });
   });
-}
-
-// Toggle the site-wide switch. Full Admin only.
-function toggleSiteEnabled(enabled) {
-  if (adminLevel !== 2) { showToast('❌ غير مصرح'); return; }
-  onDbReady(async () => {
-    const { doc, setDoc } = window._firestore;
-    try {
-      await setDoc(doc(window._db, 'settings', 'app'), { siteEnabled: enabled }, { merge: true });
-      showToast(enabled ? '✅ الموقع شغال الآن' : '⏸️ الموقع متوقف مؤقتاً');
-    } catch(e) {
-      console.error('Toggle site failed', e);
-      showToast('⚠️ فشل التغيير، حاول مرة ثانية');
-    }
-  });
-}
-
-// Swap the public-gate content between the normal wedding welcome and a
-// "paused" message, based on the site-wide switch. Only affects visitors
-// who are NOT already authenticated — an admin/security device that's
-// already logged in (via localStorage session) keeps full access
-// regardless, so whoever paused the site can always get back in to
-// resume it, and staff mid-shift never get locked out mid-event.
-function applySiteEnabledState(enabled) {
-  const welcome = document.getElementById('gate-welcome-block');
-  const paused = document.getElementById('gate-paused-block');
-  if (welcome && paused) {
-    if (adminLevel !== 0 || enabled) {
-      welcome.style.display = 'block';
-      paused.style.display = 'none';
-    } else {
-      welcome.style.display = 'none';
-      paused.style.display = 'block';
-    }
-  }
-  const toggleBtn = document.getElementById('site-toggle-btn');
-  if (toggleBtn) {
-    toggleBtn.textContent = enabled ? '⏸️ إيقاف الموقع مؤقتاً' : '▶️ تشغيل الموقع';
-    toggleBtn.onclick = () => toggleSiteEnabled(!enabled);
-  }
 }
 
 function escapeHtml(str) {
@@ -990,7 +932,6 @@ function updateSecurityButtons() {
   document.getElementById('btn-export').style.display = isFullAdmin ? 'block' : 'none';
   document.getElementById('btn-import').style.display = isFullAdmin ? 'block' : 'none';
   document.getElementById('btn-clear').style.display = isFullAdmin ? 'block' : 'none';
-  document.getElementById('site-toggle-btn').style.display = isFullAdmin ? 'block' : 'none';
   document.getElementById('btn-logout').style.display = 'block'; // Always visible
   document.getElementById('theme-switcher').style.display = isFullAdmin ? 'flex' : 'none';
 
