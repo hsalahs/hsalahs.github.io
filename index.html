@@ -1013,8 +1013,10 @@ async function clearAll() {
 
 function exportCSV() {
   if (adminLevel !== 2) { showToast('❌ غير مصرح'); return; }
+  // Sorted the same way the admin list is (numbers first, then alphabetical)
+  // so a printed copy is actually searchable by eye at a busy door.
   const rows = [['Name', 'Code', 'Attendance', 'Registered At']];
-  guests.forEach(g => rows.push([g.name, g.id, g.scanned ? 'Attended' : 'Not Yet', g.registeredAt]));
+  visibleGuests().forEach(g => rows.push([g.name, g.id, g.scanned ? 'Attended' : 'Not Yet', g.registeredAt]));
   const csv = rows.map(r => r.join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
