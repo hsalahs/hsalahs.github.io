@@ -278,6 +278,7 @@
 
     <!-- Normal welcome content — hidden when the admin has paused the site -->
     <div id="gate-welcome-block">
+      <div style="font-family:'Playfair Display', serif; font-size:19px; color:#c9a86a; letter-spacing:1.5px; margin-bottom:10px;">حسن &amp; فاطمة</div>
       <div style="font-size:27px; font-weight:700; color:#E0BC7A; margin-bottom:6px; letter-spacing:0.5px;">دعوة زفاف</div>
       <div style="font-size:11px; color:#8a857a; letter-spacing:3.5px; margin-bottom:26px;">WEDDING INVITATION</div>
 
@@ -290,9 +291,11 @@
       <div style="font-size:12.5px; color:#c9a86a; margin-bottom:18px;">يبدأ الاستقبال الساعة ٨:٠٠ مساءً</div>
 
       <a href="https://maps.app.goo.gl/KQEQQtCqWTBtW4pE8?g_st=ic" target="_blank" rel="noopener"
-        style="display:inline-block; color:#E0BC7A; font-size:13px; text-decoration:none; border:1px solid rgba(224,188,122,0.4); border-radius:20px; padding:8px 18px; margin-bottom:26px;">
+        style="display:inline-block; color:#E0BC7A; font-size:13px; text-decoration:none; border:1px solid rgba(224,188,122,0.4); border-radius:20px; padding:8px 18px; margin-bottom:22px;">
         📍 موقع القاعة على الخريطة
       </a>
+
+      <div id="gate-countdown" style="font-size:13px; color:#c9a86a; margin-bottom:26px; letter-spacing:0.3px;"></div>
 
       <div style="width:64px; height:1px; background:linear-gradient(90deg, transparent, #E0BC7A, transparent); margin:0 auto 20px;"></div>
 
@@ -1603,8 +1606,37 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+// Countdown to the reception (8:00 PM, Sept 3 2026, Riyadh time) shown on
+// the public welcome card. Switches to a celebratory message once the
+// moment arrives, instead of showing zeros or a negative countdown.
+function startGateCountdown() {
+  const el = document.getElementById('gate-countdown');
+  if (!el) return;
+  const target = new Date('2026-09-03T20:00:00+03:00').getTime();
+
+  function tick() {
+    const diff = target - Date.now();
+    if (diff <= 0) {
+      el.textContent = '🎉 ليلة العمر 🎉';
+      clearInterval(timer);
+      return;
+    }
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const parts = [];
+    if (d > 0) parts.push(d + ' يوم');
+    parts.push(h + ' ساعة');
+    parts.push(m + ' دقيقة');
+    el.textContent = 'باقي ' + parts.join(' و ');
+  }
+  tick();
+  const timer = setInterval(tick, 30000); // update every 30s, no need for per-second churn
+}
+
 window.addEventListener('load', () => {
   restoreTheme();
+  startGateCountdown();
   // Hide splash screen after a brief, elegant pause
   setTimeout(() => {
     const splash = document.getElementById('splash');
