@@ -289,9 +289,12 @@
       </div>
       <div class="guest-list" id="guests-list"></div>
       <div class="card">
-        <button class="btn" style="width:100%; margin-bottom:10px;" onclick="downloadAllCards()">📦 تحميل كل الدعوات (ZIP)</button>
-        <button class="btn ghost" style="width:100%; margin-bottom:10px;" onclick="askRangeDownload()">📥 تحميل نطاق معيّن (مثال: 1–100)</button>
-        <button class="btn ghost" style="width:100%;" onclick="exportGuestsCSV()">📄 تصدير قائمة الضيوف (CSV)</button>
+        <button class="btn ghost" style="width:100%;" onclick="toggleGuestsMenu()">☰ خيارات إضافية</button>
+        <div id="guests-menu" style="display:none; margin-top:10px;">
+          <button class="btn" style="width:100%; margin-bottom:10px;" onclick="downloadAllCards()">📦 تحميل كل الدعوات (ZIP)</button>
+          <button class="btn ghost" style="width:100%; margin-bottom:10px;" onclick="askRangeDownload()">📥 تحميل نطاق معيّن (مثال: 1–100)</button>
+          <button class="btn ghost" style="width:100%;" onclick="exportGuestsCSV()">📄 تصدير قائمة الضيوف (CSV)</button>
+        </div>
       </div>
     </div>
 
@@ -787,6 +790,11 @@ async function downloadGuestCard(docId) {
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }, 'image/png');
+}
+
+function toggleGuestsMenu() {
+  const el = document.getElementById('guests-menu');
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
 }
 
 function showToast(msg) {
