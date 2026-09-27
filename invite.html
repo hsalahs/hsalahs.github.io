@@ -92,7 +92,17 @@ function renderPending() {
 }
 
 function renderRejected() {
-  card.innerHTML = `<div class="status-icon">😕</div><div class="status-msg">للأسف ما قدرنا نأكد حضورك حاليًا</div>`;
+  card.innerHTML = `
+    <div class="status-icon">😕</div>
+    <div class="status-msg">للأسف ما قدرنا نأكد حضورك حاليًا</div>
+    <button class="btn" style="margin-top:18px;" onclick="retryRequest()">حاول مرة ثانية</button>
+  `;
+}
+
+function retryRequest() {
+  try { localStorage.removeItem('inv_reqid_' + eventId); } catch (e) {}
+  myReqId = null;
+  renderForm(currentEvent);
 }
 
 function hexToRgba(hex, alpha) {
