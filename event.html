@@ -98,7 +98,8 @@
   .hero .subtitle { font-size:12px; color:var(--text-soft); letter-spacing:1px; }
   .gold-line { width:52px; height:2px; background:linear-gradient(90deg,transparent,var(--gold),transparent); margin:12px auto 18px; }
   nav { display:flex; gap:8px; margin-bottom:16px; padding:14px 8px; background:rgba(0,0,0,0.15); backdrop-filter:blur(10px); border-radius:16px; border:1px solid rgba(var(--accent-rgb),0.15); position:sticky; top:8px; z-index:100; }
-  .nav-btn { flex:1; padding:10px; border-radius:30px; border:1px solid rgba(var(--accent-rgb),0.3); background:transparent; color:var(--text-soft); font-family:inherit; font-size:13px; cursor:pointer; transition:all 0.3s ease; }
+  .nav-btn { position:relative; flex:1; padding:10px; border-radius:30px; border:1px solid rgba(var(--accent-rgb),0.3); background:transparent; color:var(--text-soft); font-family:inherit; font-size:13px; cursor:pointer; transition:all 0.3s ease; }
+  .nav-badge { position:absolute; top:-6px; left:6px; background:var(--gold-deep); color:#1a1400; font-size:10px; font-weight:700; min-width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; padding:0 4px; box-shadow:0 2px 6px rgba(0,0,0,0.35); }
   .nav-btn.active { background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; font-weight:700; border-color:transparent; box-shadow:0 6px 20px rgba(var(--accent-rgb),0.25); }
   .page { display:none; }
   .page.active { display:block; }
@@ -247,7 +248,7 @@
     <nav>
       <button class="nav-btn active" onclick="showTab('scan', this)">📱 مسح</button>
       <button class="nav-btn" onclick="showTab('guests', this)">👥 الضيوف</button>
-      <button class="nav-btn" onclick="showTab('requests', this)">📥 الطلبات</button>
+      <button class="nav-btn" onclick="showTab('requests', this)">📥 الطلبات<span class="nav-badge" id="requests-badge" style="display:none;">0</span></button>
     </nav>
 
     <div class="page active" id="page-scan">
@@ -477,6 +478,7 @@ function startListeners() {
   });
   onSnapshot(collection(window._db, 'events', eventId, 'requests'), (snap) => {
     requests = snap.docs.map(d => ({ docId: d.id, ...d.data() })).filter(r => r.status === 'pending');
+    updateRequestsBadge();
     renderRequests();
   });
 }
@@ -907,6 +909,13 @@ function exportGuestsCSV() {
   link.click();
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+function updateRequestsBadge() {
+  const badge = document.getElementById('requests-badge');
+  const count = requests.length;
+  badge.textContent = count > 99 ? '99+' : String(count);
+  badge.style.display = count > 0 ? 'flex' : 'none';
 }
 
 function renderRequests() {
