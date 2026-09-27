@@ -281,7 +281,6 @@
           <input type="text" id="new-guest-name" placeholder="اسم ضيف جديد">
           <button class="btn" onclick="addGuest()">إضافة</button>
         </div>
-        <button class="btn ghost" style="width:100%; margin-top:10px;" onclick="document.getElementById('csv-import').click()">📂 استيراد قائمة (CSV / أسماء)</button>
         <input type="file" id="csv-import" accept=".csv,.txt" style="display:none" onchange="importCSV(event)">
       </div>
       <div class="card">
@@ -291,6 +290,7 @@
       <div class="card">
         <button class="btn ghost" style="width:100%;" onclick="toggleGuestsMenu()">☰ خيارات إضافية</button>
         <div id="guests-menu" style="display:none; margin-top:10px;">
+          <button class="btn ghost" style="width:100%; margin-bottom:10px;" onclick="document.getElementById('csv-import').click()">📂 استيراد قائمة (CSV / أسماء)</button>
           <button class="btn" style="width:100%; margin-bottom:10px;" onclick="downloadAllCards()">📦 تحميل كل الدعوات (ZIP)</button>
           <button class="btn ghost" style="width:100%; margin-bottom:10px;" onclick="askRangeDownload()">📥 تحميل نطاق معيّن (مثال: 1–100)</button>
           <button class="btn ghost" style="width:100%;" onclick="exportGuestsCSV()">📄 تصدير قائمة الضيوف (CSV)</button>
