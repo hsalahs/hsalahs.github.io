@@ -77,7 +77,7 @@
 
   <div id="app-view" style="display:none">
     <div class="topbar">
-      <h1 style="margin:0; font-size:20px;">مناسباتي</h1>
+      <h1 style="margin:0; font-size:20px;" id="events-heading">مناسباتي</h1>
       <button class="btn ghost small" onclick="doLogout()">🔓 خروج</button>
     </div>
     <div class="sub" style="margin-bottom:20px;">
@@ -85,7 +85,8 @@
       — مو حسابك؟ <a onclick="doLogout()" style="color:#E0BC7A; cursor:pointer; text-decoration:underline;">سجّل بحساب ثاني</a>
     </div>
 
-    <button class="btn" onclick="showCreateForm()">➕ إنشاء مناسبة جديدة</button>
+    <button class="btn" id="create-toggle-btn" onclick="showCreateForm()">➕ إنشاء مناسبة جديدة</button>
+    <div class="sub" id="limit-msg" style="display:none; margin-bottom:16px;">عندك مناسبة واحدة مفعّلة على حسابك حاليًا. تحتاج مناسبة ثانية؟ تواصل معنا.</div>
 
     <div class="card" id="create-form" style="display:none">
       <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: عرس حسن وفاطمة)">
@@ -100,6 +101,9 @@
 </div>
 
 <script>
+const ADMIN_EMAILS = ['hsallah@outlook.sa'];
+function isAdmin(user) { return !!user && ADMIN_EMAILS.includes((user.email || '').toLowerCase()); }
+
 let authMode = 'login'; // or 'signup'
 
 function toggleAuthMode() {
@@ -160,6 +164,11 @@ async function createNewEvent() {
   const venue = document.getElementById('ev-venue').value.trim();
   if (!name) { alert('اكتب اسم المناسبة'); return; }
 
+  if (!isAdmin(window._auth.currentUser) && myEventsCount >= 1) {
+    alert('عندك مناسبة واحدة مفعّلة على حسابك حاليًا. تواصل معنا لو تحتاج مناسبة ثانية.');
+    return;
+  }
+
   const { serverTimestamp, doc, setDoc } = window._fsFns;
   const eventId = newEventId();
   const scanPin = String(Math.floor(1000 + Math.random() * 9000)); // 4-digit PIN for the door/security team
@@ -167,6 +176,7 @@ async function createNewEvent() {
     await setDoc(doc(window._db, 'events', eventId), {
       name, date, venue, scanPin,
       ownerUid: window._auth.currentUser.uid,
+      ownerEmail: window._auth.currentUser.email || '',
       createdAt: serverTimestamp()
     });
     window.location.href = 'event.html?id=' + eventId;
@@ -176,7 +186,7 @@ async function createNewEvent() {
   }
 }
 
-function renderEvents(events) {
+function renderEvents(events, showOwner) {
   const list = document.getElementById('events-list');
   if (events.length === 0) {
     list.innerHTML = '<div class="empty">لسه ما أنشأت أي مناسبة</div>';
@@ -187,6 +197,7 @@ function renderEvents(events) {
       <div>
         <div class="event-name">${escapeHtml(ev.name)}</div>
         <div class="event-date">${ev.date || ''}${ev.venue ? ' · ' + escapeHtml(ev.venue) : ''}</div>
+        ${showOwner ? `<div class="event-date">👤 ${escapeHtml(ev.ownerEmail || ev.ownerUid || '')}</div>` : ''}
       </div>
       <div style="display:flex; gap:6px;">
         <a class="btn ghost small" style="text-decoration:none" href="event.html?id=${ev.id}">فتح</a>
@@ -218,6 +229,7 @@ function escapeHtml(str) {
 }
 
 let eventsUnsub = null;
+let myEventsCount = 0;
 
 function initAuthWatcher() {
   const { onAuthStateChanged } = window._authFns;
@@ -226,7 +238,8 @@ function initAuthWatcher() {
       document.getElementById('auth-view').style.display = 'none';
       document.getElementById('app-view').style.display = 'block';
       document.getElementById('current-email').textContent = user.email || '';
-      watchEvents(user.uid);
+      document.getElementById('events-heading').textContent = isAdmin(user) ? 'كل المناسبات (أدمن)' : 'مناسباتي';
+      watchEvents(user);
     } else {
       document.getElementById('auth-view').style.display = 'block';
       document.getElementById('app-view').style.display = 'none';
@@ -235,13 +248,26 @@ function initAuthWatcher() {
   });
 }
 
-function watchEvents(uid) {
+function updateCreateGate(admin) {
+  const btn = document.getElementById('create-toggle-btn');
+  const msg = document.getElementById('limit-msg');
+  const locked = !admin && myEventsCount >= 1;
+  btn.style.display = locked ? 'none' : 'block';
+  msg.style.display = locked ? 'block' : 'none';
+  if (locked) document.getElementById('create-form').style.display = 'none';
+}
+
+function watchEvents(user) {
   const { query, where, onSnapshot } = window._fsFns;
   if (eventsUnsub) eventsUnsub();
-  eventsUnsub = onSnapshot(query(window._eventsCol, where('ownerUid', '==', uid)), (snap) => {
+  const admin = isAdmin(user);
+  const q = admin ? window._eventsCol : query(window._eventsCol, where('ownerUid', '==', user.uid));
+  eventsUnsub = onSnapshot(q, (snap) => {
     const events = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     events.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-    renderEvents(events);
+    myEventsCount = admin ? events.filter(ev => ev.ownerUid === user.uid).length : events.length;
+    updateCreateGate(admin);
+    renderEvents(events, admin);
   });
 }
 
