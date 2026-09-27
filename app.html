@@ -8,7 +8,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import {
     getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-    onAuthStateChanged, signOut
+    onAuthStateChanged, signOut, sendPasswordResetEmail
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc, getDoc, updateDoc, increment, runTransaction, getDocs, deleteDoc
@@ -31,7 +31,7 @@
   window._auth = auth;
   window._db = db;
   window._eventsCol = eventsCol;
-  window._authFns = { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut };
+  window._authFns = { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail };
   window._fsFns = { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc, getDoc, updateDoc, increment, runTransaction, getDocs, deleteDoc };
   window._readyEvent = new Event('appDbReady');
   window.dispatchEvent(window._readyEvent);
@@ -79,6 +79,7 @@
       <input type="password" id="auth-pass" placeholder="كلمة المرور">
       <button class="btn" id="auth-submit-btn" onclick="submitAuth()">دخول</button>
       <div class="toggle-row" id="auth-toggle">ما عندك حساب؟ <a onclick="toggleAuthMode()">سجّل واحد جديد</a></div>
+      <div class="toggle-row" id="forgot-pass-row"><a onclick="sendResetEmail()">نسيت كلمة المرور؟</a></div>
     </div>
   </div>
 
@@ -101,8 +102,8 @@
 
     <button class="btn" id="create-toggle-btn" onclick="showCreateForm()" style="display:none">➕ إنشاء مناسبة جديدة</button>
     <div id="limit-box" style="display:none; margin-bottom:16px;">
-      <div class="sub" style="margin-bottom:10px;">عندك مناسبة واحدة مفعّلة على حسابك حاليًا.</div>
-      <button class="btn ghost" id="request-more-btn" style="width:100%;" onclick="requestExtraEvent()">🙋 اطلب مناسبة إضافية</button>
+      <div class="sub" id="limit-box-msg" style="margin-bottom:10px;">وصلت لحد مناسباتك الحالي.</div>
+      <button class="btn ghost" id="request-more-btn" style="width:100%;">🙋 اطلب مناسبة إضافية</button>
       <div class="sub" id="pending-request-msg" style="display:none;">⏳ طلبك قيد المراجعة، بننبّهك أول ما يتم الرد.</div>
     </div>
 
@@ -130,6 +131,24 @@ function toggleAuthMode() {
   document.getElementById('auth-toggle').innerHTML = authMode === 'login'
     ? 'ما عندك حساب؟ <a onclick="toggleAuthMode()">سجّل واحد جديد</a>'
     : 'عندك حساب؟ <a onclick="toggleAuthMode()">سجّل دخول</a>';
+  document.getElementById('forgot-pass-row').style.display = authMode === 'login' ? 'block' : 'none';
+}
+
+async function sendResetEmail() {
+  const email = document.getElementById('auth-email').value.trim();
+  document.getElementById('auth-err').style.display = 'none';
+  if (!email) { showAuthError('اكتب بريدك الإلكتروني فوق الأول، وبعدين اضغط "نسيت كلمة المرور"'); return; }
+  const { sendPasswordResetEmail } = window._authFns;
+  try {
+    await sendPasswordResetEmail(window._auth, email);
+    alert('تم إرسال رابط تغيير كلمة المرور إلى بريدك — تفقّد صندوق الوارد (والسبام لو ما وصلك).');
+  } catch (e) {
+    const map = {
+      'auth/invalid-email': 'صيغة البريد غير صحيحة',
+      'auth/user-not-found': 'ما فيه حساب مسجّل بهذا البريد'
+    };
+    showAuthError(map[e.code] || ('خطأ: ' + e.message));
+  }
 }
 
 function showAuthError(msg) {
@@ -335,18 +354,53 @@ function initAuthWatcher() {
   });
 }
 
+const AUTO_APPROVE_CEILING = 3; // customers can self-serve up to this many events; beyond it needs admin approval
+
 function updateCreateGate(admin) {
   const btn = document.getElementById('create-toggle-btn');
   const box = document.getElementById('limit-box');
   const reqBtn = document.getElementById('request-more-btn');
   const pendingMsg = document.getElementById('pending-request-msg');
+  const msg = document.getElementById('limit-box-msg');
   const locked = !admin && myEventsCount >= myEventLimit;
   btn.style.display = locked ? 'none' : 'block';
   box.style.display = locked ? 'block' : 'none';
   if (locked) {
     document.getElementById('create-form').style.display = 'none';
-    reqBtn.style.display = myPendingRequestId ? 'none' : 'block';
-    pendingMsg.style.display = myPendingRequestId ? 'block' : 'none';
+    if (myPendingRequestId) {
+      reqBtn.style.display = 'none';
+      pendingMsg.style.display = 'block';
+    } else {
+      reqBtn.style.display = 'block';
+      pendingMsg.style.display = 'none';
+      if (myEventLimit < AUTO_APPROVE_CEILING) {
+        msg.textContent = 'وصلت لحد مناسباتك الحالي (' + myEventLimit + ').';
+        reqBtn.textContent = '➕ فتح مناسبة إضافية';
+        reqBtn.onclick = selfIncreaseLimit;
+      } else {
+        msg.textContent = 'وصلت للحد الأقصى المسموح ذاتيًا (' + AUTO_APPROVE_CEILING + '). لأي مناسبة زيادة لازم موافقة يدوية.';
+        reqBtn.textContent = '🙋 اطلب مناسبة إضافية';
+        reqBtn.onclick = requestExtraEvent;
+      }
+    }
+  }
+}
+
+async function selfIncreaseLimit() {
+  const { doc, runTransaction } = window._fsFns;
+  const user = window._auth.currentUser;
+  const limitRef = doc(window._db, 'accountLimits', user.uid);
+  try {
+    await runTransaction(window._db, async (tx) => {
+      const snap = await tx.get(limitRef);
+      const eventLimit = snap.exists() ? (snap.data().eventLimit || 1) : 1;
+      if (eventLimit >= AUTO_APPROVE_CEILING) throw new Error('CEILING_REACHED');
+      tx.update(limitRef, { eventLimit: eventLimit + 1 });
+    });
+  } catch (e) {
+    if (e.message === 'CEILING_REACHED') { requestExtraEvent(); return; }
+    alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
+    console.error(e);
   }
 }
 
