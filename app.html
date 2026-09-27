@@ -11,7 +11,7 @@
     onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import {
-    getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc
+    getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc, getDocs, deleteDoc
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -32,7 +32,7 @@
   window._db = db;
   window._eventsCol = eventsCol;
   window._authFns = { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut };
-  window._fsFns = { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc };
+  window._fsFns = { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc, getDocs, deleteDoc };
   window._readyEvent = new Event('appDbReady');
   window.dispatchEvent(window._readyEvent);
 </script>
@@ -188,9 +188,29 @@ function renderEvents(events) {
         <div class="event-name">${escapeHtml(ev.name)}</div>
         <div class="event-date">${ev.date || ''}${ev.venue ? ' · ' + escapeHtml(ev.venue) : ''}</div>
       </div>
-      <a class="btn ghost small" style="text-decoration:none" href="event.html?id=${ev.id}">فتح</a>
+      <div style="display:flex; gap:6px;">
+        <a class="btn ghost small" style="text-decoration:none" href="event.html?id=${ev.id}">فتح</a>
+        <button class="btn ghost small" style="border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteEvent('${ev.id}', '${escapeHtml(ev.name).replace(/'/g, "\\'")}')">🗑</button>
+      </div>
     </div>
   `).join('');
+}
+
+async function deleteEvent(eventId, name) {
+  if (!confirm('حذف "' + name + '" نهائيًا؟\n\nراح ينحذف كل الضيوف والطلبات المرتبطة فيها، وما تقدر ترجعها بعدين.')) return;
+  const { collection, getDocs, deleteDoc, doc } = window._fsFns;
+  try {
+    const guestsSnap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
+    const requestsSnap = await getDocs(collection(window._db, 'events', eventId, 'requests'));
+    await Promise.all([
+      ...guestsSnap.docs.map(d => deleteDoc(d.ref)),
+      ...requestsSnap.docs.map(d => deleteDoc(d.ref))
+    ]);
+    await deleteDoc(doc(window._db, 'events', eventId));
+  } catch (e) {
+    alert('صار خطأ أثناء الحذف: ' + (e.code || '') + ' — ' + e.message);
+    console.error(e);
+  }
 }
 
 function escapeHtml(str) {

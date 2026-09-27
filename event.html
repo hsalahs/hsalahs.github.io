@@ -10,7 +10,7 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import {
-    getFirestore, doc, getDoc, collection, addDoc, onSnapshot,
+    getFirestore, doc, getDoc, getDocs, collection, addDoc, onSnapshot,
     updateDoc, deleteDoc, runTransaction, query, where
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
@@ -30,7 +30,7 @@
   window._auth = auth;
   window._db = db;
   window._authFns = { onAuthStateChanged, signOut };
-  window._fsFns = { doc, getDoc, collection, addDoc, onSnapshot, updateDoc, deleteDoc, runTransaction, query, where };
+  window._fsFns = { doc, getDoc, getDocs, collection, addDoc, onSnapshot, updateDoc, deleteDoc, runTransaction, query, where };
   window.dispatchEvent(new Event('appDbReady'));
 </script>
 <style>
@@ -94,9 +94,23 @@
   <div id="dashboard" style="display:none">
     <div class="topbar">
       <h1 id="ev-title"></h1>
-      <a class="btn ghost" href="app.html" style="text-decoration:none">مناسباتي</a>
+      <div style="display:flex; gap:6px;">
+        <button class="btn ghost xs" onclick="toggleEditEvent()">✏️ تعديل</button>
+        <a class="btn ghost xs" href="app.html" style="text-decoration:none">مناسباتي</a>
+      </div>
     </div>
     <div class="sub" id="ev-sub"></div>
+
+    <div class="card" id="edit-event-card" style="display:none">
+      <input type="text" id="edit-ev-name" placeholder="اسم المناسبة">
+      <input type="date" id="edit-ev-date">
+      <input type="text" id="edit-ev-venue" placeholder="مكان الحفل">
+      <div class="row">
+        <button class="btn" style="flex:1" onclick="saveEventEdit()">حفظ التعديل</button>
+        <button class="btn ghost" style="flex:1" onclick="toggleEditEvent()">إلغاء</button>
+      </div>
+      <button class="btn danger" style="width:100%; margin-top:12px;" onclick="deleteThisEvent()">🗑 حذف المناسبة نهائيًا</button>
+    </div>
 
     <div class="card">
       <div style="font-size:12px; color:#B8B4AC; margin-bottom:6px;">رابط الدعوة — شاركه مع ضيوفك</div>
@@ -199,6 +213,54 @@ function copyScanLink() {
   const input = document.getElementById('scan-link');
   input.select();
   navigator.clipboard?.writeText(input.value);
+}
+
+function toggleEditEvent() {
+  const el = document.getElementById('edit-event-card');
+  const opening = el.style.display !== 'block';
+  el.style.display = opening ? 'block' : 'none';
+  if (opening) {
+    document.getElementById('edit-ev-name').value = eventData.name || '';
+    document.getElementById('edit-ev-date').value = eventData.date || '';
+    document.getElementById('edit-ev-venue').value = eventData.venue || '';
+  }
+}
+
+async function saveEventEdit() {
+  const name = document.getElementById('edit-ev-name').value.trim();
+  const date = document.getElementById('edit-ev-date').value;
+  const venue = document.getElementById('edit-ev-venue').value.trim();
+  if (!name) { alert('اكتب اسم المناسبة'); return; }
+
+  const { doc, updateDoc } = window._fsFns;
+  try {
+    await updateDoc(doc(window._db, 'events', eventId), { name, date, venue });
+    eventData.name = name; eventData.date = date; eventData.venue = venue;
+    document.getElementById('ev-title').textContent = name;
+    document.getElementById('ev-sub').textContent = [date, venue].filter(Boolean).join(' · ');
+    toggleEditEvent();
+  } catch (e) {
+    alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
+    console.error(e);
+  }
+}
+
+async function deleteThisEvent() {
+  if (!confirm('حذف "' + eventData.name + '" نهائيًا؟\n\nراح ينحذف كل الضيوف والطلبات المرتبطة فيها، وما تقدر ترجعها بعدين.')) return;
+  const { collection, getDocs, deleteDoc, doc } = window._fsFns;
+  try {
+    const guestsSnap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
+    const requestsSnap = await getDocs(collection(window._db, 'events', eventId, 'requests'));
+    await Promise.all([
+      ...guestsSnap.docs.map(d => deleteDoc(d.ref)),
+      ...requestsSnap.docs.map(d => deleteDoc(d.ref))
+    ]);
+    await deleteDoc(doc(window._db, 'events', eventId));
+    window.location.href = 'app.html';
+  } catch (e) {
+    alert('صار خطأ أثناء الحذف: ' + (e.code || '') + ' — ' + e.message);
+    console.error(e);
+  }
 }
 
 async function init() {
