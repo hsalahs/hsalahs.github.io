@@ -7,33 +7,7 @@
 <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import {
-    getFirestore, doc, getDoc, getDocs, collection, addDoc, onSnapshot,
-    updateDoc, deleteDoc, runTransaction, query, where
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyDbjJtLLDniHbALfUhzQ-UiN2j5txR8PGM",
-    authDomain: "wedding-qr-16d01.firebaseapp.com",
-    projectId: "wedding-qr-16d01",
-    storageBucket: "wedding-qr-16d01.firebasestorage.app",
-    messagingSenderId: "1036657421971",
-    appId: "1:1036657421971:web:7ac5618871ec061fba6766"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-
-  window._auth = auth;
-  window._db = db;
-  window._authFns = { onAuthStateChanged, signOut };
-  window._fsFns = { doc, getDoc, getDocs, collection, addDoc, onSnapshot, updateDoc, deleteDoc, runTransaction, query, where };
-  window.dispatchEvent(new Event('appDbReady'));
-</script>
+<script type="module" src="firebase-init.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Tajawal:wght@400;500;700&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -309,6 +283,7 @@
   </div>
 </div>
 
+<script src="utils.js"></script>
 <script>
 const ADMIN_EMAILS = ['hsallah@outlook.sa'];
 function isAdmin(user) { return !!user && ADMIN_EMAILS.includes((user.email || '').toLowerCase()); }
@@ -323,10 +298,6 @@ let lastScanned = null;
 let scanCooldown = false;
 let statusFilter = 'all'; // 'all' | 'attended' | 'pending'
 let searchQuery = '';
-
-function escapeHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 function showTab(name, btn) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));

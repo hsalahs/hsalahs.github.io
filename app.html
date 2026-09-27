@@ -4,38 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>لوحة المنظّم | دعوات</title>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {
-    getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-    onAuthStateChanged, signOut, sendPasswordResetEmail
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import {
-    getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc, getDoc, updateDoc, increment, runTransaction, getDocs, deleteDoc
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyDbjJtLLDniHbALfUhzQ-UiN2j5txR8PGM",
-    authDomain: "wedding-qr-16d01.firebaseapp.com",
-    projectId: "wedding-qr-16d01",
-    storageBucket: "wedding-qr-16d01.firebasestorage.app",
-    messagingSenderId: "1036657421971",
-    appId: "1:1036657421971:web:7ac5618871ec061fba6766"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const eventsCol = collection(db, 'events');
-
-  window._auth = auth;
-  window._db = db;
-  window._eventsCol = eventsCol;
-  window._authFns = { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail };
-  window._fsFns = { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc, getDoc, updateDoc, increment, runTransaction, getDocs, deleteDoc };
-  window._readyEvent = new Event('appDbReady');
-  window.dispatchEvent(window._readyEvent);
-</script>
+<script type="module" src="firebase-init.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Tajawal:wght@400;500;700&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -119,6 +88,7 @@
 
 </div>
 
+<script src="utils.js"></script>
 <script>
 const ADMIN_EMAILS = ['hsallah@outlook.sa'];
 function isAdmin(user) { return !!user && ADMIN_EMAILS.includes((user.email || '').toLowerCase()); }
@@ -312,10 +282,6 @@ async function deleteEvent(eventId, name, ownerUid) {
     alert('صار خطأ أثناء الحذف: ' + (e.code || '') + ' — ' + e.message);
     console.error(e);
   }
-}
-
-function escapeHtml(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 let eventsUnsub = null;
