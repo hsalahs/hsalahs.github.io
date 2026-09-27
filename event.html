@@ -86,7 +86,10 @@
   h1 { font-family:'Playfair Display',serif; color:var(--gold); font-size:20px; }
   .sub { color:var(--text-soft); font-size:12px; margin-bottom:16px; }
   .msg { text-align:center; padding:60px 20px; color:var(--text-soft); }
-  .toolbar { display:flex; justify-content:space-between; gap:6px; margin-bottom:4px; }
+  .toolbar { display:flex; justify-content:flex-start; gap:6px; margin-bottom:4px; position:relative; }
+  .dropdown-menu { position:absolute; top:42px; right:0; min-width:170px; background:linear-gradient(145deg,var(--glass-bg-1),var(--glass-bg-2)); border:1px solid var(--glass-border); border-radius:14px; padding:6px; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); z-index:200; box-shadow:0 10px 30px rgba(0,0,0,0.35); }
+  .dropdown-menu button { display:block; width:100%; text-align:right; background:transparent; border:none; color:var(--text-main); padding:10px 12px; font-size:13px; font-family:inherit; cursor:pointer; border-radius:8px; }
+  .dropdown-menu button:hover { background:rgba(var(--accent-rgb),0.1); }
   .hero { text-align:center; padding:16px 0 8px; }
   .hero-ornament { font-size:22px; color:var(--gold); letter-spacing:10px; margin-bottom:8px; animation:float 3.2s ease-in-out infinite; }
   @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-7px); } }
@@ -175,8 +178,11 @@
 
   <div id="dashboard" style="display:none">
     <div class="toolbar">
-      <button class="btn ghost xs" onclick="doLogout()">🔓 خروج</button>
-      <button class="btn ghost xs" onclick="toggleEditEvent()">✏️ تعديل</button>
+      <button class="btn ghost xs" style="width:auto; padding:9px 14px; font-size:16px;" onclick="toggleTopMenu()">☰</button>
+      <div class="dropdown-menu" id="top-menu" style="display:none;">
+        <button onclick="closeTopMenu(); toggleEditEvent();">✏️ تعديل المناسبة</button>
+        <button onclick="closeTopMenu(); doLogout();">🔓 خروج</button>
+      </div>
     </div>
 
     <div class="hero">
@@ -284,11 +290,10 @@
         <input type="file" id="csv-import" accept=".csv,.txt" style="display:none" onchange="importCSV(event)">
       </div>
       <div class="card">
-        <input type="text" id="guest-search" placeholder="🔍 بحث بالاسم" oninput="searchGuests()" style="margin:0;">
-      </div>
-      <div class="guest-list" id="guests-list"></div>
-      <div class="card">
-        <button class="btn ghost" style="width:100%;" onclick="toggleGuestsMenu()">☰ خيارات إضافية</button>
+        <div class="row" style="flex-wrap:nowrap;">
+          <input type="text" id="guest-search" placeholder="🔍 بحث بالاسم" oninput="searchGuests()" style="margin:0; flex:1;">
+          <button class="btn ghost" style="width:auto; padding:12px 14px;" onclick="toggleGuestsMenu()">☰</button>
+        </div>
         <div id="guests-menu" style="display:none; margin-top:10px;">
           <button class="btn ghost" style="width:100%; margin-bottom:10px;" onclick="document.getElementById('csv-import').click()">📂 استيراد قائمة (CSV / أسماء)</button>
           <button class="btn" style="width:100%; margin-bottom:10px;" onclick="downloadAllCards()">📦 تحميل كل الدعوات (ZIP)</button>
@@ -296,6 +301,7 @@
           <button class="btn ghost" style="width:100%;" onclick="exportGuestsCSV()">📄 تصدير قائمة الضيوف (CSV)</button>
         </div>
       </div>
+      <div class="guest-list" id="guests-list"></div>
     </div>
 
     <div class="page" id="page-requests">
@@ -791,6 +797,18 @@ async function downloadGuestCard(docId) {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }, 'image/png');
 }
+
+function toggleTopMenu() {
+  const el = document.getElementById('top-menu');
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+function closeTopMenu() {
+  document.getElementById('top-menu').style.display = 'none';
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('top-menu');
+  if (menu && menu.style.display === 'block' && !e.target.closest('.toolbar')) closeTopMenu();
+});
 
 function toggleGuestsMenu() {
   const el = document.getElementById('guests-menu');
