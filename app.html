@@ -78,7 +78,11 @@
   <div id="app-view" style="display:none">
     <div class="topbar">
       <h1 style="margin:0; font-size:20px;">مناسباتي</h1>
-      <button class="btn ghost small" onclick="doLogout()">خروج</button>
+      <button class="btn ghost small" onclick="doLogout()">🔓 خروج</button>
+    </div>
+    <div class="sub" style="margin-bottom:20px;">
+      مسجّل دخول بحساب: <span id="current-email" style="color:#E0BC7A"></span>
+      — مو حسابك؟ <a onclick="doLogout()" style="color:#E0BC7A; cursor:pointer; text-decoration:underline;">سجّل بحساب ثاني</a>
     </div>
 
     <button class="btn" onclick="showCreateForm()">➕ إنشاء مناسبة جديدة</button>
@@ -200,6 +204,7 @@ function initAuthWatcher() {
     if (user) {
       document.getElementById('auth-view').style.display = 'none';
       document.getElementById('app-view').style.display = 'block';
+      document.getElementById('current-email').textContent = user.email || '';
       watchEvents(user.uid);
     } else {
       document.getElementById('auth-view').style.display = 'block';
