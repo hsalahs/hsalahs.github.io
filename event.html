@@ -6,6 +6,7 @@
 <title>لوحة المناسبة | دعوات</title>
 <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -162,9 +163,12 @@
   .link-box { display:flex; gap:8px; align-items:center; }
   .link-box input { flex:1; margin:0; font-size:12px; }
   .empty { text-align:center; color:var(--text-soft); font-size:13px; padding:14px 0; opacity:0.7; }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); background:rgba(20,18,14,0.95); color:var(--gold-light); border:1px solid rgba(var(--accent-rgb),0.35); padding:12px 20px; border-radius:30px; font-size:13px; opacity:0; pointer-events:none; transition:all 0.25s ease; z-index:1000; white-space:nowrap; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
+<div id="toast"></div>
 <div class="wrap">
   <div id="loading-msg" class="msg">جاري التحميل...</div>
   <div id="denied-msg" class="msg" style="display:none">🚫 غير مصرح لك بالوصول لهذه المناسبة</div>
@@ -284,6 +288,10 @@
         <input type="text" id="guest-search" placeholder="🔍 بحث بالاسم" oninput="searchGuests()" style="margin:0;">
       </div>
       <div class="guest-list" id="guests-list"></div>
+      <div class="card">
+        <button class="btn" style="width:100%; margin-bottom:10px;" onclick="downloadAllCards()">📦 تحميل كل الدعوات (ZIP)</button>
+        <button class="btn ghost" style="width:100%;" onclick="askRangeDownload()">📥 تحميل نطاق معيّن (مثال: 1–100)</button>
+      </div>
     </div>
 
     <div class="page" id="page-requests">
@@ -778,6 +786,82 @@ async function downloadGuestCard(docId) {
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   }, 'image/png');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+async function downloadAllCards(from, to) {
+  const source = visibleGuests();
+  if (source.length === 0) { showToast('⚠️ لا يوجد ضيوف للتحميل'); return; }
+
+  let list = source;
+  let label = '';
+  if (from && to) {
+    if (from > to || from < 1) { showToast('⚠️ تحقق من الأرقام'); return; }
+    list = source.slice(from - 1, to);
+    label = '-' + from + '-' + to;
+    if (list.length === 0) { showToast('⚠️ لا يوجد ضيوف في هذا النطاق'); return; }
+  }
+
+  showToast('⏳ جاري تجهيز الملف...');
+
+  const zip = new JSZip();
+  const total = list.length;
+  let done = 0;
+
+  const usedNames = new Map();
+  function safeFileName(name) {
+    const clean = String(name || 'Guest').replace(/[\/\\:*?"<>|]/g, '-').trim() || 'Guest';
+    const count = (usedNames.get(clean) || 0) + 1;
+    usedNames.set(clean, count);
+    return count === 1 ? clean : clean + ' (' + count + ')';
+  }
+
+  for (let i = 0; i < total; i += 5) {
+    const batch = list.slice(i, i + 5);
+    const cards = await Promise.all(batch.map(g => buildGuestCard(g)));
+    cards.forEach((card, idx) => {
+      if (card) {
+        const base64 = card.toDataURL('image/png').split(',')[1];
+        zip.file('Invitation-' + safeFileName(batch[idx].name) + '.png', base64, { base64: true });
+      }
+    });
+    done += batch.length;
+    showToast('⏳ ' + Math.min(done, total) + ' / ' + total + ' تم...');
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'Invitations' + label + '.zip';
+  link.click();
+  showToast('✅ تم تحميل الملف! (' + total + ' دعوة)');
+}
+
+function askRangeDownload() {
+  const total = visibleGuests().length;
+  if (total === 0) { showToast('⚠️ لا يوجد ضيوف بعد'); return; }
+
+  const fromStr = prompt('من أي رقم؟ (1 - ' + total + ')', '1');
+  if (fromStr === null) return;
+  const from = parseInt(fromStr);
+
+  const toStr = prompt('إلى أي رقم؟ (' + (from || 1) + ' - ' + total + ')', String(Math.min((from || 1) + 99, total)));
+  if (toStr === null) return;
+  const to = parseInt(toStr);
+
+  if (!from || !to || from < 1 || to < from) {
+    showToast('⚠️ الأرقام غير صحيحة، حاول مرة ثانية');
+    return;
+  }
+  downloadAllCards(from, to);
 }
 
 function renderRequests() {
