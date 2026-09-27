@@ -37,6 +37,12 @@
   .card { background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.2); border-radius:14px; padding:20px; text-align:center; }
   input { width:100%; padding:14px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:20px; font-family:inherit; text-align:center; letter-spacing:6px; }
   .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
+  .btn.ghost { width:100%; background:transparent; border:1px solid rgba(224,188,122,0.3); color:#E0BC7A; }
+  .counter { text-align:center; color:#E0BC7A; font-size:15px; font-weight:700; margin-bottom:14px; }
+  .manual-divider { display:flex; align-items:center; gap:10px; color:#6f6a62; font-size:12px; margin:16px 0 12px; }
+  .manual-divider::before, .manual-divider::after { content:''; flex:1; height:1px; background:rgba(224,188,122,0.2); }
+  .manual-row { display:flex; gap:8px; align-items:stretch; }
+  .manual-row input { flex:1; }
   .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; display:none; }
   .camera-status { font-size:13px; color:#B8B4AC; margin-bottom:14px; text-align:center; }
   #camera-wrapper { position:relative; width:100%; max-width:320px; margin:0 auto; aspect-ratio:1; border-radius:16px; overflow:hidden; border:2px solid #E0BC7A; background:#000; }
@@ -75,6 +81,7 @@
   <div id="scanner-view" style="display:none">
     <h1 id="scan-event-name"></h1>
     <div class="sub">سكانر الدخول — فريق الأمن</div>
+    <div class="counter" id="scan-counter">تم الدخول: 0 / 0</div>
     <div class="card" style="text-align:center">
       <p class="camera-status" id="camera-status">اضغط لتشغيل الكاميرا</p>
       <button class="btn" id="start-cam-btn" onclick="startCamera()" style="width:100%">📷 تشغيل الكاميرا</button>
@@ -85,6 +92,12 @@
           <div class="scan-frame"></div>
           <div class="scan-line"></div>
         </div>
+      </div>
+
+      <div class="manual-divider"><span>أو أدخل الكود يدويًا</span></div>
+      <div class="manual-row">
+        <button class="btn" style="width:auto; padding:12px 18px;" onclick="submitManualCode()">تحقق ✓</button>
+        <input type="text" id="manual-code" placeholder="مثال: WD-ABC123" style="margin-bottom:0; text-align:center; letter-spacing:2px; font-size:14px;" onkeydown="if(event.key==='Enter') submitManualCode()">
       </div>
 
       <div class="result-card allowed" id="result-allowed">
@@ -103,6 +116,8 @@
         <div class="result-status err">باركود غير صحيح</div>
       </div>
     </div>
+
+    <button class="btn ghost" id="new-scan-btn" style="margin-top:14px; display:none" onclick="resetScanState()">🔄 مسح جديد</button>
   </div>
 </div>
 
@@ -133,14 +148,46 @@ function showScanner() {
   document.getElementById('pin-gate').style.display = 'none';
   document.getElementById('scanner-view').style.display = 'block';
   document.getElementById('scan-event-name').textContent = eventData.name;
+  document.getElementById('new-scan-btn').style.display = 'block';
   startGuestsListener();
+}
+
+function updateScanCounter() {
+  const total = guests.length;
+  const scanned = guests.filter(g => g.scanned).length;
+  document.getElementById('scan-counter').textContent = 'تم الدخول: ' + scanned + ' / ' + total;
 }
 
 function startGuestsListener() {
   const { collection, onSnapshot } = window._fsFns;
   onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    updateScanCounter();
   });
+}
+
+function resetScanState() {
+  hideResultCards();
+  scanCooldown = false;
+  lastScanned = null;
+  document.getElementById('manual-code').value = '';
+  document.getElementById('camera-status').textContent = qrScanner
+    ? 'وجّه الكاميرا نحو الباركود'
+    : 'اضغط لتشغيل الكاميرا';
+}
+
+function submitManualCode() {
+  const input = document.getElementById('manual-code');
+  const raw = input.value.trim();
+  if (!raw) return;
+  const match = raw.toUpperCase().match(/WD-[A-Z0-9]+/);
+  if (!match) {
+    document.getElementById('camera-status').textContent = '⚠️ صيغة الكود غير صحيحة';
+    return;
+  }
+  input.value = '';
+  lastScanned = null;
+  handleScan(match[0]);
 }
 
 async function init() {
