@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سكانر الدخول</title>
+<script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, doc, getDoc, collection, onSnapshot, runTransaction
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDbjJtLLDniHbALfUhzQ-UiN2j5txR8PGM",
+    authDomain: "wedding-qr-16d01.firebaseapp.com",
+    projectId: "wedding-qr-16d01",
+    storageBucket: "wedding-qr-16d01.firebasestorage.app",
+    messagingSenderId: "1036657421971",
+    appId: "1:1036657421971:web:7ac5618871ec061fba6766"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window._db = db;
+  window._fsFns = { doc, getDoc, collection, onSnapshot, runTransaction };
+  window.dispatchEvent(new Event('appDbReady'));
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Tajawal:wght@400;500;700&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh; }
+  .wrap { max-width:420px; margin:0 auto; padding:24px 18px 60px; }
+  .msg { text-align:center; padding:60px 20px; color:#B8B4AC; }
+  h1 { font-family:'Playfair Display',serif; color:#E0BC7A; font-size:20px; text-align:center; margin-bottom:4px; }
+  .sub { color:#B8B4AC; font-size:12px; text-align:center; margin-bottom:22px; }
+  .card { background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.2); border-radius:14px; padding:20px; text-align:center; }
+  input { width:100%; padding:14px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:20px; font-family:inherit; text-align:center; letter-spacing:6px; }
+  .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
+  .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; display:none; }
+  .camera-status { font-size:13px; color:#B8B4AC; margin-bottom:14px; text-align:center; }
+  #camera-wrapper { position:relative; width:100%; max-width:320px; margin:0 auto; aspect-ratio:1; border-radius:16px; overflow:hidden; border:2px solid #E0BC7A; background:#000; }
+  #camera-video { width:100%; height:100%; object-fit:cover; display:block; }
+  .scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+  .scan-frame { width:65%; height:65%; border:2px solid #E0BC7A; border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,0.45); }
+  .scan-line { position:absolute; width:65%; height:2px; background:linear-gradient(90deg,transparent,#E0BC7A,transparent); animation:scanLine 2s linear infinite; }
+  @keyframes scanLine { 0% { top:17.5%; } 100% { top:82.5%; } }
+  .result-card { display:none; padding:24px; border-radius:16px; margin-top:16px; text-align:center; animation:slideUp 0.4s ease-out; }
+  @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+  .result-card.allowed { background:linear-gradient(135deg,rgba(76,175,80,0.12),rgba(76,175,80,0.04)); border:1px solid rgba(76,175,80,0.3); }
+  .result-card.duplicate { background:linear-gradient(135deg,rgba(255,193,7,0.12),rgba(255,193,7,0.04)); border:1px solid rgba(255,193,7,0.3); }
+  .result-card.denied { background:linear-gradient(135deg,rgba(244,67,54,0.12),rgba(244,67,54,0.04)); border:1px solid rgba(244,67,54,0.3); }
+  .result-icon { font-size:48px; margin-bottom:12px; }
+  .result-name { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:#E0BC7A; margin-bottom:8px; }
+  .result-status { font-size:14px; color:#B8B4AC; }
+  .result-status.ok { color:#4CAF50; }
+  .result-status.dup { color:#E0BC7A; }
+  .result-status.err { color:#F44336; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="loading-msg" class="msg">جاري التحميل...</div>
+
+  <div id="pin-gate" style="display:none">
+    <h1 id="pin-event-name"></h1>
+    <div class="sub">أدخل رقم الدخول اللي وصلك من المنظّم</div>
+    <div class="card">
+      <div class="err" id="pin-err">رقم غير صحيح</div>
+      <input type="tel" inputmode="numeric" maxlength="4" id="pin-input" placeholder="0000" onkeydown="if(event.key==='Enter') checkPin()">
+      <button class="btn" onclick="checkPin()">دخول</button>
+    </div>
+  </div>
+
+  <div id="scanner-view" style="display:none">
+    <h1 id="scan-event-name"></h1>
+    <div class="sub">سكانر الدخول — فريق الأمن</div>
+    <div class="card" style="text-align:center">
+      <p class="camera-status" id="camera-status">اضغط لتشغيل الكاميرا</p>
+      <button class="btn" id="start-cam-btn" onclick="startCamera()" style="width:100%">📷 تشغيل الكاميرا</button>
+
+      <div id="camera-wrapper" style="display:none">
+        <video id="camera-video" autoplay playsinline muted></video>
+        <div class="scan-overlay">
+          <div class="scan-frame"></div>
+          <div class="scan-line"></div>
+        </div>
+      </div>
+
+      <div class="result-card allowed" id="result-allowed">
+        <div class="result-icon">✅</div>
+        <div class="result-name" id="result-name-ok"></div>
+        <div class="result-status ok">مسموح بالدخول</div>
+      </div>
+      <div class="result-card duplicate" id="result-duplicate">
+        <div class="result-icon">⚠️</div>
+        <div class="result-name" id="result-name-dup"></div>
+        <div class="result-status dup">دخل من قبل!</div>
+      </div>
+      <div class="result-card denied" id="result-denied">
+        <div class="result-icon">❌</div>
+        <div class="result-name">غير مسجّل</div>
+        <div class="result-status err">باركود غير صحيح</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const eventId = params.get('event');
+let eventData = null;
+let guests = [];
+let qrScanner = null;
+let lastScanned = null;
+let scanCooldown = false;
+
+function unlockKey() { return 'scan_unlocked_' + eventId; }
+
+async function checkPin() {
+  const val = document.getElementById('pin-input').value.trim();
+  const err = document.getElementById('pin-err');
+  if (val !== eventData.scanPin) {
+    err.style.display = 'block';
+    return;
+  }
+  err.style.display = 'none';
+  try { localStorage.setItem(unlockKey(), '1'); } catch (e) {}
+  showScanner();
+}
+
+function showScanner() {
+  document.getElementById('pin-gate').style.display = 'none';
+  document.getElementById('scanner-view').style.display = 'block';
+  document.getElementById('scan-event-name').textContent = eventData.name;
+  startGuestsListener();
+}
+
+function startGuestsListener() {
+  const { collection, onSnapshot } = window._fsFns;
+  onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
+    guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+  });
+}
+
+async function init() {
+  if (!eventId) {
+    document.getElementById('loading-msg').textContent = '⚠️ رابط غير صحيح';
+    return;
+  }
+  const { doc, getDoc } = window._fsFns;
+  const snap = await getDoc(doc(window._db, 'events', eventId));
+  if (!snap.exists()) {
+    document.getElementById('loading-msg').textContent = '⚠️ هذه المناسبة غير موجودة';
+    return;
+  }
+  eventData = snap.data();
+  document.getElementById('loading-msg').style.display = 'none';
+
+  let alreadyUnlocked = false;
+  try { alreadyUnlocked = localStorage.getItem(unlockKey()) === '1'; } catch (e) {}
+
+  if (alreadyUnlocked) {
+    showScanner();
+  } else {
+    document.getElementById('pin-gate').style.display = 'block';
+    document.getElementById('pin-event-name').textContent = eventData.name;
+  }
+}
+
+function hideResultCards() {
+  document.getElementById('result-allowed').style.display = 'none';
+  document.getElementById('result-duplicate').style.display = 'none';
+  document.getElementById('result-denied').style.display = 'none';
+}
+
+async function startCamera() {
+  const video = document.getElementById('camera-video');
+  const status = document.getElementById('camera-status');
+  status.textContent = 'جاري تشغيل الكاميرا...';
+
+  let retries = 2;
+  while (retries >= 0) {
+    try {
+      qrScanner = new QrScanner(video, result => {
+        if (!scanCooldown) handleScan(result.data);
+      }, { returnDetailedScanResult: true, preferredCamera: 'environment' });
+      await qrScanner.start();
+      document.getElementById('camera-wrapper').style.display = 'block';
+      document.getElementById('start-cam-btn').style.display = 'none';
+      status.textContent = 'وجّه الكاميرا نحو الباركود';
+      return;
+    } catch (e) {
+      if (qrScanner) { try { qrScanner.destroy(); } catch (_) {} qrScanner = null; }
+      retries--;
+      if (retries < 0) {
+        status.textContent = '⚠️ خطأ: ' + (e.name || '') + ' — ' + (e.message || e);
+      } else {
+        status.textContent = 'إعادة المحاولة...';
+        await new Promise(r => setTimeout(r, 800));
+      }
+    }
+  }
+}
+
+async function handleScan(raw) {
+  const match = raw.trim().toUpperCase().match(/WD-[A-Z0-9]+/);
+  if (!match) return;
+  const val = match[0];
+  if (val === lastScanned) return;
+  lastScanned = val;
+  scanCooldown = true;
+
+  const status = document.getElementById('camera-status');
+  status.textContent = '🔍 جاري التحقق...';
+  hideResultCards();
+
+  const found = guests.find(g => g.id === val);
+
+  if (!found) {
+    document.getElementById('result-denied').style.display = 'block';
+    status.textContent = '❌ باركود غير مسجّل';
+  } else {
+    const { doc, runTransaction } = window._fsFns;
+    const gRef = doc(window._db, 'events', eventId, 'guests', found.docId);
+    const outcome = await runTransaction(window._db, async (tx) => {
+      const snap = await tx.get(gRef);
+      if (!snap.exists()) return 'missing';
+      if (snap.data().scanned) return 'dup';
+      tx.update(gRef, { scanned: true, scannedAt: new Date().toISOString() });
+      return 'ok';
+    });
+    if (outcome === 'ok') {
+      document.getElementById('result-name-ok').textContent = found.name;
+      document.getElementById('result-allowed').style.display = 'block';
+      status.textContent = '✅ مسموح بالدخول';
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    } else if (outcome === 'dup') {
+      document.getElementById('result-name-dup').textContent = found.name;
+      document.getElementById('result-duplicate').style.display = 'block';
+      status.textContent = '⚠️ دخل من قبل';
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    } else {
+      document.getElementById('result-denied').style.display = 'block';
+      status.textContent = '❌ غير مسجّل';
+    }
+  }
+
+  setTimeout(() => {
+    hideResultCards();
+    scanCooldown = false; lastScanned = null;
+    status.textContent = 'وجّه الكاميرا نحو الباركود';
+  }, 2500);
+}
+
+if (window._db) init();
+else window.addEventListener('appDbReady', init);
+</script>
+</body>
+</html>

@@ -106,6 +106,15 @@
       </div>
     </div>
 
+    <div class="card">
+      <div style="font-size:12px; color:#B8B4AC; margin-bottom:6px;">رابط السكانر — شاركه مع فريق الأمن (يفتح المسح بس، بدون قائمة الضيوف)</div>
+      <div class="link-box">
+        <input type="text" id="scan-link" readonly>
+        <button class="btn" onclick="copyScanLink()">نسخ</button>
+      </div>
+      <div style="font-size:12px; color:#B8B4AC; margin-top:10px;">رقم الدخول للفريق: <span id="scan-pin-display" style="color:#E0BC7A; font-weight:700; letter-spacing:2px;"></span></div>
+    </div>
+
     <nav>
       <button class="nav-btn active" onclick="showTab('scan', this)">📱 مسح</button>
       <button class="nav-btn" onclick="showTab('guests', this)">👥 الضيوف</button>
@@ -186,6 +195,12 @@ function copyInviteLink() {
   navigator.clipboard?.writeText(input.value);
 }
 
+function copyScanLink() {
+  const input = document.getElementById('scan-link');
+  input.select();
+  navigator.clipboard?.writeText(input.value);
+}
+
 async function init() {
   if (!eventId) {
     document.getElementById('loading-msg').textContent = '⚠️ رابط غير صحيح — ما فيه رقم مناسبة';
@@ -207,11 +222,21 @@ async function init() {
       return;
     }
     eventData = snap.data();
+
+    // Events created before the scan-PIN feature existed don't have one yet
+    if (!eventData.scanPin) {
+      const { updateDoc } = window._fsFns;
+      eventData.scanPin = String(Math.floor(1000 + Math.random() * 9000));
+      try { await updateDoc(doc(window._db, 'events', eventId), { scanPin: eventData.scanPin }); } catch (e) { console.error(e); }
+    }
+
     document.getElementById('loading-msg').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
     document.getElementById('ev-title').textContent = eventData.name;
     document.getElementById('ev-sub').textContent = [eventData.date, eventData.venue].filter(Boolean).join(' · ');
     document.getElementById('invite-link').value = window.location.origin + window.location.pathname.replace('event.html', 'invite.html') + '?event=' + eventId;
+    document.getElementById('scan-link').value = window.location.origin + window.location.pathname.replace('event.html', 'scan.html') + '?event=' + eventId;
+    document.getElementById('scan-pin-display').textContent = eventData.scanPin;
     startListeners();
   });
 }

@@ -162,9 +162,10 @@ async function createNewEvent() {
 
   const { serverTimestamp, doc, setDoc } = window._fsFns;
   const eventId = newEventId();
+  const scanPin = String(Math.floor(1000 + Math.random() * 9000)); // 4-digit PIN for the door/security team
   try {
     await setDoc(doc(window._db, 'events', eventId), {
-      name, date, venue,
+      name, date, venue, scanPin,
       ownerUid: window._auth.currentUser.uid,
       createdAt: serverTimestamp()
     });
