@@ -42,9 +42,11 @@
   .result-status.ok { color:#4CAF50; }
   .result-status.dup { color:#E0BC7A; }
   .result-status.err { color:#F44336; }
+  #connection-banner { display:none; position:sticky; top:0; z-index:1000; background:#5a1a1a; color:#ffd7d7; text-align:center; padding:10px 16px; font-size:13px; font-weight:600; }
 </style>
 </head>
 <body>
+<div id="connection-banner">⚠️ انقطع الاتصال بقاعدة البيانات — القائمة قد لا تكون محدّثة. تحقق من الإنترنت.</div>
 <div class="wrap">
   <div id="loading-msg" class="msg">جاري التحميل...</div>
 
@@ -109,6 +111,24 @@ let guests = [];
 let qrScanner = null;
 let lastScanned = null;
 let scanCooldown = false;
+let audioCtx = null;
+
+// Audible feedback for busy door staff who can't watch the screen every
+// scan — a high sine for allowed, a low square for duplicate/denied.
+function playBeep(success) {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.connect(g); g.connect(audioCtx.destination);
+    o.frequency.value = success ? 880 : 300;
+    o.type = success ? 'sine' : 'square';
+    g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+    o.start(audioCtx.currentTime);
+    o.stop(audioCtx.currentTime + 0.4);
+  } catch (e) {}
+}
 
 function unlockKey() { return 'scan_unlocked_' + eventId; }
 
@@ -138,11 +158,23 @@ function updateScanCounter() {
   document.getElementById('scan-counter').textContent = 'تم الدخول: ' + scanned + ' / ' + total;
 }
 
+// Without this, a dropped connection looks identical to an empty/stale
+// list, and door staff can't tell a real "not registered" scan from a
+// network hiccup.
+function refreshConnectionBanner(ok) {
+  const b = document.getElementById('connection-banner');
+  if (b) b.style.display = ok ? 'none' : 'block';
+}
+
 function startGuestsListener() {
   const { collection, onSnapshot } = window._fsFns;
   onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     updateScanCounter();
+    refreshConnectionBanner(true);
+  }, (error) => {
+    console.error('guests onSnapshot error:', error);
+    refreshConnectionBanner(false);
   });
 }
 
@@ -247,6 +279,7 @@ async function handleScan(raw) {
   if (!found) {
     document.getElementById('result-denied').style.display = 'block';
     status.textContent = '❌ باركود غير مسجّل';
+    playBeep(false);
   } else {
     const { doc, runTransaction } = window._fsFns;
     const gRef = doc(window._db, 'events', eventId, 'guests', found.docId);
@@ -261,15 +294,18 @@ async function handleScan(raw) {
       document.getElementById('result-name-ok').textContent = found.name;
       document.getElementById('result-allowed').style.display = 'block';
       status.textContent = '✅ مسموح بالدخول';
+      playBeep(true);
       if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
     } else if (outcome === 'dup') {
       document.getElementById('result-name-dup').textContent = found.name;
       document.getElementById('result-duplicate').style.display = 'block';
       status.textContent = '⚠️ دخل من قبل';
+      playBeep(false);
       if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
     } else {
       document.getElementById('result-denied').style.display = 'block';
       status.textContent = '❌ غير مسجّل';
+      playBeep(false);
     }
   }
 
