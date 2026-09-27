@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>دعوة | دعوات</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getFirestore, doc, getDoc, collection, addDoc, onSnapshot, query, where
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDbjJtLLDniHbALfUhzQ-UiN2j5txR8PGM",
+    authDomain: "wedding-qr-16d01.firebaseapp.com",
+    projectId: "wedding-qr-16d01",
+    storageBucket: "wedding-qr-16d01.firebasestorage.app",
+    messagingSenderId: "1036657421971",
+    appId: "1:1036657421971:web:7ac5618871ec061fba6766"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window._db = db;
+  window._fsFns = { doc, getDoc, collection, addDoc, onSnapshot, query, where };
+  window.dispatchEvent(new Event('appDbReady'));
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Tajawal:wght@400;500;700&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .card { width:100%; max-width:380px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); border-radius:20px; padding:32px 26px; text-align:center; }
+  h1 { font-family:'Playfair Display',serif; color:#E0BC7A; font-size:22px; margin-bottom:4px; }
+  .sub { color:#B8B4AC; font-size:13px; margin-bottom:22px; }
+  input { width:100%; padding:13px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:15px; font-family:inherit; text-align:center; }
+  .btn { width:100%; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
+  .status-icon { font-size:44px; margin-bottom:10px; }
+  .status-msg { font-size:15px; line-height:1.9; }
+  #qr-box { margin-top:18px; padding:16px; background:#fff; border-radius:12px; display:inline-block; }
+  .guest-name { color:#E0BC7A; font-weight:700; margin-top:14px; font-size:15px; }
+</style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div id="loading">جاري التحميل...</div>
+  </div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const eventId = params.get('event');
+const card = document.getElementById('card');
+let myReqId = localStorage.getItem('inv_reqid_' + eventId) || null;
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderForm(eventData) {
+  card.innerHTML = `
+    <h1>${escapeHtml(eventData.name)}</h1>
+    <div class="sub">${[eventData.date, eventData.venue].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+    <input type="text" id="g-name" placeholder="الاسم الكامل">
+    <button class="btn" onclick="submitRequest()">تأكيد الحضور</button>
+  `;
+}
+
+async function submitRequest() {
+  const name = document.getElementById('g-name').value.trim();
+  if (!name) return;
+  const { collection, addDoc } = window._fsFns;
+  const reqId = 'REQ-' + Math.random().toString(36).substr(2, 8).toUpperCase() + Date.now().toString(36).toUpperCase().substr(-4);
+  await addDoc(collection(window._db, 'events', eventId, 'requests'), {
+    name, reqId, status: 'pending', createdAt: new Date().toISOString()
+  });
+  localStorage.setItem('inv_reqid_' + eventId, reqId);
+  myReqId = reqId;
+  watchStatus();
+}
+
+function renderPending() {
+  card.innerHTML = `
+    <div class="status-icon">⏳</div>
+    <div class="status-msg">تم إرسال طلبك، بانتظار موافقة المنظّم</div>
+  `;
+}
+
+function renderRejected() {
+  card.innerHTML = `<div class="status-icon">😕</div><div class="status-msg">للأسف ما قدرنا نأكد حضورك حاليًا</div>`;
+}
+
+async function renderApproved(guest) {
+  card.innerHTML = `
+    <div class="status-icon">🎉</div>
+    <div class="status-msg">تم تأكيد حضورك!</div>
+    <div class="guest-name">${escapeHtml(guest.name)}</div>
+    <div id="qr-box"></div>
+  `;
+  new QRCode(document.getElementById('qr-box'), { text: guest.id, width: 180, height: 180 });
+}
+
+function watchStatus() {
+  const { query, where, collection, onSnapshot } = window._fsFns;
+  onSnapshot(query(collection(window._db, 'events', eventId, 'requests'), where('reqId', '==', myReqId)), (snap) => {
+    if (snap.empty) return;
+    const req = snap.docs[0].data();
+    if (req.status === 'pending') renderPending();
+    else if (req.status === 'rejected') renderRejected();
+    else if (req.status === 'approved') {
+      onSnapshot(query(collection(window._db, 'events', eventId, 'guests'), where('reqId', '==', myReqId)), (gsnap) => {
+        if (!gsnap.empty) renderApproved(gsnap.docs[0].data());
+        else renderPending();
+      });
+    }
+  });
+}
+
+async function init() {
+  if (!eventId) { card.innerHTML = '<div class="status-msg">⚠️ رابط غير صحيح</div>'; return; }
+  const { doc, getDoc } = window._fsFns;
+  const snap = await getDoc(doc(window._db, 'events', eventId));
+  if (!snap.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذه المناسبة غير موجودة</div>'; return; }
+  const eventData = snap.data();
+
+  if (myReqId) watchStatus();
+  else renderForm(eventData);
+}
+
+if (window._db) init();
+else window.addEventListener('appDbReady', init);
+</script>
+</body>
+</html>
