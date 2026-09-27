@@ -11,7 +11,7 @@
     onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import {
-    getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc, getDocs, deleteDoc
+    getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc, getDoc, updateDoc, increment, getDocs, deleteDoc
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -32,7 +32,7 @@
   window._db = db;
   window._eventsCol = eventsCol;
   window._authFns = { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut };
-  window._fsFns = { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc, getDocs, deleteDoc };
+  window._fsFns = { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc, getDoc, updateDoc, increment, getDocs, deleteDoc };
   window._readyEvent = new Event('appDbReady');
   window.dispatchEvent(window._readyEvent);
 </script>
@@ -90,8 +90,17 @@
       مسجّل دخول بحساب: <span id="current-email" style="color:#E0BC7A"></span>
     </div>
 
+    <div id="admin-requests-section" style="display:none; margin-bottom:16px;">
+      <div class="sub" style="margin-bottom:8px; text-align:right;">🙋 طلبات مناسبات إضافية</div>
+      <div id="admin-requests-list"></div>
+    </div>
+
     <button class="btn" id="create-toggle-btn" onclick="showCreateForm()" style="display:none">➕ إنشاء مناسبة جديدة</button>
-    <div class="sub" id="limit-msg" style="display:none; margin-bottom:16px;">عندك مناسبة واحدة مفعّلة على حسابك حاليًا. تحتاج مناسبة ثانية؟ تواصل معنا.</div>
+    <div id="limit-box" style="display:none; margin-bottom:16px;">
+      <div class="sub" style="margin-bottom:10px;">عندك مناسبة واحدة مفعّلة على حسابك حاليًا.</div>
+      <button class="btn ghost" id="request-more-btn" style="width:100%;" onclick="requestExtraEvent()">🙋 اطلب مناسبة إضافية</button>
+      <div class="sub" id="pending-request-msg" style="display:none;">⏳ طلبك قيد المراجعة، بننبّهك أول ما يتم الرد.</div>
+    </div>
 
     <div class="card" id="create-form" style="display:none">
       <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: عرس حسن وفاطمة)">
@@ -169,8 +178,8 @@ async function createNewEvent() {
   const venue = document.getElementById('ev-venue').value.trim();
   if (!name) { alert('اكتب اسم المناسبة'); return; }
 
-  if (!isAdmin(window._auth.currentUser) && myEventsCount >= 1) {
-    alert('عندك مناسبة واحدة مفعّلة على حسابك حاليًا. تواصل معنا لو تحتاج مناسبة ثانية.');
+  if (!isAdmin(window._auth.currentUser) && myEventsCount >= myEventLimit) {
+    alert('عندك مناسبة وحدة مفعّلة على حسابك حاليًا. اطلب مناسبة إضافية من لوحتك.');
     return;
   }
 
@@ -258,7 +267,12 @@ function escapeHtml(str) {
 }
 
 let eventsUnsub = null;
+let limitUnsub = null;
+let requestUnsub = null;
+let adminRequestsUnsub = null;
 let myEventsCount = 0;
+let myEventLimit = 1;
+let myPendingRequestId = null;
 
 function initAuthWatcher() {
   const { onAuthStateChanged } = window._authFns;
@@ -267,23 +281,40 @@ function initAuthWatcher() {
       document.getElementById('auth-view').style.display = 'none';
       document.getElementById('app-view').style.display = 'block';
       document.getElementById('current-email').textContent = user.email || '';
-      document.getElementById('events-heading').textContent = isAdmin(user) ? 'كل المناسبات (أدمن)' : 'مناسباتي';
+      const admin = isAdmin(user);
+      document.getElementById('events-heading').textContent = admin ? 'كل المناسبات (أدمن)' : 'مناسباتي';
       watchEvents(user);
+      if (admin) {
+        watchAdminRequests();
+      } else {
+        watchMyLimitAndRequest(user);
+      }
     } else {
       document.getElementById('auth-view').style.display = 'block';
       document.getElementById('app-view').style.display = 'none';
       if (eventsUnsub) { eventsUnsub(); eventsUnsub = null; }
+      if (limitUnsub) { limitUnsub(); limitUnsub = null; }
+      if (requestUnsub) { requestUnsub(); requestUnsub = null; }
+      if (adminRequestsUnsub) { adminRequestsUnsub(); adminRequestsUnsub = null; }
+      myEventLimit = 1;
+      myPendingRequestId = null;
     }
   });
 }
 
 function updateCreateGate(admin) {
   const btn = document.getElementById('create-toggle-btn');
-  const msg = document.getElementById('limit-msg');
-  const locked = !admin && myEventsCount >= 1;
+  const box = document.getElementById('limit-box');
+  const reqBtn = document.getElementById('request-more-btn');
+  const pendingMsg = document.getElementById('pending-request-msg');
+  const locked = !admin && myEventsCount >= myEventLimit;
   btn.style.display = locked ? 'none' : 'block';
-  msg.style.display = locked ? 'block' : 'none';
-  if (locked) document.getElementById('create-form').style.display = 'none';
+  box.style.display = locked ? 'block' : 'none';
+  if (locked) {
+    document.getElementById('create-form').style.display = 'none';
+    reqBtn.style.display = myPendingRequestId ? 'none' : 'block';
+    pendingMsg.style.display = myPendingRequestId ? 'block' : 'none';
+  }
 }
 
 function watchEvents(user) {
@@ -298,6 +329,92 @@ function watchEvents(user) {
     updateCreateGate(admin);
     renderEvents(events, admin);
   });
+}
+
+function watchMyLimitAndRequest(user) {
+  const { doc, onSnapshot, collection, query, where } = window._fsFns;
+  if (limitUnsub) limitUnsub();
+  limitUnsub = onSnapshot(doc(window._db, 'accountLimits', user.uid), (snap) => {
+    myEventLimit = snap.exists() ? (snap.data().eventLimit || 1) : 1;
+    updateCreateGate(false);
+  });
+  if (requestUnsub) requestUnsub();
+  requestUnsub = onSnapshot(
+    query(collection(window._db, 'eventRequests'), where('uid', '==', user.uid), where('status', '==', 'pending')),
+    (snap) => {
+      myPendingRequestId = snap.empty ? null : snap.docs[0].id;
+      updateCreateGate(false);
+    }
+  );
+}
+
+async function requestExtraEvent() {
+  if (myPendingRequestId) return;
+  const { collection, addDoc, serverTimestamp } = window._fsFns;
+  const user = window._auth.currentUser;
+  try {
+    await addDoc(collection(window._db, 'eventRequests'), {
+      uid: user.uid, email: user.email || '', status: 'pending', requestedAt: serverTimestamp()
+    });
+  } catch (e) {
+    alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
+    console.error(e);
+  }
+}
+
+function watchAdminRequests() {
+  const { collection, query, where, onSnapshot } = window._fsFns;
+  if (adminRequestsUnsub) adminRequestsUnsub();
+  adminRequestsUnsub = onSnapshot(
+    query(collection(window._db, 'eventRequests'), where('status', '==', 'pending')),
+    (snap) => renderAdminRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+  );
+}
+
+function renderAdminRequests(reqs) {
+  const section = document.getElementById('admin-requests-section');
+  const list = document.getElementById('admin-requests-list');
+  if (reqs.length === 0) { section.style.display = 'none'; list.innerHTML = ''; return; }
+  section.style.display = 'block';
+  list.innerHTML = reqs.map(r => `
+    <div class="card event-card-top">
+      <div>
+        <div class="event-name">${escapeHtml(r.email || r.uid)}</div>
+        <div class="event-date">طلب مناسبة إضافية</div>
+      </div>
+      <div class="event-actions">
+        <button class="btn small" style="margin:0; width:auto; padding:8px 14px;" onclick="approveEventRequest('${r.id}','${r.uid}')">✅ قبول</button>
+        <button class="btn ghost small" style="margin:0; width:auto; padding:8px 14px;" onclick="rejectEventRequest('${r.id}')">❌ رفض</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function approveEventRequest(requestId, uid) {
+  const { doc, getDoc, setDoc, updateDoc, increment } = window._fsFns;
+  try {
+    const limitRef = doc(window._db, 'accountLimits', uid);
+    const limitSnap = await getDoc(limitRef);
+    if (limitSnap.exists()) {
+      await updateDoc(limitRef, { eventLimit: increment(1) });
+    } else {
+      await setDoc(limitRef, { eventLimit: 2 });
+    }
+    await updateDoc(doc(window._db, 'eventRequests', requestId), { status: 'approved' });
+  } catch (e) {
+    alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
+    console.error(e);
+  }
+}
+
+async function rejectEventRequest(requestId) {
+  const { doc, updateDoc } = window._fsFns;
+  try {
+    await updateDoc(doc(window._db, 'eventRequests', requestId), { status: 'rejected' });
+  } catch (e) {
+    alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
+    console.error(e);
+  }
 }
 
 if (window._auth) initAuthWatcher();
