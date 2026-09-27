@@ -171,7 +171,7 @@
 
   <div id="dashboard" style="display:none">
     <div class="toolbar">
-      <a class="btn ghost xs" href="app.html" style="text-decoration:none">‹ مناسباتي</a>
+      <button class="btn ghost xs" onclick="doLogout()">🔓 خروج</button>
       <button class="btn ghost xs" onclick="toggleEditEvent()">✏️ تعديل</button>
     </div>
 
@@ -373,6 +373,11 @@ async function deleteThisEvent() {
     alert('صار خطأ أثناء الحذف: ' + (e.code || '') + ' — ' + e.message);
     console.error(e);
   }
+}
+
+function doLogout() {
+  const { signOut } = window._authFns;
+  signOut(window._auth).then(() => { window.location.href = 'app.html'; });
 }
 
 async function init() {
