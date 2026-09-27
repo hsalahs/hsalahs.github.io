@@ -605,6 +605,7 @@ function buildGuestCard(guest) {
     // (rarely) still be blank a moment later — checking the element exists
     // isn't enough. Sample a grid of pixels for any actual dark (QR) ink
     // before accepting it.
+    window._qrDebug = [];
     function qrCanvasHasContent(canvas) {
       try {
         const c2 = canvas.getContext('2d');
@@ -612,24 +613,32 @@ function buildGuestCard(guest) {
         const data = c2.getImageData(0, 0, w, h).data;
         for (let y = 0; y < h; y += 8) {
           for (let x = 0; x < w; x += 8) {
-            if (data[(y * w + x) * 4] < 128) return true;
+            if (data[(y * w + x) * 4] < 128) {
+              window._qrDebug.push('content found at ' + w + 'x' + h);
+              return true;
+            }
           }
         }
+        window._qrDebug.push('no dark pixels in ' + w + 'x' + h + ' canvas');
         return false;
       } catch (e) {
+        window._qrDebug.push('getImageData threw: ' + e.message);
         return true; // can't inspect (e.g. tainted canvas) — trust it exists
       }
     }
 
     function waitForQr(retriesLeft) {
+      const allTags = tmp.innerHTML.slice(0, 60);
       const qr = tmp.querySelector('canvas');
+      window._qrDebug.push('try ' + (30 - retriesLeft) + ': tmp.innerHTML=[' + allTags + '] canvasFound=' + !!qr);
       if (qr && qrCanvasHasContent(qr)) return Promise.resolve(qr);
       if (retriesLeft <= 0) return Promise.resolve(qr || null);
       return new Promise(r => setTimeout(r, 100)).then(() => waitForQr(retriesLeft - 1));
     }
 
     waitForQr(30).then((qr) => new Promise(r => setTimeout(() => r(qr), 80))).then((qr) => {
-      if (!qr) { document.body.removeChild(tmp); resolve(null); return; }
+      if (!qr) { window._qrDebug.push('FINAL: qr is null, aborting card'); document.body.removeChild(tmp); resolve(null); return; }
+      window._qrDebug.push('FINAL: using qr canvas ' + qr.width + 'x' + qr.height);
 
       const c = document.createElement('canvas');
       c.width = 1000; c.height = 1400;
@@ -732,6 +741,11 @@ async function downloadGuestCard(docId) {
   const guest = guests.find(g => g.docId === docId);
   if (!guest) return;
   const built = await buildGuestCard(guest);
+
+  // Temporary diagnostics — show exactly what happened while building the
+  // QR so we can see the real failure on a real device without DevTools.
+  if (window._qrDebug) alert('QR debug:\n' + window._qrDebug.join('\n'));
+
   if (!built) { alert('تعذّر إنشاء البطاقة'); return; }
 
   const safeName = String(guest.name).trim().replace(/[\s\/\\:*?"<>|]+/g, '_');
