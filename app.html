@@ -80,6 +80,7 @@
       <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: عرس حسن وفاطمة)">
       <input type="date" id="ev-date" placeholder="التاريخ">
       <input type="text" id="ev-venue" placeholder="مكان الحفل">
+      <input type="text" id="ev-maps" placeholder="رابط الموقع على الخريطة (اختياري)">
       <button class="btn" onclick="createNewEvent()">إنشاء</button>
     </div>
 
@@ -169,6 +170,7 @@ async function createNewEvent() {
   const name = document.getElementById('ev-name').value.trim();
   const date = document.getElementById('ev-date').value;
   const venue = document.getElementById('ev-venue').value.trim();
+  const mapsLink = document.getElementById('ev-maps').value.trim();
   if (!name) { alert('اكتب اسم المناسبة'); return; }
 
   const { serverTimestamp, doc, runTransaction } = window._fsFns;
@@ -182,7 +184,7 @@ async function createNewEvent() {
   try {
     await runTransaction(window._db, async (tx) => {
       const eventData = {
-        name, date, venue, scanPin,
+        name, date, venue, mapsLink, scanPin,
         ownerUid: user.uid,
         ownerEmail: user.email || '',
         createdAt: serverTimestamp()

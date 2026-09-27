@@ -70,6 +70,8 @@
   h1 { font-family:'Playfair Display',serif; color:var(--gold); font-size:24px; font-weight:700; margin-bottom:6px; letter-spacing:0.3px; }
   .sub { color:var(--text-soft); font-size:12.5px; margin-bottom:24px; }
   .gold-line { width:56px; height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent); margin:22px auto; }
+  .maps-link { display:inline-block; color:var(--gold); font-size:12.5px; text-decoration:none; border:1px solid rgba(var(--accent-rgb),0.4); border-radius:20px; padding:7px 16px; margin-bottom:16px; }
+  .countdown { font-size:12.5px; color:var(--gold); margin-bottom:16px; letter-spacing:0.3px; }
   input { width:100%; padding:13px; margin-bottom:14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(var(--accent-rgb),0.25); color:var(--text-main); font-size:15px; font-family:inherit; text-align:center; }
   input:focus { outline:none; border-color:var(--gold); }
   .btn { width:100%; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
@@ -126,15 +128,60 @@ const eventId = params.get('event');
 const card = document.getElementById('card');
 let myReqId = localStorage.getItem('inv_reqid_' + eventId) || null;
 
+// Maps link + live countdown to the event date, shown above the RSVP form
+// and again once the guest is approved. Time defaults to 8pm Riyadh time —
+// there's no per-event time field, so this matches the typical reception hour.
+function eventInfoHtml(eventData) {
+  const mapsBtn = eventData.mapsLink
+    ? `<a class="maps-link" href="${escapeHtml(eventData.mapsLink)}" target="_blank" rel="noopener">📍 موقع القاعة على الخريطة</a>`
+    : '';
+  const countdown = eventData.date ? `<div class="countdown" id="countdown"></div>` : '';
+  return mapsBtn + countdown;
+}
+
+// Re-renders (the RSVP status listener can re-fire) replace #countdown's
+// markup wholesale, so the previous interval must be cleared explicitly —
+// otherwise it keeps ticking against a detached element forever.
+let countdownTimer = null;
+
+function startCountdown(eventData) {
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+  const el = document.getElementById('countdown');
+  if (!el || !eventData.date) return;
+  const target = new Date(eventData.date + 'T20:00:00+03:00').getTime();
+  if (isNaN(target)) return;
+  function tick() {
+    const diff = target - Date.now();
+    if (diff <= 0) {
+      el.textContent = '🎉 وصل الموعد 🎉';
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+      return;
+    }
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const parts = [];
+    if (d > 0) parts.push(d + ' يوم');
+    parts.push(h + ' ساعة');
+    parts.push(m + ' دقيقة');
+    el.textContent = 'باقي ' + parts.join(' و ');
+  }
+  tick();
+  countdownTimer = setInterval(tick, 30000);
+}
+
 function renderForm(eventData) {
   card.innerHTML = `
     <div class="ornament">✦</div>
     <h1>${escapeHtml(eventData.name)}</h1>
     <div class="sub">${[eventData.date, eventData.venue].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+    ${eventInfoHtml(eventData)}
     <div class="gold-line"></div>
     <input type="text" id="g-name" placeholder="الاسم الكامل" onkeydown="if(event.key==='Enter') submitRequest()">
     <button class="btn" onclick="submitRequest()">تأكيد الحضور</button>
   `;
+  startCountdown(eventData);
 }
 
 async function submitRequest() {
@@ -416,9 +463,11 @@ async function renderApproved(eventData, guest) {
   card.innerHTML = `
     <div class="status-icon">🎉</div>
     <div class="status-msg">تم تأكيد حضورك!</div>
+    ${eventInfoHtml(eventData)}
     <div id="card-wrap" style="margin-top:16px;"></div>
     <button class="btn" id="save-btn" style="margin-top:14px; display:none;" onclick="downloadInviteCard()">⬇️ حفظ الدعوة</button>
   `;
+  startCountdown(eventData);
   const built = await buildInviteCard(eventData, guest);
   if (!built) return;
   cardCanvas = built;
