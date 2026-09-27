@@ -117,17 +117,24 @@
   .t-gold { background:#E0BC7A; } .t-rose { background:#E8B4B8; } .t-emerald { background:#2E7D5A; }
   .t-sapphire { background:#5A6FA0; } .t-ivory { background:#B08D57; }
 
-  .guest-row { display:flex; align-items:center; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.06); gap:10px; flex-wrap:wrap; }
-  .guest-row:last-child { border-bottom:none; }
-  .g-num { color:var(--text-soft); font-size:12px; min-width:20px; }
-  .g-info { flex:1; min-width:120px; }
-  .g-name { font-size:14px; }
-  .g-id { color:var(--text-soft); font-size:11px; margin-top:2px; opacity:0.7; }
-  .g-actions { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
-  .btn.xs { padding:6px 10px; font-size:11px; border-radius:8px; }
-  .badge { font-size:11px; padding:3px 10px; border-radius:20px; }
-  .badge.ok { background:rgba(90,200,120,0.15); color:#7bd894; }
-  .badge.pending { background:rgba(255,255,255,0.06); color:var(--text-soft); }
+  .guest-list { background:linear-gradient(145deg,var(--glass-bg-1),var(--glass-bg-2)); border:1px solid var(--glass-border); border-radius:18px; overflow:hidden; max-height:60vh; overflow-y:auto; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
+  .guest-item { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid rgba(var(--accent-rgb),0.08); gap:10px; transition:background 0.2s ease; flex-wrap:wrap; }
+  .guest-item:hover { background:rgba(var(--accent-rgb),0.05); }
+  .guest-item:last-child { border-bottom:none; }
+  .guest-item .name { color:var(--text-main); font-size:14px; font-weight:500; }
+  .guest-item .gid { color:var(--text-soft); font-size:11px; direction:ltr; opacity:0.8; }
+  .guest-item .gnum { flex:0 0 auto; min-width:26px; text-align:center; font-size:13px; font-weight:700; color:var(--gold); opacity:0.75; direction:ltr; }
+  .guest-item .dl-btn { background:none; border:1px solid rgba(var(--accent-rgb),0.3); color:var(--gold); font-size:13px; cursor:pointer; padding:4px 10px; border-radius:8px; transition:all 0.2s ease; white-space:nowrap; }
+  .guest-item .dl-btn:hover { background:rgba(var(--accent-rgb),0.1); border-color:var(--gold); }
+  .guest-item .attend-btn { background:rgba(76,175,80,0.12); border:1px solid rgba(76,175,80,0.5); color:#4CAF50; font-size:13px; cursor:pointer; padding:4px 10px; border-radius:8px; transition:all 0.2s ease; white-space:nowrap; }
+  .guest-item .attend-btn:hover { background:rgba(76,175,80,0.25); border-color:#4CAF50; }
+  .guest-item .undo-btn { background:rgba(255,152,0,0.10); border:1px solid rgba(255,152,0,0.40); color:#FF9800; font-size:13px; cursor:pointer; padding:4px 10px; border-radius:8px; transition:all 0.2s ease; white-space:nowrap; opacity:0.85; }
+  .guest-item .undo-btn:hover { opacity:1; background:rgba(255,152,0,0.18); }
+  .guest-item .del-btn { background:none; border:none; color:#F44336; font-size:18px; cursor:pointer; padding:4px 8px; transition:all 0.2s ease; }
+  .guest-item .del-btn:hover { transform:scale(1.2); }
+  .badge { padding:4px 12px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .badge.scanned { background:rgba(76,175,80,0.15); color:#4CAF50; }
+  .badge.pending { background:rgba(255,255,255,0.05); color:var(--text-soft); }
   #camera-wrapper { position:relative; width:100%; max-width:320px; margin:0 auto; aspect-ratio:1; border-radius:16px; overflow:hidden; border:2px solid var(--gold); background:#000; }
   #camera-video { width:100%; height:100%; object-fit:cover; display:block; }
   .scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
@@ -270,7 +277,7 @@
       <div class="card">
         <input type="text" id="guest-search" placeholder="🔍 بحث بالاسم" oninput="searchGuests()" style="margin:0;">
       </div>
-      <div class="card" id="guests-list"></div>
+      <div class="guest-list" id="guests-list"></div>
     </div>
 
     <div class="page" id="page-requests">
@@ -449,7 +456,17 @@ function visibleGuests() {
     const q = searchQuery.trim().toLowerCase();
     list = list.filter(g => g.name.toLowerCase().includes(q));
   }
-  return list;
+
+  // Numeric names (like "1", "2", "150") sort by value first, in order;
+  // then everyone else sorts alphabetically after them.
+  return [...list].sort((a, b) => {
+    const aNum = /^\d+$/.test(a.name.trim());
+    const bNum = /^\d+$/.test(b.name.trim());
+    if (aNum && bNum) return parseInt(a.name, 10) - parseInt(b.name, 10);
+    if (aNum) return -1;
+    if (bNum) return 1;
+    return a.name.localeCompare(b.name, 'ar');
+  });
 }
 
 function updateStats() {
@@ -487,20 +504,18 @@ function renderGuests() {
   const list = visibleGuests();
   if (list.length === 0) { el.innerHTML = '<div class="empty">لسه ما فيه ضيوف</div>'; return; }
   el.innerHTML = list.map((g, i) => `
-    <div class="guest-row">
-      <span class="g-num">${i + 1}</span>
-      <div class="g-info">
-        <div class="g-name">${escapeHtml(g.name)}</div>
-        <div class="g-id">${escapeHtml(g.id)}</div>
+    <div class="guest-item">
+      <span class="gnum">${i + 1}</span>
+      <div style="flex:1; min-width:110px;">
+        <div class="name">${escapeHtml(g.name)}</div>
+        <div class="gid">${escapeHtml(g.id)}</div>
       </div>
-      <div class="g-actions">
-        <span class="badge ${g.scanned ? 'ok' : 'pending'}">${g.scanned ? '✓ حضر' : 'لسه'}</span>
-        <button class="btn ghost xs" onclick="downloadGuestCard('${g.docId}')">💾 حفظ</button>
-        ${g.scanned
-          ? `<button class="btn ghost xs" onclick="undoGuestAttend('${g.docId}')">↩️ تراجع</button>`
-          : `<button class="btn xs" onclick="markGuestAttend('${g.docId}')">✓ حضر</button>`}
-        <button class="btn danger xs" onclick="deleteGuest('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">🗑</button>
-      </div>
+      <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ حضر' : 'لسه'}</span>
+      ${g.scanned
+        ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}')">↩️ تراجع</button>`
+        : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}')">✓ حضر</button>`}
+      <button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">💾 حفظ</button>
+      <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">🗑</button>
     </div>
   `).join('');
 }
