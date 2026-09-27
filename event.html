@@ -101,8 +101,9 @@
 
     <div class="page active" id="page-scan">
       <div class="card">
-        <button class="btn" id="start-cam-btn" onclick="startCamera()">تشغيل الكاميرا</button>
-        <video id="camera-video" style="display:none"></video>
+        <p id="camera-status" style="color:#B8B4AC; font-size:13px; text-align:center; margin-bottom:10px;">اضغط لتشغيل الكاميرا</p>
+        <button class="btn" id="start-cam-btn" onclick="startCamera()" style="width:100%">📷 تشغيل الكاميرا</button>
+        <video id="camera-video" autoplay playsinline muted style="display:none"></video>
         <div id="scan-result"></div>
       </div>
     </div>
@@ -483,15 +484,30 @@ async function rejectRequest(reqDocId) {
 
 async function startCamera() {
   const video = document.getElementById('camera-video');
-  try {
-    qrScanner = new QrScanner(video, result => {
-      if (!scanCooldown) handleScan(result.data);
-    }, { returnDetailedScanResult: true, preferredCamera: 'environment' });
-    await qrScanner.start();
-    video.style.display = 'block';
-    document.getElementById('start-cam-btn').style.display = 'none';
-  } catch (e) {
-    alert('ما قدرنا نفتح الكاميرا — تحقق من الصلاحيات');
+  const status = document.getElementById('camera-status');
+  status.textContent = 'جاري تشغيل الكاميرا...';
+
+  let retries = 2;
+  while (retries >= 0) {
+    try {
+      qrScanner = new QrScanner(video, result => {
+        if (!scanCooldown) handleScan(result.data);
+      }, { returnDetailedScanResult: true, preferredCamera: 'environment' });
+      await qrScanner.start();
+      video.style.display = 'block';
+      document.getElementById('start-cam-btn').style.display = 'none';
+      status.textContent = 'وجّه الكاميرا نحو الباركود';
+      return;
+    } catch (e) {
+      if (qrScanner) { try { qrScanner.destroy(); } catch (_) {} qrScanner = null; }
+      retries--;
+      if (retries < 0) {
+        status.textContent = '⚠️ ما قدرنا نفتح الكاميرا — تحقق من صلاحيات الكاميرا بإعدادات المتصفح';
+      } else {
+        status.textContent = 'إعادة المحاولة...';
+        await new Promise(r => setTimeout(r, 800));
+      }
+    }
   }
 }
 
