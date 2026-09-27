@@ -64,6 +64,7 @@
   .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
   #hidden-forms > div { display:none; }
   .empty { text-align:center; color:#6f6a62; font-size:14px; padding:20px 0; }
+  .badge-count { background:#E0BC7A; color:#1a1400; font-size:11px; font-weight:700; min-width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0 4px; }
 </style>
 </head>
 <body>
@@ -91,7 +92,10 @@
     </div>
 
     <div id="admin-requests-section" style="display:none; margin-bottom:16px;">
-      <div class="sub" style="margin-bottom:8px; text-align:right;">🙋 طلبات مناسبات إضافية</div>
+      <div class="sub" style="margin-bottom:8px; text-align:right; display:flex; align-items:center; justify-content:flex-end; gap:8px;">
+        🙋 طلبات مناسبات إضافية
+        <span class="badge-count" id="admin-requests-badge">0</span>
+      </div>
       <div id="admin-requests-list"></div>
     </div>
 
@@ -376,6 +380,7 @@ function renderAdminRequests(reqs) {
   const list = document.getElementById('admin-requests-list');
   if (reqs.length === 0) { section.style.display = 'none'; list.innerHTML = ''; return; }
   section.style.display = 'block';
+  document.getElementById('admin-requests-badge').textContent = reqs.length > 99 ? '99+' : String(reqs.length);
   list.innerHTML = reqs.map(r => `
     <div class="card event-card-top">
       <div>
