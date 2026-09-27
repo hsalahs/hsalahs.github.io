@@ -172,6 +172,8 @@
           <input type="text" id="new-guest-name" placeholder="اسم ضيف جديد">
           <button class="btn" onclick="addGuest()">إضافة</button>
         </div>
+        <button class="btn ghost" style="width:100%; margin-top:10px;" onclick="document.getElementById('csv-import').click()">📂 استيراد قائمة (CSV / أسماء)</button>
+        <input type="file" id="csv-import" accept=".csv,.txt" style="display:none" onchange="importCSV(event)">
       </div>
       <div class="card" id="guests-list"></div>
     </div>
@@ -583,6 +585,70 @@ async function addGuest() {
     });
     nameInput.value = '';
   } catch (e) { showErr(e); }
+}
+
+async function importCSV(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const text = e.target.result;
+      const lines = String(text).split('\n').map(l => l.trim()).filter(l => l);
+
+      // Accept either a real CSV (name is the first column) or a plain
+      // list of one name per line
+      let names = [];
+      lines.forEach(line => {
+        if (line.includes(',')) {
+          const name = line.split(',')[0].trim();
+          if (name && name.toLowerCase() !== 'name') names.push(name);
+        } else {
+          names.push(line);
+        }
+      });
+
+      if (names.length === 0) {
+        alert('ما لقينا أي أسماء صالحة بالملف');
+        document.getElementById('csv-import').value = '';
+        return;
+      }
+
+      // Dedupe against existing guests AND against repeats within this same
+      // file, synchronously, before any writes start — otherwise duplicate
+      // names in the same file all pass the check in parallel and all get
+      // added, since the in-memory guests list doesn't update mid-import.
+      const seen = new Set(guests.map(g => g.name));
+      const toAdd = [];
+      let duplicates = 0;
+      for (const name of names) {
+        if (seen.has(name)) { duplicates++; continue; }
+        seen.add(name);
+        toAdd.push(name);
+      }
+
+      const { collection, addDoc } = window._fsFns;
+      let added = 0;
+      const batchSize = 50;
+      for (let i = 0; i < toAdd.length; i += batchSize) {
+        const batch = toAdd.slice(i, i + batchSize);
+        await Promise.all(batch.map(name =>
+          addDoc(collection(window._db, 'events', eventId, 'guests'), {
+            id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString()
+          })
+        ));
+        added += batch.length;
+      }
+
+      alert('تم استيراد ' + added + ' ضيف' + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' مكرر)' : ''));
+      document.getElementById('csv-import').value = '';
+    } catch (e2) {
+      showErr(e2);
+      document.getElementById('csv-import').value = '';
+    }
+  };
+  reader.readAsText(file);
 }
 
 async function approveRequest(reqDocId) {
