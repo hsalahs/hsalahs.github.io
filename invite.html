@@ -261,6 +261,18 @@ function buildInviteCard(eventData, guest) {
     waitForQr(30).then((qr) => new Promise(r => setTimeout(() => r(qr), 80))).then((qr) => {
       if (!qr) { document.body.removeChild(tmp); resolve(null); return; }
 
+      // Some browsers (notably Firefox, as an anti-fingerprinting measure)
+      // silently blank out pixels drawn via ctx.drawImage(sourceCanvas, ...)
+      // without throwing. Converting the QR canvas to a data URL and loading
+      // it into a plain <img> first avoids that canvas-to-canvas copy path.
+      const qrDataUrl = qr.toDataURL('image/png');
+      const qrImg = new Image();
+      qrImg.onload = () => buildCardWithQr(qrImg);
+      qrImg.onerror = () => buildCardWithQr(qr);
+      qrImg.src = qrDataUrl;
+    });
+
+    function buildCardWithQr(qr) {
       const c = document.createElement('canvas');
       c.width = 1000; c.height = 1400;
       const ctx = c.getContext('2d');
@@ -354,7 +366,7 @@ function buildInviteCard(eventData, guest) {
 
       document.body.removeChild(tmp);
       resolve(c);
-    });
+    }
   });
 }
 
