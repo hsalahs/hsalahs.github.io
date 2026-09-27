@@ -697,7 +697,33 @@ function buildGuestCard(guest) {
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      ctx.drawImage(qr, 220, 272, 560, 560);
+      // Re-check the source canvas right before the actual copy — if the
+      // library clears/replaces it shortly after our earlier check passed,
+      // this tells us definitively instead of guessing.
+      try {
+        const srcData = qr.getContext('2d').getImageData(0, 0, qr.width, qr.height).data;
+        let srcHasInk = false;
+        for (let i = 0; i < srcData.length; i += 4 * 50) { if (srcData[i] < 128) { srcHasInk = true; break; } }
+        window._qrDebug.push('right before drawImage: source canvas hasInk=' + srcHasInk);
+      } catch (e) {
+        window._qrDebug.push('right before drawImage: source check threw ' + e.message);
+      }
+
+      try {
+        ctx.drawImage(qr, 220, 272, 560, 560);
+        window._qrDebug.push('drawImage: no exception thrown');
+      } catch (e) {
+        window._qrDebug.push('drawImage THREW: ' + e.name + ' — ' + e.message);
+      }
+
+      try {
+        const destData = ctx.getImageData(220, 272, 560, 560).data;
+        let destHasInk = false;
+        for (let i = 0; i < destData.length; i += 4 * 50) { if (destData[i] < 200) { destHasInk = true; break; } }
+        window._qrDebug.push('after drawImage: destination area hasInk=' + destHasInk);
+      } catch (e) {
+        window._qrDebug.push('after drawImage: destination check threw ' + e.message);
+      }
 
       ctx.fillStyle = '#0A0A0A';
       ctx.font = 'bold 54px Tajawal, Arial';
