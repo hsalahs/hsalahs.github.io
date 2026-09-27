@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة المنظّم | دعوات</title>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import {
+    getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+    onAuthStateChanged, signOut
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import {
+    getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc
+  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDbjJtLLDniHbALfUhzQ-UiN2j5txR8PGM",
+    authDomain: "wedding-qr-16d01.firebaseapp.com",
+    projectId: "wedding-qr-16d01",
+    storageBucket: "wedding-qr-16d01.firebasestorage.app",
+    messagingSenderId: "1036657421971",
+    appId: "1:1036657421971:web:7ac5618871ec061fba6766"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const eventsCol = collection(db, 'events');
+
+  window._auth = auth;
+  window._db = db;
+  window._eventsCol = eventsCol;
+  window._authFns = { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut };
+  window._fsFns = { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, setDoc };
+  window._readyEvent = new Event('appDbReady');
+  window.dispatchEvent(window._readyEvent);
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Tajawal:wght@400;500;700&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh; }
+  .wrap { max-width:480px; margin:0 auto; padding:32px 18px 60px; }
+  h1 { font-family:'Playfair Display',serif; color:#E0BC7A; font-size:26px; text-align:center; margin-bottom:6px; }
+  .sub { text-align:center; color:#B8B4AC; font-size:13px; margin-bottom:28px; }
+  .card { background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.2); border-radius:16px; padding:22px; margin-bottom:16px; }
+  input { width:100%; padding:13px 14px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:15px; font-family:inherit; }
+  input:focus { outline:none; border-color:#E0BC7A; }
+  .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; margin-bottom:10px; }
+  .btn.ghost { background:transparent; border:1px solid rgba(224,188,122,0.3); color:#E0BC7A; }
+  .btn.small { width:auto; padding:8px 16px; font-size:13px; }
+  .toggle-row { text-align:center; font-size:13px; color:#B8B4AC; margin-top:4px; }
+  .toggle-row a { color:#E0BC7A; cursor:pointer; text-decoration:underline; }
+  .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; text-align:center; }
+  .event-card { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .event-name { font-weight:700; color:#E0BC7A; font-size:15px; }
+  .event-date { color:#B8B4AC; font-size:12px; margin-top:3px; }
+  .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+  #hidden-forms > div { display:none; }
+  .empty { text-align:center; color:#6f6a62; font-size:14px; padding:20px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="auth-view">
+    <h1>دعوات</h1>
+    <div class="sub">لوحة تحكم المنظّمين — أنشئ دعوة رقمية لمناسبتك</div>
+    <div class="card">
+      <div id="auth-err" class="err" style="display:none"></div>
+      <input type="email" id="auth-email" placeholder="البريد الإلكتروني">
+      <input type="password" id="auth-pass" placeholder="كلمة المرور">
+      <button class="btn" id="auth-submit-btn" onclick="submitAuth()">دخول</button>
+      <div class="toggle-row" id="auth-toggle">ما عندك حساب؟ <a onclick="toggleAuthMode()">سجّل واحد جديد</a></div>
+    </div>
+  </div>
+
+  <div id="app-view" style="display:none">
+    <div class="topbar">
+      <h1 style="margin:0; font-size:20px;">مناسباتي</h1>
+      <button class="btn ghost small" onclick="doLogout()">خروج</button>
+    </div>
+
+    <button class="btn" onclick="showCreateForm()">➕ إنشاء مناسبة جديدة</button>
+
+    <div class="card" id="create-form" style="display:none">
+      <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: عرس حسن وفاطمة)">
+      <input type="date" id="ev-date" placeholder="التاريخ">
+      <input type="text" id="ev-venue" placeholder="مكان الحفل">
+      <button class="btn" onclick="createEvent()">إنشاء</button>
+    </div>
+
+    <div id="events-list"></div>
+  </div>
+
+</div>
+
+<script>
+let authMode = 'login'; // or 'signup'
+
+function toggleAuthMode() {
+  authMode = authMode === 'login' ? 'signup' : 'login';
+  document.getElementById('auth-submit-btn').textContent = authMode === 'login' ? 'دخول' : 'إنشاء حساب';
+  document.getElementById('auth-toggle').innerHTML = authMode === 'login'
+    ? 'ما عندك حساب؟ <a onclick="toggleAuthMode()">سجّل واحد جديد</a>'
+    : 'عندك حساب؟ <a onclick="toggleAuthMode()">سجّل دخول</a>';
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-err');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function submitAuth() {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass = document.getElementById('auth-pass').value;
+  document.getElementById('auth-err').style.display = 'none';
+  if (!email || !pass) { showAuthError('عبّي البريد وكلمة المرور'); return; }
+
+  const { createUserWithEmailAndPassword, signInWithEmailAndPassword } = window._authFns;
+  try {
+    if (authMode === 'signup') {
+      await createUserWithEmailAndPassword(window._auth, email, pass);
+    } else {
+      await signInWithEmailAndPassword(window._auth, email, pass);
+    }
+  } catch (e) {
+    const map = {
+      'auth/email-already-in-use': 'البريد مسجّل مسبقًا — جرب تسجّل دخول',
+      'auth/invalid-credential': 'البريد أو كلمة المرور غلط',
+      'auth/weak-password': 'كلمة المرور لازم تكون ٦ أحرف على الأقل',
+      'auth/invalid-email': 'صيغة البريد غير صحيحة'
+    };
+    showAuthError(map[e.code] || ('خطأ: ' + e.message));
+  }
+}
+
+function doLogout() {
+  const { signOut } = window._authFns;
+  signOut(window._auth);
+}
+
+function showCreateForm() {
+  const f = document.getElementById('create-form');
+  f.style.display = f.style.display === 'block' ? 'none' : 'block';
+}
+
+function newEventId() {
+  return Math.random().toString(36).substr(2, 6) + Date.now().toString(36).substr(-4);
+}
+
+async function createEvent() {
+  const name = document.getElementById('ev-name').value.trim();
+  const date = document.getElementById('ev-date').value;
+  const venue = document.getElementById('ev-venue').value.trim();
+  if (!name) { alert('اكتب اسم المناسبة'); return; }
+
+  const { serverTimestamp, doc, setDoc } = window._fsFns;
+  const eventId = newEventId();
+  await setDoc(doc(window._db, 'events', eventId), {
+    name, date, venue,
+    ownerUid: window._auth.currentUser.uid,
+    createdAt: serverTimestamp()
+  });
+  window.location.href = 'event.html?id=' + eventId;
+}
+
+function renderEvents(events) {
+  const list = document.getElementById('events-list');
+  if (events.length === 0) {
+    list.innerHTML = '<div class="empty">لسه ما أنشأت أي مناسبة</div>';
+    return;
+  }
+  list.innerHTML = events.map(ev => `
+    <div class="card event-card">
+      <div>
+        <div class="event-name">${escapeHtml(ev.name)}</div>
+        <div class="event-date">${ev.date || ''}${ev.venue ? ' · ' + escapeHtml(ev.venue) : ''}</div>
+      </div>
+      <a class="btn ghost small" style="text-decoration:none" href="event.html?id=${ev.id}">فتح</a>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let eventsUnsub = null;
+
+function initAuthWatcher() {
+  const { onAuthStateChanged } = window._authFns;
+  onAuthStateChanged(window._auth, (user) => {
+    if (user) {
+      document.getElementById('auth-view').style.display = 'none';
+      document.getElementById('app-view').style.display = 'block';
+      watchEvents(user.uid);
+    } else {
+      document.getElementById('auth-view').style.display = 'block';
+      document.getElementById('app-view').style.display = 'none';
+      if (eventsUnsub) { eventsUnsub(); eventsUnsub = null; }
+    }
+  });
+}
+
+function watchEvents(uid) {
+  const { query, where, onSnapshot } = window._fsFns;
+  if (eventsUnsub) eventsUnsub();
+  eventsUnsub = onSnapshot(query(window._eventsCol, where('ownerUid', '==', uid)), (snap) => {
+    const events = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    events.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    renderEvents(events);
+  });
+}
+
+if (window._auth) initAuthWatcher();
+else window.addEventListener('appDbReady', initAuthWatcher);
+</script>
+</body>
+</html>
