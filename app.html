@@ -52,9 +52,15 @@
   .toggle-row { text-align:center; font-size:13px; color:#B8B4AC; margin-top:4px; }
   .toggle-row a { color:#E0BC7A; cursor:pointer; text-decoration:underline; }
   .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; text-align:center; }
-  .event-card { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .event-card { display:flex; flex-direction:column; gap:12px; }
+  .event-card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
   .event-name { font-weight:700; color:#E0BC7A; font-size:15px; }
   .event-date { color:#B8B4AC; font-size:12px; margin-top:3px; }
+  .event-stats { display:flex; gap:8px; }
+  .event-stat { flex:1; text-align:center; background:rgba(224,188,122,0.06); border:1px solid rgba(224,188,122,0.15); border-radius:10px; padding:8px 4px; }
+  .event-stat .n { font-weight:700; color:#FAF8F4; font-size:15px; }
+  .event-stat .l { color:#8a857a; font-size:10.5px; margin-top:1px; }
+  .event-actions { display:flex; gap:6px; }
   .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
   #hidden-forms > div { display:none; }
   .empty { text-align:center; color:#6f6a62; font-size:14px; padding:20px 0; }
@@ -193,17 +199,41 @@ function renderEvents(events, showOwner) {
   }
   list.innerHTML = events.map(ev => `
     <div class="card event-card">
-      <div>
-        <div class="event-name">${escapeHtml(ev.name)}</div>
-        <div class="event-date">${ev.date || ''}${ev.venue ? ' · ' + escapeHtml(ev.venue) : ''}</div>
-        ${showOwner ? `<div class="event-date">👤 ${escapeHtml(ev.ownerEmail || ev.ownerUid || '')}</div>` : ''}
+      <div class="event-card-top">
+        <div>
+          <div class="event-name">${escapeHtml(ev.name)}</div>
+          <div class="event-date">${ev.date || ''}${ev.venue ? ' · ' + escapeHtml(ev.venue) : ''}</div>
+          ${showOwner ? `<div class="event-date">👤 ${escapeHtml(ev.ownerEmail || ev.ownerUid || '')}</div>` : ''}
+        </div>
+        <div class="event-actions">
+          <a class="btn ghost small" style="text-decoration:none" href="event.html?id=${ev.id}">فتح</a>
+          <button class="btn ghost small" style="border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteEvent('${ev.id}', '${escapeHtml(ev.name).replace(/'/g, "\\'")}')">🗑</button>
+        </div>
       </div>
-      <div style="display:flex; gap:6px;">
-        <a class="btn ghost small" style="text-decoration:none" href="event.html?id=${ev.id}">فتح</a>
-        <button class="btn ghost small" style="border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteEvent('${ev.id}', '${escapeHtml(ev.name).replace(/'/g, "\\'")}')">🗑</button>
+      <div class="event-stats" id="stats-${ev.id}">
+        <div class="event-stat"><div class="n">…</div><div class="l">كل الضيوف</div></div>
+        <div class="event-stat"><div class="n">…</div><div class="l">حضروا</div></div>
       </div>
     </div>
   `).join('');
+  events.forEach(loadEventStats);
+}
+
+async function loadEventStats(ev) {
+  const { collection, getDocs } = window._fsFns;
+  const box = document.getElementById('stats-' + ev.id);
+  if (!box) return;
+  try {
+    const snap = await getDocs(collection(window._db, 'events', ev.id, 'guests'));
+    const total = snap.size;
+    const attended = snap.docs.filter(d => d.data().scanned).length;
+    box.innerHTML = `
+      <div class="event-stat"><div class="n">${total}</div><div class="l">كل الضيوف</div></div>
+      <div class="event-stat"><div class="n">${attended}</div><div class="l">حضروا</div></div>
+    `;
+  } catch (e) {
+    box.style.display = 'none';
+  }
 }
 
 async function deleteEvent(eventId, name) {
