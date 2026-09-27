@@ -601,10 +601,30 @@ function buildGuestCard(guest) {
       correctLevel: QRCode.CorrectLevel.H
     });
 
+    // qrcodejs creates the <canvas> element up front but the pixels can
+    // (rarely) still be blank a moment later — checking the element exists
+    // isn't enough. Sample a grid of pixels for any actual dark (QR) ink
+    // before accepting it.
+    function qrCanvasHasContent(canvas) {
+      try {
+        const c2 = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height;
+        const data = c2.getImageData(0, 0, w, h).data;
+        for (let y = 0; y < h; y += 8) {
+          for (let x = 0; x < w; x += 8) {
+            if (data[(y * w + x) * 4] < 128) return true;
+          }
+        }
+        return false;
+      } catch (e) {
+        return true; // can't inspect (e.g. tainted canvas) — trust it exists
+      }
+    }
+
     function waitForQr(retriesLeft) {
       const qr = tmp.querySelector('canvas');
-      if (qr) return Promise.resolve(qr);
-      if (retriesLeft <= 0) return Promise.resolve(null);
+      if (qr && qrCanvasHasContent(qr)) return Promise.resolve(qr);
+      if (retriesLeft <= 0) return Promise.resolve(qr || null);
       return new Promise(r => setTimeout(r, 100)).then(() => waitForQr(retriesLeft - 1));
     }
 
