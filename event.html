@@ -556,10 +556,13 @@ function renderRequests() {
   if (requests.length === 0) { el.innerHTML = '<div class="empty">مافيه طلبات جديدة</div>'; return; }
   el.innerHTML = requests.map(r => `
     <div class="guest-row">
-      <span class="g-name">${escapeHtml(r.name)}</span>
-      <div class="row">
-        <button class="btn" onclick="approveRequest('${r.docId}')">قبول</button>
-        <button class="btn danger" onclick="rejectRequest('${r.docId}')">رفض</button>
+      <span style="font-size:16px;">⏳</span>
+      <div class="g-info">
+        <div class="g-name">${escapeHtml(r.name)}</div>
+      </div>
+      <div class="g-actions">
+        <button class="btn xs" onclick="approveRequest('${r.docId}')">✓ قبول</button>
+        <button class="btn danger xs" onclick="rejectRequest('${r.docId}')">✕ رفض</button>
       </div>
     </div>
   `).join('');

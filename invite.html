@@ -29,11 +29,30 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Tajawal:wght@400;500;700&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
-  .card { width:100%; max-width:380px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); border-radius:20px; padding:32px 26px; text-align:center; }
-  h1 { font-family:'Playfair Display',serif; color:#E0BC7A; font-size:22px; margin-bottom:4px; }
-  .sub { color:#B8B4AC; font-size:13px; margin-bottom:22px; }
-  input { width:100%; padding:13px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:15px; font-family:inherit; text-align:center; }
+  body {
+    font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh;
+    display:flex; align-items:center; justify-content:center; padding:20px; position:relative; overflow-x:hidden;
+  }
+  body::before {
+    content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(224,188,122,0.12), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 100% 100%, rgba(201,155,74,0.08), transparent 55%),
+      linear-gradient(160deg, #0C0C0C 0%, #0A0A0A 50%, #060606 100%);
+  }
+  .card {
+    position:relative; z-index:1; width:100%; max-width:380px;
+    background:rgba(255,255,255,0.035); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    border:1px solid rgba(224,188,122,0.3); border-radius:22px; padding:42px 30px; text-align:center;
+    box-shadow:0 8px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .ornament { font-size:20px; color:#E0BC7A; letter-spacing:8px; margin-bottom:14px; animation:float 3s ease-in-out infinite; }
+  @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
+  h1 { font-family:'Playfair Display',serif; color:#E0BC7A; font-size:24px; font-weight:700; margin-bottom:6px; letter-spacing:0.3px; }
+  .sub { color:#B8B4AC; font-size:12.5px; margin-bottom:24px; }
+  .gold-line { width:56px; height:1px; background:linear-gradient(90deg,transparent,#E0BC7A,transparent); margin:22px auto; }
+  input { width:100%; padding:13px; margin-bottom:14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:15px; font-family:inherit; text-align:center; }
+  input:focus { outline:none; border-color:#E0BC7A; }
   .btn { width:100%; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
   .status-icon { font-size:44px; margin-bottom:10px; }
   .status-msg { font-size:15px; line-height:1.9; }
@@ -58,9 +77,11 @@ function escapeHtml(str) {
 
 function renderForm(eventData) {
   card.innerHTML = `
+    <div class="ornament">✦</div>
     <h1>${escapeHtml(eventData.name)}</h1>
     <div class="sub">${[eventData.date, eventData.venue].filter(Boolean).map(escapeHtml).join(' · ')}</div>
-    <input type="text" id="g-name" placeholder="الاسم الكامل">
+    <div class="gold-line"></div>
+    <input type="text" id="g-name" placeholder="الاسم الكامل" onkeydown="if(event.key==='Enter') submitRequest()">
     <button class="btn" onclick="submitRequest()">تأكيد الحضور</button>
   `;
 }
