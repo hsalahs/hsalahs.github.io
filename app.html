@@ -87,7 +87,7 @@
       <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: عرس حسن وفاطمة)">
       <input type="date" id="ev-date" placeholder="التاريخ">
       <input type="text" id="ev-venue" placeholder="مكان الحفل">
-      <button class="btn" onclick="createEvent()">إنشاء</button>
+      <button class="btn" onclick="createNewEvent()">إنشاء</button>
     </div>
 
     <div id="events-list"></div>
@@ -150,7 +150,7 @@ function newEventId() {
   return Math.random().toString(36).substr(2, 6) + Date.now().toString(36).substr(-4);
 }
 
-async function createEvent() {
+async function createNewEvent() {
   const name = document.getElementById('ev-name').value.trim();
   const date = document.getElementById('ev-date').value;
   const venue = document.getElementById('ev-venue').value.trim();
