@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'hsallah@outlook.sa';
+    }
+
+    // Legacy top-level collections used only by index.html (the original
+    // single-wedding site, still live at the site root). Left open since
+    // that page has no auth of its own — kept as-is, not part of this
+    // hardening pass.
+    match /guests/{guestId} { allow read, write: if true; }
+    match /requests/{requestId} { allow read, write: if true; }
+    match /settings/{settingId} { allow read, write: if true; }
+
+    match /eventRequests/{requestId} {
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['uid', 'email', 'status', 'requestedAt']) &&
+        request.resource.data.status == 'pending';
+      allow read: if request.auth != null && (isAdmin() || resource.data.uid == request.auth.uid);
+      allow update: if isAdmin();
+    }
+
+    // Tracks how many events each customer currently owns (eventCount) against
+    // how many they're allowed (eventLimit). A customer can bump their own
+    // eventCount by exactly ±1 (on event create/delete), and can self-serve
+    // raise their own eventLimit by 1 at a time up to AUTO_APPROVE_CEILING —
+    // beyond that only the admin can raise it further (via approve-request).
+    match /accountLimits/{uid} {
+      allow read: if request.auth != null && (isAdmin() || request.auth.uid == uid);
+
+      // A customer's very first event bootstraps this doc.
+      allow create: if request.auth != null && request.auth.uid == uid &&
+        request.resource.data.eventLimit == 1 && request.resource.data.eventCount == 1;
+
+      allow update: if request.auth != null && (
+        isAdmin() ||
+        (
+          request.auth.uid == uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['eventCount']) &&
+          request.resource.data.eventLimit == resource.data.eventLimit &&
+          (
+            (request.resource.data.eventCount == resource.data.eventCount + 1 &&
+             resource.data.eventCount < resource.data.eventLimit) ||
+            (request.resource.data.eventCount == resource.data.eventCount - 1 &&
+             resource.data.eventCount > 0)
+          )
+        ) ||
+        (
+          // self-service limit bump, capped at 3 — keep in sync with
+          // AUTO_APPROVE_CEILING in app.html
+          request.auth.uid == uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['eventLimit']) &&
+          request.resource.data.eventCount == resource.data.eventCount &&
+          request.resource.data.eventLimit == resource.data.eventLimit + 1 &&
+          request.resource.data.eventLimit <= 3
+        )
+      );
+    }
+
+    match /events/{eventId} {
+      allow get: if true;
+      allow list: if request.auth != null &&
+        (isAdmin() || resource.data.ownerUid == request.auth.uid);
+
+      // The real one-event-per-customer enforcement: a non-admin create must
+      // land alongside a valid accountLimits write (checked via getAfter, so
+      // both documents are validated as part of the same atomic transaction)
+      // whose resulting eventCount doesn't exceed eventLimit.
+      allow create: if request.auth != null && request.resource.data.ownerUid == request.auth.uid &&
+        (
+          isAdmin() ||
+          (
+            existsAfter(/databases/$(database)/documents/accountLimits/$(request.auth.uid)) &&
+            getAfter(/databases/$(database)/documents/accountLimits/$(request.auth.uid)).data.eventCount <=
+            getAfter(/databases/$(database)/documents/accountLimits/$(request.auth.uid)).data.eventLimit
+          )
+        );
+
+      allow update, delete: if request.auth != null &&
+        (isAdmin() || resource.data.ownerUid == request.auth.uid);
+
+      match /guests/{guestId} {
+        allow read: if true;
+        allow write: if request.auth != null &&
+          (isAdmin() ||
+           get(/databases/$(database)/documents/events/$(eventId)).data.ownerUid == request.auth.uid);
+
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scanned', 'scannedAt'])
+                      && resource.data.scanned == false
+                      && request.resource.data.scanned == true;
+      }
+      match /requests/{requestId} {
+        // Guest RSVP submissions — public and unauthenticated by design, so
+        // this is the one place a stranger can write without being the
+        // event owner. Field-shape validation is the only spam guard
+        // available on the free plan (no Cloud Functions for real rate
+        // limiting), but it blocks arbitrary extra fields and outsized junk.
+        allow create: if request.resource.data.keys().hasOnly(['name', 'reqId', 'status', 'createdAt']) &&
+          request.resource.data.status == 'pending' &&
+          request.resource.data.name is string &&
+          request.resource.data.name.size() > 0 &&
+          request.resource.data.name.size() <= 100;
+        allow read: if true;
+        allow update, delete: if request.auth != null &&
+          (isAdmin() ||
+           get(/databases/$(database)/documents/events/$(eventId)).data.ownerUid == request.auth.uid);
+      }
+    }
+  }
+}
