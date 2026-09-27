@@ -6,7 +6,7 @@
 <title>لوحة المنظّم | دعوات</title>
 <script type="module" src="firebase-init.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Tajawal:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh; }
   .wrap { max-width:480px; margin:0 auto; padding:32px 18px 60px; }
@@ -34,13 +34,50 @@
   #hidden-forms > div { display:none; }
   .empty { text-align:center; color:#6f6a62; font-size:14px; padding:20px 0; }
   .badge-count { background:#F44336; color:#fff; font-size:11px; font-weight:700; min-width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0 4px; }
+
+  #splash { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.8s ease, visibility 0.8s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
+  #splash::before { content:''; position:absolute; width:460px; height:460px; border-radius:50%; background:radial-gradient(circle, rgba(224,188,122,0.12), transparent 70%); animation:splashPulse 3.5s ease-in-out infinite; }
+  #splash.hide { opacity:0; visibility:hidden; }
+  .splash-inner { text-align:center; position:relative; z-index:1; animation:splashFade 1.2s cubic-bezier(0.2,0.8,0.2,1); }
+  .splash-rings { animation:splashRingsIn 1.4s cubic-bezier(0.2,0.8,0.2,1), splashFloat 3.5s ease-in-out 1.4s infinite; margin-bottom:26px; filter:drop-shadow(0 6px 26px rgba(224,188,122,0.45)); }
+  .splash-title { font-family:'Reem Kufi','Playfair Display',sans-serif; font-size:42px; font-weight:700; color:#E0BC7A; letter-spacing:1px; margin-bottom:8px; text-shadow:0 2px 24px rgba(224,188,122,0.3); }
+  .splash-subtitle { font-family:'Playfair Display',serif; font-size:16px; font-weight:400; color:#E0BC7A; letter-spacing:6px; text-transform:uppercase; opacity:0.75; margin-bottom:4px; }
+  .splash-line { width:0; height:2px; background:linear-gradient(90deg,transparent,#E0BC7A,transparent); margin:20px auto 0; animation:splashLineGrow 1.6s ease-out 0.6s forwards; }
+  @keyframes splashFade { from { opacity:0; transform:translateY(20px) scale(0.96); } to { opacity:1; transform:translateY(0) scale(1); } }
+  @keyframes splashRingsIn { from { opacity:0; transform:scale(0.7) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+  @keyframes splashFloat { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
+  @keyframes splashLineGrow { from { width:0; } to { width:140px; } }
+  @keyframes splashPulse { 0%,100% { transform:scale(0.9); opacity:0.5; } 50% { transform:scale(1.1); opacity:1; } }
 </style>
 </head>
 <body>
+
+<div id="splash">
+  <div class="splash-inner">
+    <div class="splash-rings">
+      <svg viewBox="0 0 140 90" width="110" height="70" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="ringGold" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#F3E0BC"/>
+            <stop offset="0.5" stop-color="#E0BC7A"/>
+            <stop offset="1" stop-color="#C99B4A"/>
+          </linearGradient>
+        </defs>
+        <circle cx="52" cy="50" r="30" stroke="url(#ringGold)" stroke-width="5"/>
+        <circle cx="88" cy="50" r="30" stroke="url(#ringGold)" stroke-width="5"/>
+        <path d="M70 22 L74 31 L83 32 L76 39 L78 48 L70 43 L62 48 L64 39 L57 32 L66 31 Z" fill="url(#ringGold)"/>
+      </svg>
+    </div>
+    <div class="splash-title">دعوة زفاف</div>
+    <div class="splash-subtitle">Wedding Invitation</div>
+    <div class="splash-line"></div>
+  </div>
+</div>
+
 <div class="wrap">
 
   <div id="auth-view">
-    <h1><a href="landing.html" style="color:inherit; text-decoration:none;">دعوات</a></h1>
+    <h1><a href="index.html" style="color:inherit; text-decoration:none;">دعوات</a></h1>
     <div class="sub">لوحة تحكم المنظّمين — أنشئ دعوة رقمية لمناسبتك</div>
     <div class="card">
       <div id="auth-err" class="err" style="display:none"></div>
@@ -475,6 +512,13 @@ async function rejectEventRequest(requestId) {
 
 if (window._auth) initAuthWatcher();
 else window.addEventListener('appDbReady', initAuthWatcher);
+
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const splash = document.getElementById('splash');
+    if (splash) splash.classList.add('hide');
+  }, 2200);
+});
 </script>
 </body>
 </html>

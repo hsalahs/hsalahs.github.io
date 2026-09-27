@@ -6,14 +6,6 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'hsallah@outlook.sa';
     }
 
-    // Legacy top-level collections used only by index.html (the original
-    // single-wedding site, still live at the site root). Left open since
-    // that page has no auth of its own — kept as-is, not part of this
-    // hardening pass.
-    match /guests/{guestId} { allow read, write: if true; }
-    match /requests/{requestId} { allow read, write: if true; }
-    match /settings/{settingId} { allow read, write: if true; }
-
     match /eventRequests/{requestId} {
       allow create: if request.auth != null && request.resource.data.uid == request.auth.uid &&
         request.resource.data.keys().hasOnly(['uid', 'email', 'status', 'requestedAt']) &&
