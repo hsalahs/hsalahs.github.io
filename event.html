@@ -497,12 +497,33 @@ async function startCamera() {
       video.style.display = 'block';
       document.getElementById('start-cam-btn').style.display = 'none';
       status.textContent = 'وجّه الكاميرا نحو الباركود';
+
+      // Temporary on-screen diagnostics — shows exactly what the <video>
+      // element is doing without needing DevTools, so we can see whether
+      // the stream actually attached and produced real pixels or not.
+      const dbg = document.createElement('div');
+      dbg.style.cssText = 'margin-top:10px; padding:10px; background:rgba(255,255,255,0.06); border-radius:10px; font-size:11px; color:#9ad; direction:ltr; text-align:left; white-space:pre-wrap;';
+      video.insertAdjacentElement('afterend', dbg);
+      let ticks = 0;
+      const poll = setInterval(() => {
+        ticks++;
+        const rect = video.getBoundingClientRect();
+        dbg.textContent =
+          'readyState=' + video.readyState +
+          ' videoWidth=' + video.videoWidth + ' videoHeight=' + video.videoHeight +
+          ' boxW=' + Math.round(rect.width) + ' boxH=' + Math.round(rect.height) +
+          ' paused=' + video.paused + ' srcObject=' + !!video.srcObject +
+          ' display=' + getComputedStyle(video).display +
+          ' visibility=' + getComputedStyle(video).visibility;
+        if (ticks > 15) clearInterval(poll);
+      }, 400);
+
       return;
     } catch (e) {
       if (qrScanner) { try { qrScanner.destroy(); } catch (_) {} qrScanner = null; }
       retries--;
       if (retries < 0) {
-        status.textContent = '⚠️ ما قدرنا نفتح الكاميرا — تحقق من صلاحيات الكاميرا بإعدادات المتصفح';
+        status.textContent = '⚠️ خطأ: ' + (e.name || '') + ' — ' + (e.message || e);
       } else {
         status.textContent = 'إعادة المحاولة...';
         await new Promise(r => setTimeout(r, 800));
