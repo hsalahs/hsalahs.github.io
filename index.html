@@ -1556,6 +1556,7 @@ function startGateCountdown() {
   const el = document.getElementById('gate-countdown');
   if (!el) return;
   const target = new Date('2026-09-03T20:00:00+03:00').getTime();
+  let timer;
 
   function tick() {
     const diff = target - Date.now();
@@ -1574,7 +1575,7 @@ function startGateCountdown() {
     el.textContent = 'باقي ' + parts.join(' و ');
   }
   tick();
-  const timer = setInterval(tick, 30000); // update every 30s, no need for per-second churn
+  timer = setInterval(tick, 30000); // update every 30s, no need for per-second churn
 }
 
 window.addEventListener('load', () => {
