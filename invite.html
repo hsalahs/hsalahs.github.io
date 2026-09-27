@@ -29,35 +29,74 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Tajawal:wght@400;500;700&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
+
+  /* ===== THEME SYSTEM — matches app.html/event.html ===== */
+  :root, [data-theme="gold"] {
+    --gold:#E0BC7A; --gold-deep:#C99B4A;
+    --bg-base:#0A0A0A; --bg-1:#0C0C0C; --bg-2:#060606;
+    --glow-1:rgba(var(--accent-rgb),0.12); --glow-2:rgba(201,155,74,0.08);
+    --accent-rgb:224,188,122; --text-main:#FAF8F4; --text-soft:#B8B4AC;
+    --glass-bg:rgba(255,255,255,0.035);
+  }
+  [data-theme="rose"] {
+    --gold:#E8B4B8; --gold-deep:#C9879A;
+    --bg-base:#14090C; --bg-1:#1A0C10; --bg-2:#0E0608;
+    --glow-1:rgba(232,180,184,0.14); --glow-2:rgba(201,135,154,0.10);
+    --accent-rgb:232,180,184; --text-main:#FAF4F4; --text-soft:#C9B4B6;
+    --glass-bg:rgba(255,255,255,0.035);
+  }
+  [data-theme="emerald"] {
+    --gold:#D4AF7F; --gold-deep:#B08D57;
+    --bg-base:#07120E; --bg-1:#0A1812; --bg-2:#040C08;
+    --glow-1:rgba(var(--accent-rgb),0.12); --glow-2:rgba(46,125,90,0.14);
+    --accent-rgb:212,175,127; --text-main:#F4FAF6; --text-soft:#AEC2B7;
+    --glass-bg:rgba(255,255,255,0.035);
+  }
+  [data-theme="sapphire"] {
+    --gold:#B8C6E0; --gold-deep:#8A9DC9;
+    --bg-base:#080C16; --bg-1:#0C1220; --bg-2:#04060E;
+    --glow-1:rgba(184,198,224,0.12); --glow-2:rgba(138,157,201,0.12);
+    --accent-rgb:184,198,224; --text-main:#F4F6FA; --text-soft:#AEB7C9;
+    --glass-bg:rgba(255,255,255,0.035);
+  }
+  [data-theme="ivory"] {
+    --gold:#B08D57; --gold-deep:#9C7A45;
+    --bg-base:#F6F1E7; --bg-1:#FAF6EE; --bg-2:#EFE7D6;
+    --glow-1:rgba(176,141,87,0.10); --glow-2:rgba(176,141,87,0.07);
+    --accent-rgb:176,141,87; --text-main:#2A2419; --text-soft:#7A7060;
+    --glass-bg:rgba(255,255,255,0.55);
+  }
+
   body {
-    font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh;
+    font-family:'Tajawal',sans-serif; background:var(--bg-base); color:var(--text-main); min-height:100vh;
     display:flex; align-items:center; justify-content:center; padding:20px; position:relative; overflow-x:hidden;
+    transition:background 0.4s ease, color 0.4s ease;
   }
   body::before {
     content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
     background:
-      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(224,188,122,0.12), transparent 60%),
-      radial-gradient(ellipse 60% 40% at 100% 100%, rgba(201,155,74,0.08), transparent 55%),
-      linear-gradient(160deg, #0C0C0C 0%, #0A0A0A 50%, #060606 100%);
+      radial-gradient(ellipse 80% 50% at 50% -10%, var(--glow-1), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 100% 100%, var(--glow-2), transparent 55%),
+      linear-gradient(160deg, var(--bg-1) 0%, var(--bg-base) 50%, var(--bg-2) 100%);
   }
   .card {
     position:relative; z-index:1; width:100%; max-width:380px;
-    background:rgba(255,255,255,0.035); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
-    border:1px solid rgba(224,188,122,0.3); border-radius:22px; padding:42px 30px; text-align:center;
+    background:var(--glass-bg); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    border:1px solid rgba(var(--accent-rgb),0.3); border-radius:22px; padding:42px 30px; text-align:center;
     box-shadow:0 8px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
   }
-  .ornament { font-size:20px; color:#E0BC7A; letter-spacing:8px; margin-bottom:14px; animation:float 3s ease-in-out infinite; }
+  .ornament { font-size:20px; color:var(--gold); letter-spacing:8px; margin-bottom:14px; animation:float 3s ease-in-out infinite; }
   @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
-  h1 { font-family:'Playfair Display',serif; color:#E0BC7A; font-size:24px; font-weight:700; margin-bottom:6px; letter-spacing:0.3px; }
-  .sub { color:#B8B4AC; font-size:12.5px; margin-bottom:24px; }
-  .gold-line { width:56px; height:1px; background:linear-gradient(90deg,transparent,#E0BC7A,transparent); margin:22px auto; }
-  input { width:100%; padding:13px; margin-bottom:14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:15px; font-family:inherit; text-align:center; }
-  input:focus { outline:none; border-color:#E0BC7A; }
-  .btn { width:100%; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
+  h1 { font-family:'Playfair Display',serif; color:var(--gold); font-size:24px; font-weight:700; margin-bottom:6px; letter-spacing:0.3px; }
+  .sub { color:var(--text-soft); font-size:12.5px; margin-bottom:24px; }
+  .gold-line { width:56px; height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent); margin:22px auto; }
+  input { width:100%; padding:13px; margin-bottom:14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(var(--accent-rgb),0.25); color:var(--text-main); font-size:15px; font-family:inherit; text-align:center; }
+  input:focus { outline:none; border-color:var(--gold); }
+  .btn { width:100%; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
   .status-icon { font-size:44px; margin-bottom:10px; }
   .status-msg { font-size:15px; line-height:1.9; }
   #qr-box { margin-top:18px; padding:16px; background:#fff; border-radius:12px; display:inline-block; }
-  .guest-name { color:#E0BC7A; font-weight:700; margin-top:14px; font-size:15px; }
+  .guest-name { color:var(--gold); font-weight:700; margin-top:14px; font-size:15px; }
 </style>
 </head>
 <body>
@@ -167,10 +206,19 @@ function drawFadedLine(ctx, x1, x2, y, color) {
 // canvas-based so it renders identically everywhere, and produces a real
 // <img> (via toDataURL) that iOS/Android "save image" actually works on,
 // unlike a bare <canvas> which most mobile browsers won't let you save.
+const THEME_COLORS = {
+  gold:     { accent: '#C9A84C', accentLight: '#E0BC7A' },
+  rose:     { accent: '#C9879A', accentLight: '#E8B4B8' },
+  emerald:  { accent: '#2E7D5A', accentLight: '#D4AF7F' },
+  sapphire: { accent: '#5A6FA0', accentLight: '#8A9DC9' },
+  ivory:    { accent: '#9C7A45', accentLight: '#B08D57' }
+};
+
 function buildInviteCard(eventData, guest) {
   return new Promise((resolve) => {
-    const GOLD = '#C9A84C';
-    const GOLD_LIGHT = '#E0BC7A';
+    const themeColors = THEME_COLORS[eventData.theme || 'gold'] || THEME_COLORS.gold;
+    const GOLD = themeColors.accent;
+    const GOLD_LIGHT = themeColors.accentLight;
 
     const tmp = document.createElement('div');
     tmp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;background:white;padding:12px;';
@@ -361,6 +409,7 @@ async function init() {
   const snap = await getDoc(doc(window._db, 'events', eventId));
   if (!snap.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذه المناسبة غير موجودة</div>'; return; }
   currentEvent = snap.data();
+  document.body.setAttribute('data-theme', currentEvent.theme || 'gold');
 
   if (myReqId) watchStatus();
   else renderForm(currentEvent);
