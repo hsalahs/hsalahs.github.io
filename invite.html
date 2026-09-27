@@ -95,15 +95,218 @@ function renderRejected() {
   card.innerHTML = `<div class="status-icon">😕</div><div class="status-msg">للأسف ما قدرنا نأكد حضورك حاليًا</div>`;
 }
 
-async function renderApproved(guest) {
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+}
+
+function drawSparkle(ctx, x, y, size, color) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.lineTo(x + size * 0.28, y - size * 0.28);
+  ctx.lineTo(x + size, y);
+  ctx.lineTo(x + size * 0.28, y + size * 0.28);
+  ctx.lineTo(x, y + size);
+  ctx.lineTo(x - size * 0.28, y + size * 0.28);
+  ctx.lineTo(x - size, y);
+  ctx.lineTo(x - size * 0.28, y - size * 0.28);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFadedLine(ctx, x1, x2, y, color) {
+  const g = ctx.createLinearGradient(x1, y, x2, y);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(0.5, color);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.strokeStyle = g;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x1, y); ctx.lineTo(x2, y);
+  ctx.stroke();
+}
+
+// Draws the same polished printable card the organizer's dashboard uses —
+// canvas-based so it renders identically everywhere, and produces a real
+// <img> (via toDataURL) that iOS/Android "save image" actually works on,
+// unlike a bare <canvas> which most mobile browsers won't let you save.
+function buildInviteCard(eventData, guest) {
+  return new Promise((resolve) => {
+    const GOLD = '#C9A84C';
+    const GOLD_LIGHT = '#E0BC7A';
+
+    const tmp = document.createElement('div');
+    tmp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;background:white;padding:12px;';
+    document.body.appendChild(tmp);
+
+    new QRCode(tmp, {
+      text: guest.id, width: 400, height: 400,
+      colorDark: '#0A0A0A', colorLight: '#FAFAF8',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+
+    function waitForQr(retriesLeft) {
+      const qr = tmp.querySelector('canvas');
+      if (qr) return Promise.resolve(qr);
+      if (retriesLeft <= 0) return Promise.resolve(null);
+      return new Promise(r => setTimeout(r, 100)).then(() => waitForQr(retriesLeft - 1));
+    }
+
+    waitForQr(30).then((qr) => new Promise(r => setTimeout(() => r(qr), 80))).then((qr) => {
+      if (!qr) { document.body.removeChild(tmp); resolve(null); return; }
+
+      const c = document.createElement('canvas');
+      c.width = 1000; c.height = 1400;
+      const ctx = c.getContext('2d');
+
+      ctx.fillStyle = '#FAFAF8';
+      ctx.fillRect(0, 0, 1000, 1400);
+
+      const glow = ctx.createRadialGradient(500, 530, 60, 500, 530, 520);
+      glow.addColorStop(0, hexToRgba(GOLD, 0.10));
+      glow.addColorStop(1, hexToRgba(GOLD, 0));
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 150, 1000, 800);
+
+      ctx.fillStyle = GOLD;
+      ctx.fillRect(0, 0, 1000, 22);
+      ctx.fillRect(0, 1378, 1000, 22);
+      ctx.fillRect(0, 0, 6, 1400);
+      ctx.fillRect(994, 0, 6, 1400);
+
+      ctx.strokeStyle = hexToRgba(GOLD, 0.35);
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(42, 42, 916, 1316);
+
+      const titleGrad = ctx.createLinearGradient(300, 0, 700, 0);
+      titleGrad.addColorStop(0, GOLD);
+      titleGrad.addColorStop(0.5, GOLD_LIGHT);
+      titleGrad.addColorStop(1, GOLD);
+      ctx.fillStyle = titleGrad;
+      ctx.font = 'bold 58px Tajawal, Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(eventData.name, 500, 118);
+
+      ctx.fillStyle = '#999';
+      ctx.font = '34px Tajawal, Arial';
+      ctx.fillText(eventData.date || '', 500, 172);
+
+      drawFadedLine(ctx, 280, 720, 205, GOLD);
+
+      const qx = 180, qy = 232, qw = 640, qh = 640, rr = 28;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(qx + rr, qy);
+      ctx.arcTo(qx + qw, qy, qx + qw, qy + qh, rr);
+      ctx.arcTo(qx + qw, qy + qh, qx, qy + qh, rr);
+      ctx.arcTo(qx, qy + qh, qx, qy, rr);
+      ctx.arcTo(qx, qy, qx + qw, qy, rr);
+      ctx.closePath();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.shadowColor = 'rgba(0,0,0,0.10)';
+      ctx.shadowBlur = 24;
+      ctx.shadowOffsetY = 6;
+      ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = hexToRgba(GOLD, 0.5);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.drawImage(qr, 220, 272, 560, 560);
+
+      ctx.fillStyle = '#0A0A0A';
+      ctx.font = 'bold 54px Tajawal, Arial';
+      ctx.fillText(guest.name, 500, 940);
+
+      ctx.fillStyle = '#B0AAA0';
+      ctx.font = '28px "Playfair Display", Arial';
+      ctx.fillText(guest.id, 500, 992);
+
+      drawFadedLine(ctx, 220, 780, 1028, 'rgba(0,0,0,0.18)');
+
+      if (eventData.venue) {
+        ctx.fillStyle = GOLD;
+        ctx.font = 'bold 38px "Playfair Display", Arial';
+        ctx.fillText(eventData.venue, 500, 1088);
+        ctx.strokeStyle = hexToRgba(GOLD, 0.55);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(300, 1076); ctx.lineTo(360, 1076); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(640, 1076); ctx.lineTo(700, 1076); ctx.stroke();
+      }
+
+      ctx.fillStyle = '#888';
+      ctx.font = '26px Tajawal, Arial';
+      ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1148);
+      ctx.fillStyle = '#666';
+      ctx.font = '24px Tajawal, Arial';
+      ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1200);
+
+      drawSparkle(ctx, 92, 92, 16, GOLD);
+      drawSparkle(ctx, 908, 92, 16, GOLD);
+      drawSparkle(ctx, 92, 1308, 16, GOLD);
+      drawSparkle(ctx, 908, 1308, 16, GOLD);
+
+      document.body.removeChild(tmp);
+      resolve(c);
+    });
+  });
+}
+
+let cardCanvas = null;
+let cardGuestName = '';
+
+async function downloadInviteCard() {
+  if (!cardCanvas) return;
+  const safeName = String(cardGuestName).trim().replace(/[\s\/\\:*?"<>|]+/g, '_');
+  const fileName = 'Invitation-' + safeName + '.png';
+
+  cardCanvas.toBlob(async (blob) => {
+    if (!blob) return;
+    try {
+      const file = new File([blob], fileName, { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: cardGuestName });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = fileName;
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }, 'image/png');
+}
+
+async function renderApproved(eventData, guest) {
   card.innerHTML = `
     <div class="status-icon">🎉</div>
     <div class="status-msg">تم تأكيد حضورك!</div>
-    <div class="guest-name">${escapeHtml(guest.name)}</div>
-    <div id="qr-box"></div>
+    <div id="card-wrap" style="margin-top:16px;"></div>
+    <button class="btn" id="save-btn" style="margin-top:14px; display:none;" onclick="downloadInviteCard()">⬇️ حفظ الدعوة</button>
   `;
-  new QRCode(document.getElementById('qr-box'), { text: guest.id, width: 180, height: 180 });
+  const built = await buildInviteCard(eventData, guest);
+  if (!built) return;
+  cardCanvas = built;
+  cardGuestName = guest.name;
+  const img = document.createElement('img');
+  img.src = built.toDataURL('image/png');
+  img.style.cssText = 'width:100%; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,0.4);';
+  document.getElementById('card-wrap').appendChild(img);
+  document.getElementById('save-btn').style.display = 'block';
 }
+
+let currentEvent = null;
 
 function watchStatus() {
   const { query, where, collection, onSnapshot } = window._fsFns;
@@ -114,7 +317,7 @@ function watchStatus() {
     else if (req.status === 'rejected') renderRejected();
     else if (req.status === 'approved') {
       onSnapshot(query(collection(window._db, 'events', eventId, 'guests'), where('reqId', '==', myReqId)), (gsnap) => {
-        if (!gsnap.empty) renderApproved(gsnap.docs[0].data());
+        if (!gsnap.empty) renderApproved(currentEvent, gsnap.docs[0].data());
         else renderPending();
       });
     }
@@ -126,10 +329,10 @@ async function init() {
   const { doc, getDoc } = window._fsFns;
   const snap = await getDoc(doc(window._db, 'events', eventId));
   if (!snap.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذه المناسبة غير موجودة</div>'; return; }
-  const eventData = snap.data();
+  currentEvent = snap.data();
 
   if (myReqId) watchStatus();
-  else renderForm(eventData);
+  else renderForm(currentEvent);
 }
 
 if (window._db) init();
