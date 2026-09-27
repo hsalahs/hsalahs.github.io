@@ -158,12 +158,17 @@ async function createEvent() {
 
   const { serverTimestamp, doc, setDoc } = window._fsFns;
   const eventId = newEventId();
-  await setDoc(doc(window._db, 'events', eventId), {
-    name, date, venue,
-    ownerUid: window._auth.currentUser.uid,
-    createdAt: serverTimestamp()
-  });
-  window.location.href = 'event.html?id=' + eventId;
+  try {
+    await setDoc(doc(window._db, 'events', eventId), {
+      name, date, venue,
+      ownerUid: window._auth.currentUser.uid,
+      createdAt: serverTimestamp()
+    });
+    window.location.href = 'event.html?id=' + eventId;
+  } catch (e) {
+    alert('صار خطأ: ' + e.code + ' — ' + e.message);
+    console.error(e);
+  }
 }
 
 function renderEvents(events) {

@@ -215,30 +215,41 @@ function newGuestId() {
   return 'WD-' + Math.random().toString(36).substr(2, 9).toUpperCase() + Date.now().toString(36).toUpperCase().substr(-4);
 }
 
+function showErr(e) {
+  alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
+  console.error(e);
+}
+
 async function addGuest() {
   const nameInput = document.getElementById('new-guest-name');
   const name = nameInput.value.trim();
   if (!name) return;
   const { collection, addDoc } = window._fsFns;
-  await addDoc(collection(window._db, 'events', eventId, 'guests'), {
-    id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString()
-  });
-  nameInput.value = '';
+  try {
+    await addDoc(collection(window._db, 'events', eventId, 'guests'), {
+      id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString()
+    });
+    nameInput.value = '';
+  } catch (e) { showErr(e); }
 }
 
 async function approveRequest(reqDocId) {
   const req = requests.find(r => r.docId === reqDocId);
   if (!req) return;
   const { collection, addDoc, doc, updateDoc } = window._fsFns;
-  await addDoc(collection(window._db, 'events', eventId, 'guests'), {
-    id: newGuestId(), name: req.name, reqId: req.reqId, scanned: false, registeredAt: new Date().toISOString()
-  });
-  await updateDoc(doc(window._db, 'events', eventId, 'requests', reqDocId), { status: 'approved' });
+  try {
+    await addDoc(collection(window._db, 'events', eventId, 'guests'), {
+      id: newGuestId(), name: req.name, reqId: req.reqId, scanned: false, registeredAt: new Date().toISOString()
+    });
+    await updateDoc(doc(window._db, 'events', eventId, 'requests', reqDocId), { status: 'approved' });
+  } catch (e) { showErr(e); }
 }
 
 async function rejectRequest(reqDocId) {
   const { doc, updateDoc } = window._fsFns;
-  await updateDoc(doc(window._db, 'events', eventId, 'requests', reqDocId), { status: 'rejected' });
+  try {
+    await updateDoc(doc(window._db, 'events', eventId, 'requests', reqDocId), { status: 'rejected' });
+  } catch (e) { showErr(e); }
 }
 
 async function startCamera() {

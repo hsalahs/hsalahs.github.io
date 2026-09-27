@@ -70,9 +70,15 @@ async function submitRequest() {
   if (!name) return;
   const { collection, addDoc } = window._fsFns;
   const reqId = 'REQ-' + Math.random().toString(36).substr(2, 8).toUpperCase() + Date.now().toString(36).toUpperCase().substr(-4);
-  await addDoc(collection(window._db, 'events', eventId, 'requests'), {
-    name, reqId, status: 'pending', createdAt: new Date().toISOString()
-  });
+  try {
+    await addDoc(collection(window._db, 'events', eventId, 'requests'), {
+      name, reqId, status: 'pending', createdAt: new Date().toISOString()
+    });
+  } catch (e) {
+    alert('صار خطأ، حاول مرة ثانية: ' + e.message);
+    console.error(e);
+    return;
+  }
   localStorage.setItem('inv_reqid_' + eventId, reqId);
   myReqId = reqId;
   watchStatus();
