@@ -64,11 +64,23 @@
   .badge { font-size:11px; padding:3px 10px; border-radius:20px; }
   .badge.ok { background:rgba(90,200,120,0.15); color:#7bd894; }
   .badge.pending { background:rgba(255,255,255,0.06); color:#B8B4AC; }
-  #camera-wrapper { width:100%; max-width:320px; margin:0 auto; aspect-ratio:1; border-radius:12px; overflow:hidden; background:#000; }
+  #camera-wrapper { position:relative; width:100%; max-width:320px; margin:0 auto; aspect-ratio:1; border-radius:16px; overflow:hidden; border:2px solid #E0BC7A; background:#000; }
   #camera-video { width:100%; height:100%; object-fit:cover; display:block; }
-  #scan-result { text-align:center; padding:14px; border-radius:12px; margin-top:10px; font-weight:700; display:none; }
-  #scan-result.ok { background:rgba(90,200,120,0.15); color:#7bd894; display:block; }
-  #scan-result.bad { background:rgba(255,90,90,0.15); color:#ff9d9d; display:block; }
+  .scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+  .scan-frame { width:65%; height:65%; border:2px solid #E0BC7A; border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,0.45); }
+  .scan-line { position:absolute; width:65%; height:2px; background:linear-gradient(90deg,transparent,#E0BC7A,transparent); animation:scanLine 2s linear infinite; }
+  @keyframes scanLine { 0% { top:17.5%; } 100% { top:82.5%; } }
+  .result-card { display:none; padding:24px; border-radius:16px; margin-top:16px; text-align:center; animation:slideUp 0.4s ease-out; }
+  @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+  .result-card.allowed { background:linear-gradient(135deg,rgba(76,175,80,0.12),rgba(76,175,80,0.04)); border:1px solid rgba(76,175,80,0.3); }
+  .result-card.duplicate { background:linear-gradient(135deg,rgba(255,193,7,0.12),rgba(255,193,7,0.04)); border:1px solid rgba(255,193,7,0.3); }
+  .result-card.denied { background:linear-gradient(135deg,rgba(244,67,54,0.12),rgba(244,67,54,0.04)); border:1px solid rgba(244,67,54,0.3); }
+  .result-icon { font-size:48px; margin-bottom:12px; }
+  .result-name { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:#E0BC7A; margin-bottom:8px; }
+  .result-status { font-size:14px; color:#B8B4AC; }
+  .result-status.ok { color:#4CAF50; }
+  .result-status.dup { color:#E0BC7A; }
+  .result-status.err { color:#F44336; }
   .link-box { display:flex; gap:8px; align-items:center; }
   .link-box input { flex:1; margin:0; font-size:12px; }
   .empty { text-align:center; color:#6f6a62; font-size:13px; padding:14px 0; }
@@ -101,13 +113,33 @@
     </nav>
 
     <div class="page active" id="page-scan">
-      <div class="card">
-        <p id="camera-status" style="color:#B8B4AC; font-size:13px; text-align:center; margin-bottom:10px;">اضغط لتشغيل الكاميرا</p>
+      <div class="card" style="text-align:center">
+        <p class="camera-status" id="camera-status">اضغط لتشغيل الكاميرا</p>
         <button class="btn" id="start-cam-btn" onclick="startCamera()" style="width:100%">📷 تشغيل الكاميرا</button>
+
         <div id="camera-wrapper" style="display:none">
           <video id="camera-video" autoplay playsinline muted></video>
+          <div class="scan-overlay">
+            <div class="scan-frame"></div>
+            <div class="scan-line"></div>
+          </div>
         </div>
-        <div id="scan-result"></div>
+
+        <div class="result-card allowed" id="result-allowed">
+          <div class="result-icon">✅</div>
+          <div class="result-name" id="result-name-ok"></div>
+          <div class="result-status ok">مسموح بالدخول</div>
+        </div>
+        <div class="result-card duplicate" id="result-duplicate">
+          <div class="result-icon">⚠️</div>
+          <div class="result-name" id="result-name-dup"></div>
+          <div class="result-status dup">دخل من قبل!</div>
+        </div>
+        <div class="result-card denied" id="result-denied">
+          <div class="result-icon">❌</div>
+          <div class="result-name">غير مسجّل</div>
+          <div class="result-status err">باركود غير صحيح</div>
+        </div>
       </div>
     </div>
 
@@ -514,6 +546,12 @@ async function startCamera() {
   }
 }
 
+function hideResultCards() {
+  document.getElementById('result-allowed').style.display = 'none';
+  document.getElementById('result-duplicate').style.display = 'none';
+  document.getElementById('result-denied').style.display = 'none';
+}
+
 async function handleScan(raw) {
   const match = raw.trim().toUpperCase().match(/WD-[A-Z0-9]+/);
   if (!match) return;
@@ -522,12 +560,15 @@ async function handleScan(raw) {
   lastScanned = val;
   scanCooldown = true;
 
-  const resultEl = document.getElementById('scan-result');
+  const status = document.getElementById('camera-status');
+  status.textContent = '🔍 جاري التحقق...';
+  hideResultCards();
+
   const found = guests.find(g => g.id === val);
 
   if (!found) {
-    resultEl.className = 'bad';
-    resultEl.textContent = '❌ باركود غير مسجّل';
+    document.getElementById('result-denied').style.display = 'block';
+    status.textContent = '❌ باركود غير مسجّل';
   } else {
     const { doc, runTransaction } = window._fsFns;
     const gRef = doc(window._db, 'events', eventId, 'guests', found.docId);
@@ -539,15 +580,26 @@ async function handleScan(raw) {
       return 'ok';
     });
     if (outcome === 'ok') {
-      resultEl.className = 'ok';
-      resultEl.textContent = '✅ ' + found.name + ' — مسموح';
+      document.getElementById('result-name-ok').textContent = found.name;
+      document.getElementById('result-allowed').style.display = 'block';
+      status.textContent = '✅ مسموح بالدخول';
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
     } else if (outcome === 'dup') {
-      resultEl.className = 'bad';
-      resultEl.textContent = '⚠️ ' + found.name + ' — دخل قبل كذا';
+      document.getElementById('result-name-dup').textContent = found.name;
+      document.getElementById('result-duplicate').style.display = 'block';
+      status.textContent = '⚠️ دخل من قبل';
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    } else {
+      document.getElementById('result-denied').style.display = 'block';
+      status.textContent = '❌ غير مسجّل';
     }
   }
 
-  setTimeout(() => { resultEl.style.display = 'none'; scanCooldown = false; lastScanned = null; }, 2500);
+  setTimeout(() => {
+    hideResultCards();
+    scanCooldown = false; lastScanned = null;
+    status.textContent = 'وجّه الكاميرا نحو الباركود';
+  }, 2500);
 }
 
 if (window._auth) init();
