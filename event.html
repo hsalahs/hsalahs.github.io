@@ -293,6 +293,9 @@
 </div>
 
 <script>
+const ADMIN_EMAILS = ['hsallah@outlook.sa'];
+function isAdmin(user) { return !!user && ADMIN_EMAILS.includes((user.email || '').toLowerCase()); }
+
 const params = new URLSearchParams(window.location.search);
 const eventId = params.get('id');
 let eventData = null;
@@ -395,7 +398,7 @@ async function init() {
     }
     const { doc, getDoc } = window._fsFns;
     const snap = await getDoc(doc(window._db, 'events', eventId));
-    if (!snap.exists() || snap.data().ownerUid !== user.uid) {
+    if (!snap.exists() || (snap.data().ownerUid !== user.uid && !isAdmin(user))) {
       document.getElementById('loading-msg').style.display = 'none';
       document.getElementById('denied-msg').style.display = 'block';
       return;
