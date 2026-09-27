@@ -207,6 +207,7 @@
       <input type="text" id="edit-ev-name" placeholder="اسم المناسبة">
       <input type="date" id="edit-ev-date">
       <input type="text" id="edit-ev-venue" placeholder="مكان الحفل">
+      <input type="text" id="edit-ev-maps" placeholder="رابط الموقع على الخريطة (اختياري)">
       <div class="row">
         <button class="btn" style="flex:1" onclick="saveEventEdit()">حفظ التعديل</button>
         <button class="btn ghost" style="flex:1" onclick="toggleEditEvent()">إلغاء</button>
@@ -338,6 +339,7 @@ function toggleEditEvent() {
     document.getElementById('edit-ev-name').value = eventData.name || '';
     document.getElementById('edit-ev-date').value = eventData.date || '';
     document.getElementById('edit-ev-venue').value = eventData.venue || '';
+    document.getElementById('edit-ev-maps').value = eventData.mapsLink || '';
   }
 }
 
@@ -345,12 +347,13 @@ async function saveEventEdit() {
   const name = document.getElementById('edit-ev-name').value.trim();
   const date = document.getElementById('edit-ev-date').value;
   const venue = document.getElementById('edit-ev-venue').value.trim();
+  const mapsLink = document.getElementById('edit-ev-maps').value.trim();
   if (!name) { alert('اكتب اسم المناسبة'); return; }
 
   const { doc, updateDoc } = window._fsFns;
   try {
-    await updateDoc(doc(window._db, 'events', eventId), { name, date, venue });
-    eventData.name = name; eventData.date = date; eventData.venue = venue;
+    await updateDoc(doc(window._db, 'events', eventId), { name, date, venue, mapsLink });
+    eventData.name = name; eventData.date = date; eventData.venue = venue; eventData.mapsLink = mapsLink;
     document.getElementById('ev-title').textContent = name;
     document.getElementById('ev-sub').textContent = [date, venue].filter(Boolean).join(' · ');
     toggleEditEvent();
