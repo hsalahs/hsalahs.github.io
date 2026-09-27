@@ -64,7 +64,7 @@
   .badge { font-size:11px; padding:3px 10px; border-radius:20px; }
   .badge.ok { background:rgba(90,200,120,0.15); color:#7bd894; }
   .badge.pending { background:rgba(255,255,255,0.06); color:#B8B4AC; }
-  #camera-video { width:100%; border-radius:12px; }
+  #camera-video { width:100%; max-width:320px; margin:0 auto; aspect-ratio:1; object-fit:cover; border-radius:12px; background:#000; display:block; }
   #scan-result { text-align:center; padding:14px; border-radius:12px; margin-top:10px; font-weight:700; display:none; }
   #scan-result.ok { background:rgba(90,200,120,0.15); color:#7bd894; display:block; }
   #scan-result.bad { background:rgba(255,90,90,0.15); color:#ff9d9d; display:block; }
