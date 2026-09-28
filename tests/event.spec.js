@@ -54,6 +54,32 @@ test('adding sequential numbers creates that many numbered guests without needin
   expect(names).toEqual(['1', '2', '3', '4', '5']);
 });
 
+test('a large batch of sequential numbers shows progress instead of looking frozen', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, paid: true } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  let promptCount = 0;
+  page.on('dialog', async (d) => {
+    if (d.type() === 'prompt') {
+      promptCount++;
+      await d.accept(promptCount === 1 ? '1' : '120');
+    } else {
+      await d.accept();
+    }
+  });
+
+  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: /إضافة أرقام متسلسلة/ }).click();
+
+  await expect(page.locator('.guest-item')).toHaveCount(120, { timeout: 10000 });
+  await expect(page.locator('#toast')).toContainText('120 / 120');
+});
+
 test('guest list sorts numeric names first (in numeric order), then alphabetical', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {

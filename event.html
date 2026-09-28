@@ -1261,6 +1261,12 @@ async function importGuestNames(names) {
   let added = 0;
   let blockedByGate = 0;
   const batchSize = 50;
+  const total = toAdd.length;
+  // A few hundred entries means several transaction round-trips in a row —
+  // long enough with no feedback that it can look frozen. Same progress
+  // toast pattern as the bulk card download, so it reads as "still working"
+  // rather than stuck, and just goes away on its own once done.
+  if (total > batchSize) showToast('⏳ جاري الإضافة... 0 / ' + total);
   for (let i = 0; i < toAdd.length; i += batchSize) {
     const batch = toAdd.slice(i, i + batchSize);
     const addedThisBatch = await runTransaction(window._db, async (tx) => {
@@ -1278,6 +1284,7 @@ async function importGuestNames(names) {
       return toWrite.length;
     });
     added += addedThisBatch;
+    if (total > batchSize) showToast('⏳ جاري الإضافة... ' + Math.min(added, total) + ' / ' + total);
     if (addedThisBatch < batch.length) { blockedByGate += (batch.length - addedThisBatch); break; }
   }
 
