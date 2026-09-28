@@ -88,11 +88,27 @@ test('the admin account can open a customer event it does not own', async ({ pag
   await expect(page.locator('#denied-msg')).toBeHidden();
 });
 
-test('an unpaid event blocks the owner from adding a guest, and shows the payment gate', async ({ page }) => {
+test('a fresh unpaid event shows the free-tier note, not the payment gate, and lets the owner add a guest', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: { uid: 'u1', email: 'customer@example.com' },
-    store: { events: { e1: { ...EVENT, paid: false } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+    store: { events: { e1: { ...EVENT, paid: false, guestCount: 0 } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#payment-gate')).toBeHidden();
+  await expect(page.locator('#free-tier-note')).toBeVisible();
+  await expect(page.locator('#free-tier-count')).toHaveText('5');
+  await page.getByRole('button', { name: '👥 الضيوف' }).click();
+  await page.locator('#new-guest-name').fill('ضيف جديد');
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+});
+
+test('an unpaid event at the free-guest cap blocks the owner from adding more, and shows the payment gate', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, paid: false, guestCount: 5 } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#payment-gate')).toBeVisible();
@@ -100,6 +116,23 @@ test('an unpaid event blocks the owner from adding a guest, and shows the paymen
   await page.locator('#new-guest-name').fill('ضيف جديد');
   await page.getByRole('button', { name: 'إضافة' }).click();
   await expect(page.locator('.guest-item')).toHaveCount(0);
+});
+
+test('CSV import fills only up to the remaining free slots, then stops', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, paid: false, guestCount: 3 } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  page.on('dialog', d => d.accept());
+  await page.goto('/event.html?id=e1');
+  await page.getByRole('button', { name: '👥 الضيوف' }).click();
+  await page.locator('#csv-import').setInputFiles({
+    name: 'guests.csv', mimeType: 'text/csv',
+    buffer: Buffer.from('Guest A\nGuest B\nGuest C\nGuest D\nGuest E'),
+  });
+  await expect(page.locator('.guest-item')).toHaveCount(2);
+  await expect(page.locator('#payment-gate')).toBeVisible();
 });
 
 test('a paid event lets the owner add a guest normally, and hides the payment gate', async ({ page }) => {
@@ -120,7 +153,7 @@ test('the owner sees a live toast and the gate lifts when the event is activated
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: { uid: 'u1', email: 'customer@example.com' },
-    store: { events: { e1: { ...EVENT, paid: false } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+    store: { events: { e1: { ...EVENT, paid: false, guestCount: 5 } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#payment-gate')).toBeVisible();

@@ -6,13 +6,24 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'hsallah@outlook.sa';
     }
 
-    // Payment gate: an event's owner can add guests / share the invite only
-    // once the admin has flipped `paid` to true (after an off-platform bank
-    // transfer). Reads the event doc itself, not anything in the request, so
-    // a forged request payload can't fake it.
-    function eventIsPaidAndOwnedBy(eventId, uid) {
+    // Free tier + payment gate: an event's owner can add up to
+    // FREE_GUEST_LIMIT guests for free; beyond that (or to share the invite
+    // unlimited) the admin must flip `paid` to true (after an off-platform
+    // bank transfer). getAfter (not get) on guestCount so the check sees the
+    // post-transaction count — the client must bump it in the same
+    // transaction as the guest write, it can't just be read as a stale
+    // value. Keep the 5 in sync with FREE_GUEST_LIMIT in event.html.
+    function eventCanAcceptGuest(eventId, uid) {
       let ev = get(/databases/$(database)/documents/events/$(eventId)).data;
-      return ev.ownerUid == uid && ev.paid == true;
+      let evAfter = getAfter(/databases/$(database)/documents/events/$(eventId)).data;
+      return ev.ownerUid == uid && (ev.paid == true || evAfter.guestCount <= 5);
+    }
+
+    // Lets the owner's guestCount update go through even for events created
+    // before this field existed (no old value to compare against yet).
+    function guestCountNotDecreased() {
+      return !('guestCount' in resource.data) ||
+        request.resource.data.guestCount >= resource.data.guestCount;
     }
 
     match /eventRequests/{requestId} {
@@ -87,7 +98,8 @@ service cloud.firestore {
         (
           resource.data.ownerUid == request.auth.uid &&
           request.resource.data.ownerUid == resource.data.ownerUid &&
-          request.resource.data.paid == resource.data.paid
+          request.resource.data.paid == resource.data.paid &&
+          guestCountNotDecreased()
         )
       );
       allow delete: if request.auth != null &&
@@ -97,9 +109,10 @@ service cloud.firestore {
         allow read: if true;
 
         // Adding a guest — manually, via CSV import, or by approving a
-        // self-registration request — is the action gated on payment.
+        // self-registration request — is the action gated on the free tier
+        // (first 5) / payment.
         allow create: if request.auth != null &&
-          (isAdmin() || eventIsPaidAndOwnedBy(eventId, request.auth.uid));
+          (isAdmin() || eventCanAcceptGuest(eventId, request.auth.uid));
 
         // Editing/removing existing guests (attendance, deletes) is not
         // part of the payment gate — unchanged from before.
