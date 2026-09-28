@@ -616,7 +616,20 @@ async function init() {
     }
     currentUser = user;
     const { doc, getDoc } = window._fsFns;
-    const snap = await getDoc(doc(window._db, 'events', eventId));
+    let snap;
+    try {
+      snap = await getDoc(doc(window._db, 'events', eventId));
+    } catch (e) {
+      // Same "trapped forever" failure the splash fix closed, one layer
+      // deeper: a dropped connection here used to leave the owner's whole
+      // dashboard stuck on "جاري التحميل..." forever with no way out.
+      console.error(e);
+      const msg = document.getElementById('loading-msg');
+      msg.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
+      msg.style.cursor = 'pointer';
+      msg.onclick = () => { msg.onclick = null; msg.style.cursor = ''; init(); };
+      return;
+    }
     if (!snap.exists() || (snap.data().ownerUid !== user.uid && !isAdmin(user))) {
       document.getElementById('loading-msg').style.display = 'none';
       document.getElementById('denied-msg').style.display = 'block';

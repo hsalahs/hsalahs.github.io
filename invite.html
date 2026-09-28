@@ -512,7 +512,18 @@ function watchStatus() {
 async function init() {
   if (!eventId) { card.innerHTML = '<div class="status-msg">⚠️ رابط غير صحيح</div>'; return; }
   const { doc, getDoc } = window._fsFns;
-  const snap = await getDoc(doc(window._db, 'events', eventId));
+  let snap;
+  try {
+    snap = await getDoc(doc(window._db, 'events', eventId));
+  } catch (e) {
+    // Same "trapped forever" failure the splash fix closed, one layer
+    // deeper: a dropped connection here used to leave a guest stuck on
+    // "جاري التحميل..." forever with no way to actually RSVP.
+    console.error(e);
+    card.innerHTML = '<div class="status-msg" id="retry-msg" style="cursor:pointer">⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية</div>';
+    document.getElementById('retry-msg').onclick = init;
+    return;
+  }
   if (!snap.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذه المناسبة غير موجودة</div>'; return; }
   currentEvent = snap.data();
   document.body.setAttribute('data-theme', currentEvent.theme || 'gold');

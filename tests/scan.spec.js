@@ -92,6 +92,18 @@ test('the splash screen clears on its own even if the entire app script fails to
   await expect(page.locator('#splash')).toHaveClass(/hide/, { timeout: 4000 });
 });
 
+test('a dropped connection while loading the event shows a tappable retry instead of hanging on "جاري التحميل..." forever', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.addInitScript(() => { window.__failNextGetDoc = true; });
+  await page.goto('/scan.html?event=e1');
+
+  const msg = page.locator('#loading-msg');
+  await expect(msg).toContainText('تعذّر الاتصال');
+  await msg.click();
+  await expect(page.locator('#pin-event-name')).toHaveText('حفل تجريبي');
+});
+
 test('scan.html has no web app manifest, so "Add to Home Screen" uses the current address-bar URL as-is', async ({ page }) => {
   // Confirmed on a real device: a <link rel="manifest"> gets read by iOS's
   // "Add to Home Screen" before any per-event JS swap can take effect, so
