@@ -1,5 +1,5 @@
-const CACHE_NAME = 'dawaat-scan-v3';
-const SHELL_FILES = ['scan.html', 'firebase-init.js', 'utils.js', 'manifest.webmanifest'];
+const CACHE_NAME = 'dawaat-scan-v4';
+const SHELL_FILES = ['scan.html', 'firebase-init.js', 'utils.js'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

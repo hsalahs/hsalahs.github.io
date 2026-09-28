@@ -52,14 +52,17 @@ test('re-scanning an already-checked-in guest shows a clear red "already used" a
   await expect(dupCard.locator('.result-status.dup')).toHaveCSS('color', 'rgb(244, 67, 54)');
 });
 
-test('visiting scan.html with an event swaps the manifest link to bake that event into start_url, for Add to Home Screen', async ({ page }) => {
+test('scan.html has no web app manifest, so "Add to Home Screen" uses the current address-bar URL as-is', async ({ page }) => {
+  // Confirmed on a real device: a <link rel="manifest"> gets read by iOS's
+  // "Add to Home Screen" before any per-event JS swap can take effect, so
+  // the saved icon always lost the ?event= no matter how early the swap
+  // ran. Removing the manifest entirely (the legacy site's approach) lets
+  // iOS fall back to the page's own current URL, which already has the
+  // right event in it.
   await stubFirebase(page);
   await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#pin-event-name')).toHaveText('حفل تجريبي');
-  await expect.poll(() => page.locator('link[rel="manifest"]').getAttribute('href'))
-    .toMatch(/^data:application\/manifest\+json,/);
-  const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
-  const manifestJson = decodeURIComponent(manifestHref.split(',')[1]);
-  expect(JSON.parse(manifestJson).start_url).toBe('scan.html?event=e1');
+  await expect(page.locator('link[rel="manifest"]')).toHaveCount(0);
+  await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute('content', 'yes');
 });
