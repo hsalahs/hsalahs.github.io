@@ -161,17 +161,31 @@ const eventId = params.get('event');
 // home-screen app turned out to be flaky in practice, so when we know the
 // event up front, swap the manifest link to a data: URI with THIS event
 // baked into start_url. iOS's Add to Home Screen can't fetch a blob: URI for
-// the manifest, but it can read a data: one — do this before the user has a
-// chance to tap "Add to Home Screen", so the icon opens straight into this
-// event with no dependence on shared storage at all.
+// the manifest, but it can read a data: one.
+//
+// This used to fetch manifest.webmanifest and patch it, but that's a real
+// network round-trip — confirmed on a real device that tapping the share
+// button fast enough (the page renders almost instantly) can beat it, so
+// iOS reads the OLD manifest and "Add to Home Screen" shows the bare
+// scan.html with no event. Building the manifest inline, synchronously,
+// with nothing awaited, closes that race — it's done before the browser
+// paints the first frame, let alone before anyone can tap share. Keep this
+// in sync with manifest.webmanifest's fields.
 if (eventId) {
   try {
-    fetch('manifest.webmanifest').then(r => r.json()).then(manifest => {
-      manifest.start_url = 'scan.html?event=' + encodeURIComponent(eventId);
-      const json = JSON.stringify(manifest);
-      document.querySelector('link[rel="manifest"]').href =
-        'data:application/manifest+json,' + encodeURIComponent(json);
-    }).catch(() => {});
+    const manifest = {
+      name: 'سكانر الدخول - دعوات', short_name: 'سكانر',
+      description: 'سكانر التحقق من الضيوف عند بوابة المناسبة',
+      start_url: 'scan.html?event=' + encodeURIComponent(eventId),
+      scope: '.', display: 'standalone', orientation: 'portrait',
+      background_color: '#0A0A0A', theme_color: '#0A0A0A', lang: 'ar', dir: 'rtl',
+      icons: [
+        { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+      ],
+    };
+    document.querySelector('link[rel="manifest"]').href =
+      'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(manifest));
   } catch (e) {}
 }
 
