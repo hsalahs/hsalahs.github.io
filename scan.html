@@ -317,6 +317,30 @@ async function startCamera() {
   const status = document.getElementById('camera-status');
   status.textContent = 'جاري تشغيل الكاميرا...';
 
+  // The qr-scanner library CDN script can fail to load entirely (network
+  // hiccup, a content blocker on the phone) with nothing on screen to show
+  // for it — surface that plainly instead of the button silently doing
+  // nothing, which is impossible to tell apart from "still loading".
+  if (typeof QrScanner === 'undefined') {
+    status.textContent = '⚠️ تعذّر تحميل مكتبة الكاميرا — تأكد من الاتصال بالإنترنت وحدّث الصفحة';
+    return;
+  }
+
+  // Ask for camera access ourselves first, as the very first thing in this
+  // click handler with nothing awaited before it — that's what makes Safari
+  // reliably show its permission prompt instead of silently going nowhere,
+  // and it gets us a specific, actionable error (denied vs. no camera vs.
+  // insecure context) instead of QrScanner's internal retries failing quietly.
+  try {
+    const probe = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    probe.getTracks().forEach(t => t.stop());
+  } catch (e) {
+    status.textContent = e.name === 'NotAllowedError'
+      ? '⚠️ إذن الكاميرا مرفوض — فعّله من إعدادات الآيفون: الإعدادات ← Safari ← الكاميرا'
+      : '⚠️ تعذّر الوصول للكاميرا: ' + (e.name || '') + ' — ' + (e.message || e);
+    return;
+  }
+
   let retries = 2;
   while (retries >= 0) {
     try {

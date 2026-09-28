@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dawaat-scan-v2';
+const CACHE_NAME = 'dawaat-scan-v3';
 const SHELL_FILES = ['scan.html', 'firebase-init.js', 'utils.js', 'manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -17,21 +17,37 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Cache-first (stale-while-revalidate) for the static shell only — Firestore
-// and auth calls, and everything else, always go straight to the network,
-// so scanned guest data is never served stale from cache.
+// Network-first (short timeout, falling back to cache) for the static shell
+// only — Firestore and auth calls, and everything else, always go straight
+// to the network, so scanned guest data is never served stale from cache.
+//
+// This used to be cache-first (stale-while-revalidate): serve whatever's
+// cached instantly, then silently refresh the cache in the background for
+// NEXT time. That meant a device that had this page open once could keep
+// replaying that exact stale copy indefinitely, only ever catching up one
+// load behind — a real problem for a door-scanning page that gets fixed
+// mid-event. Network-first means a phone with any connectivity always gets
+// the current code; the cache is a true offline-only fallback now.
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return;
   if (!SHELL_FILES.some((f) => url.pathname.endsWith(f))) return;
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetchPromise = fetch(event.request).then((response) => {
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()));
+    (async () => {
+      try {
+        const response = await Promise.race([
+          fetch(event.request),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+        ]);
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(event.request, response.clone());
         return response;
-      }).catch(() => cached);
-      return cached || fetchPromise;
-    })
+      } catch (e) {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        throw e;
+      }
+    })()
   );
 });
