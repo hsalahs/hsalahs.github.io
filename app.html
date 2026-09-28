@@ -36,6 +36,8 @@
   #hidden-forms > div { display:none; }
   .empty { text-align:center; color:#6f6a62; font-size:14px; padding:20px 0; }
   .badge-count { background:#F44336; color:#fff; font-size:11px; font-weight:700; min-width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0 4px; }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); background:rgba(20,18,14,0.95); color:#E0BC7A; border:1px solid rgba(224,188,122,0.35); padding:12px 20px; border-radius:30px; font-size:13px; opacity:0; pointer-events:none; transition:all 0.25s ease; z-index:1000; max-width:90vw; text-align:center; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
   #splash { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.8s ease, visibility 0.8s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
   #splash::before { content:''; position:absolute; width:460px; height:460px; border-radius:50%; background:radial-gradient(circle, rgba(224,188,122,0.12), transparent 70%); animation:splashPulse 3.5s ease-in-out infinite; }
@@ -76,6 +78,7 @@
   </div>
 </div>
 
+<div id="toast"></div>
 <div class="wrap">
 
   <div id="auth-loading" class="msg">جاري التحميل...</div>
@@ -152,6 +155,17 @@ const ADMIN_NOTIFY_EMAIL = 'hsallah@outlook.sa';
 if (window.emailjs) emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
 
 // Never blocks the calling flow — a failed notification just gets logged.
+// Keep in sync with FREE_GUEST_LIMIT in event.html / firestore.rules.
+const FREE_GUEST_LIMIT = 5;
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 4000);
+}
+
 function notifyAdmin(name, message) {
   if (!window.emailjs) return;
   emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
@@ -443,6 +457,12 @@ async function selfIncreaseLimit() {
   }
 }
 
+// null until the first snapshot settles — lets checkNewlyCappedEvents skip
+// alerting for events that were ALREADY capped before the admin opened the
+// dashboard, and only toast for ones that cross the line while they're
+// actually watching.
+let knownCappedEventIds = null;
+
 function watchEvents(user) {
   const { query, where, onSnapshot } = window._fsFns;
   if (eventsUnsub) eventsUnsub();
@@ -454,8 +474,26 @@ function watchEvents(user) {
     myEventsCount = admin ? events.filter(ev => ev.ownerUid === user.uid).length : events.length;
     updateCreateGate(admin);
     renderEvents(events, admin);
-    if (admin) renderUnpaidEvents(events);
+    if (admin) {
+      renderUnpaidEvents(events);
+      checkNewlyCappedEvents(events);
+    }
   });
+}
+
+// Live, in-page alert the moment ANY customer's event crosses the free
+// -guest cap while the admin happens to have this dashboard open — on top
+// of the email notification, for whenever they're already looking at it.
+function checkNewlyCappedEvents(events) {
+  const capped = new Set(events.filter(ev => !ev.paid && (ev.guestCount || 0) >= FREE_GUEST_LIMIT).map(ev => ev.id));
+  if (knownCappedEventIds) {
+    events.forEach(ev => {
+      if (capped.has(ev.id) && !knownCappedEventIds.has(ev.id)) {
+        showToast('💰 مناسبة "' + ev.name + '" وصلت لحد الضيوف المجانيين — جاهزة للدفع');
+      }
+    });
+  }
+  knownCappedEventIds = capped;
 }
 
 function renderUnpaidEvents(events) {
