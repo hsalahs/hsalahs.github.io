@@ -36,7 +36,12 @@
   #hidden-forms > div { display:none; }
   .empty { text-align:center; color:#6f6a62; font-size:14px; padding:20px 0; }
   .badge-count { background:#F44336; color:#fff; font-size:11px; font-weight:700; min-width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0 4px; }
-  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); background:rgba(20,18,14,0.95); color:#E0BC7A; border:1px solid rgba(224,188,122,0.35); padding:12px 20px; border-radius:30px; font-size:13px; opacity:0; pointer-events:none; transition:all 0.25s ease; z-index:1000; max-width:90vw; text-align:center; }
+  /* Fixed to the TOP of the viewport, not the bottom — this page can get
+     long (many events), and a toast anchored to the bottom of the screen
+     is easy to miss entirely if you're scrolled up reading the top, or to
+     lose before you scroll down to where it is. Top-fixed means it's
+     always the first thing in view regardless of scroll position. */
+  #toast { position:fixed; left:50%; top:16px; transform:translateX(-50%) translateY(-20px); background:rgba(20,18,14,0.95); color:#E0BC7A; border:1px solid rgba(224,188,122,0.35); padding:12px 20px; border-radius:30px; font-size:13px; opacity:0; pointer-events:none; transition:all 0.25s ease; z-index:1000; max-width:90vw; text-align:center; }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
   #splash { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.8s ease, visibility 0.8s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
@@ -162,7 +167,7 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => t.classList.remove('show'), 4000);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 5000);
 }
 
 function notifyAdmin(name, message) {
