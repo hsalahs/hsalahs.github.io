@@ -27,6 +27,33 @@ test('each guest gets a WhatsApp share button, not a plain save button', async (
   await expect(page.locator('.guest-item .dl-btn')).toHaveText('📤 واتساب');
 });
 
+test('adding sequential numbers creates that many numbered guests without needing a file', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: EVENT }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  let promptCount = 0;
+  page.on('dialog', async (d) => {
+    if (d.type() === 'prompt') {
+      promptCount++;
+      await d.accept(promptCount === 1 ? '1' : '5');
+    } else {
+      await d.accept();
+    }
+  });
+
+  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: /إضافة أرقام متسلسلة/ }).click();
+
+  await expect(page.locator('.guest-item')).toHaveCount(5);
+  const names = (await page.locator('.guest-item .name').allTextContents()).sort((a, b) => Number(a) - Number(b));
+  expect(names).toEqual(['1', '2', '3', '4', '5']);
+});
+
 test('guest list sorts numeric names first (in numeric order), then alphabetical', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {

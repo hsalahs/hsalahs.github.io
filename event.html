@@ -208,6 +208,7 @@
       <div class="dropdown-menu" id="top-menu" style="display:none;">
         <button onclick="closeTopMenu(); openRequestsModal();" style="display:flex; align-items:center; justify-content:space-between;">📥 الطلبات<span class="badge-count" id="requests-badge" style="display:none;">0</span></button>
         <button onclick="closeTopMenu(); document.getElementById('csv-import').click();">📂 استيراد قائمة (CSV / أسماء)</button>
+        <button onclick="closeTopMenu(); addSequentialNumbers();">🔢 إضافة أرقام متسلسلة (مثال: 1–200)</button>
         <button onclick="closeTopMenu(); downloadAllCards();">📦 تحميل كل الدعوات (ZIP)</button>
         <button onclick="closeTopMenu(); askRangeDownload();">📥 تحميل نطاق معيّن (مثال: 1–100)</button>
         <button onclick="closeTopMenu(); exportGuestsCSV();">📄 تصدير قائمة الضيوف (CSV)</button>
@@ -1236,6 +1237,56 @@ async function addGuest() {
   }
 }
 
+// Shared by importCSV and addSequentialNumbers: dedupes the given names
+// against existing guests (and against repeats within the same list) then
+// writes them in gate-aware transactional batches. Used for both a real
+// name list and a plain range like "1".."200" for events that hand out
+// numbered rather than named entries — the guest doc doesn't care which.
+async function importGuestNames(names) {
+  // Dedupe against existing guests AND against repeats within this same
+  // list, synchronously, before any writes start — otherwise duplicate
+  // names in the same list all pass the check in parallel and all get
+  // added, since the in-memory guests list doesn't update mid-import.
+  const seen = new Set(guests.map(g => g.name));
+  const toAdd = [];
+  let duplicates = 0;
+  for (const name of names) {
+    if (seen.has(name)) { duplicates++; continue; }
+    seen.add(name);
+    toAdd.push(name);
+  }
+
+  const { doc, runTransaction } = window._fsFns;
+  const eventRef = doc(window._db, 'events', eventId);
+  let added = 0;
+  let blockedByGate = 0;
+  const batchSize = 50;
+  for (let i = 0; i < toAdd.length; i += batchSize) {
+    const batch = toAdd.slice(i, i + batchSize);
+    const addedThisBatch = await runTransaction(window._db, async (tx) => {
+      const snap = await tx.get(eventRef);
+      const data = snap.data() || {};
+      const count = data.guestCount || 0;
+      const unlimited = data.paid || isAdmin(currentUser);
+      const allowed = unlimited ? batch.length : Math.max(0, FREE_GUEST_LIMIT - count);
+      const toWrite = batch.slice(0, allowed);
+      toWrite.forEach(name => {
+        const guestRef = doc(window._db, 'events', eventId, 'guests', randomDocId());
+        tx.set(guestRef, { id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString() });
+      });
+      if (toWrite.length > 0) tx.update(eventRef, { guestCount: count + toWrite.length });
+      return toWrite.length;
+    });
+    added += addedThisBatch;
+    if (addedThisBatch < batch.length) { blockedByGate += (batch.length - addedThisBatch); break; }
+  }
+
+  let msg = 'تم استيراد ' + added + ' ضيف' + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' مكرر)' : '');
+  if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + FREE_GUEST_LIMIT + ' ضيوف المجانيين، ' + blockedByGate + ' اسم ما انضاف. فعّل الدفع عشان تكمل الاستيراد.';
+  alert(msg);
+  if (blockedByGate > 0) openPaymentWhatsapp();
+}
+
 async function importCSV(evt) {
   if (paymentGateActive()) { openPaymentWhatsapp(); evt.target.value = ''; return; }
   const file = evt.target.files[0];
@@ -1265,55 +1316,49 @@ async function importCSV(evt) {
         return;
       }
 
-      // Dedupe against existing guests AND against repeats within this same
-      // file, synchronously, before any writes start — otherwise duplicate
-      // names in the same file all pass the check in parallel and all get
-      // added, since the in-memory guests list doesn't update mid-import.
-      const seen = new Set(guests.map(g => g.name));
-      const toAdd = [];
-      let duplicates = 0;
-      for (const name of names) {
-        if (seen.has(name)) { duplicates++; continue; }
-        seen.add(name);
-        toAdd.push(name);
-      }
-
-      const { doc, runTransaction } = window._fsFns;
-      const eventRef = doc(window._db, 'events', eventId);
-      let added = 0;
-      let blockedByGate = 0;
-      const batchSize = 50;
-      for (let i = 0; i < toAdd.length; i += batchSize) {
-        const batch = toAdd.slice(i, i + batchSize);
-        const addedThisBatch = await runTransaction(window._db, async (tx) => {
-          const snap = await tx.get(eventRef);
-          const data = snap.data() || {};
-          const count = data.guestCount || 0;
-          const unlimited = data.paid || isAdmin(currentUser);
-          const allowed = unlimited ? batch.length : Math.max(0, FREE_GUEST_LIMIT - count);
-          const toWrite = batch.slice(0, allowed);
-          toWrite.forEach(name => {
-            const guestRef = doc(window._db, 'events', eventId, 'guests', randomDocId());
-            tx.set(guestRef, { id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString() });
-          });
-          if (toWrite.length > 0) tx.update(eventRef, { guestCount: count + toWrite.length });
-          return toWrite.length;
-        });
-        added += addedThisBatch;
-        if (addedThisBatch < batch.length) { blockedByGate += (batch.length - addedThisBatch); break; }
-      }
-
-      let msg = 'تم استيراد ' + added + ' ضيف' + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' مكرر)' : '');
-      if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + FREE_GUEST_LIMIT + ' ضيوف المجانيين، ' + blockedByGate + ' اسم ما انضاف. فعّل الدفع عشان تكمل الاستيراد.';
-      alert(msg);
+      await importGuestNames(names);
       document.getElementById('csv-import').value = '';
-      if (blockedByGate > 0) openPaymentWhatsapp();
     } catch (e2) {
       showErr(e2);
       document.getElementById('csv-import').value = '';
     }
   };
   reader.readAsText(file);
+}
+
+// For events that don't need named invitations — just N numbered entries
+// (e.g. general admission tickets 1..200) — generating the range directly
+// skips having to prepare and upload a text file just to get sequential
+// "names".
+async function addSequentialNumbers() {
+  if (paymentGateActive()) { openPaymentWhatsapp(); return; }
+
+  const fromStr = prompt('من أي رقم؟', '1');
+  if (fromStr === null) return;
+  const from = parseInt(fromStr);
+
+  const toStr = prompt('إلى أي رقم؟', '100');
+  if (toStr === null) return;
+  const to = parseInt(toStr);
+
+  if (!from || !to || from < 1 || to < from) {
+    showToast('⚠️ تحقق من الأرقام');
+    return;
+  }
+  const count = to - from + 1;
+  if (count > 1000) {
+    showToast('⚠️ الحد الأقصى 1000 رقم بالمرة الواحدة');
+    return;
+  }
+  if (!confirm('بيتضاف ' + count + ' ضيف بأرقام من ' + from + ' إلى ' + to + '. متأكد؟')) return;
+
+  const names = [];
+  for (let i = from; i <= to; i++) names.push(String(i));
+  try {
+    await importGuestNames(names);
+  } catch (e) {
+    showErr(e);
+  }
 }
 
 async function approveRequest(reqDocId) {
