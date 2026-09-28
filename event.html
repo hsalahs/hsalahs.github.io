@@ -94,6 +94,7 @@
   #payment-gate .pg-title { color:#E5484D; font-weight:700; font-size:14.5px; margin-bottom:6px; }
   #payment-gate .pg-sub { color:var(--text-soft); font-size:12.5px; margin-bottom:12px; line-height:1.7; }
   #payment-gate .btn.wa { background:linear-gradient(135deg,#1DA851,#25D366); color:#04170a; width:100%; }
+  #free-tier-note { display:none; background:rgba(var(--accent-rgb),0.08); border:1px solid rgba(var(--accent-rgb),0.25); border-radius:14px; padding:12px 16px; margin-bottom:12px; text-align:center; color:var(--gold); font-size:13px; font-weight:600; }
 
   .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
   .stat-box { background:linear-gradient(145deg,var(--glass-bg-1),var(--glass-bg-2)); border:1px solid var(--glass-border); border-radius:12px; padding:12px 6px; text-align:center; cursor:pointer; transition:all 0.25s ease; }
@@ -260,9 +261,12 @@
     </div>
 
     <div id="payment-gate">
-      <div class="pg-title">🔒 المناسبة لسا ما تفعّلت</div>
-      <div class="pg-sub">تقدر تجهّز مناسبتك وتشوف كل شي، بس لازم تفعّل الدفع قبل ما تضيف ضيوف أو تشارك رابط الدعوة.</div>
+      <div class="pg-title">🔒 وصلت لحد الضيوف المجانيين</div>
+      <div class="pg-sub">أضفت أول 5 ضيوف مجانًا — عشان تضيف أكثر أو تشارك رابط الدعوة لعدد غير محدود، لازم تفعّل الدفع.</div>
       <button class="btn wa" onclick="openPaymentWhatsapp()">💬 تواصل معنا عبر واتساب</button>
+    </div>
+    <div id="free-tier-note">
+      🎁 عندك <span id="free-tier-count">5</span> ضيوف مجانيين متبقين — بعدها لازم تفعّل الدفع
     </div>
 
     <div class="card" id="invite-link-card">
@@ -353,21 +357,38 @@ function isAdmin(user) { return !!user && ADMIN_EMAILS.includes((user.email || '
 
 const WHATSAPP_NUMBER = '966546664459';
 
+// First 5 guests are free so the customer can see a real saved QR card
+// before paying — keep in sync with FREE_GUEST_LIMIT in firestore.rules.
+const FREE_GUEST_LIMIT = 5;
+
 const params = new URLSearchParams(window.location.search);
 const eventId = params.get('id');
 let eventData = null;
 let currentUser = null;
 
-// Event setup (name/date/theme/etc.) stays free — the gate only blocks the
-// actions that actually deliver value: adding guests and sharing the invite
-// link. Admins always bypass it.
+function guestCount() {
+  return (eventData && eventData.guestCount) || 0;
+}
+
+// Event setup (name/date/theme/etc.) and the first FREE_GUEST_LIMIT guests
+// stay free — the gate only blocks adding MORE guests or sharing the invite
+// link once that free quota is used up. Admins always bypass it.
 function paymentGateActive() {
-  return !!eventData && !eventData.paid && !isAdmin(currentUser);
+  return !!eventData && !eventData.paid && !isAdmin(currentUser) && guestCount() >= FREE_GUEST_LIMIT;
 }
 
 function renderPaymentGate() {
   const gate = document.getElementById('payment-gate');
-  gate.style.display = paymentGateActive() ? 'block' : 'none';
+  const freeNote = document.getElementById('free-tier-note');
+  const active = paymentGateActive();
+  gate.style.display = active ? 'block' : 'none';
+
+  const stillFree = eventData && !eventData.paid && !isAdmin(currentUser) && !active;
+  freeNote.style.display = stillFree ? 'block' : 'none';
+  if (stillFree) {
+    const remaining = Math.max(0, FREE_GUEST_LIMIT - guestCount());
+    document.getElementById('free-tier-count').textContent = remaining;
+  }
 
   const menuItem = document.getElementById('payment-menu-item');
   if (eventData && eventData.paid) {
@@ -376,8 +397,10 @@ function renderPaymentGate() {
       : '<span style="color:#4CAF50;">✅ المناسبة مفعّلة</span>';
   } else if (isAdmin(currentUser)) {
     menuItem.innerHTML = '<span style="color:#E5484D;">🔓 تفعيل الدفع (أدمن)</span>';
+  } else if (active) {
+    menuItem.innerHTML = '<span style="color:#E5484D;">🔒 وصلت للحد المجاني</span>';
   } else {
-    menuItem.innerHTML = '<span style="color:#E5484D;">🔒 غير مفعّلة</span>';
+    menuItem.innerHTML = '<span style="color:var(--gold);">🎁 ' + (FREE_GUEST_LIMIT - guestCount()) + ' ضيوف مجانيين متبقين</span>';
   }
 }
 
@@ -1107,6 +1130,13 @@ function newGuestId() {
   return 'WD-' + Math.random().toString(36).substr(2, 9).toUpperCase() + Date.now().toString(36).toUpperCase().substr(-4);
 }
 
+// A Firestore doc ID picked client-side (not addDoc's auto-ID) so it can be
+// written inside a runTransaction alongside the events/{id}.guestCount bump
+// that enforces the free-tier cap — transactions need the ref up front.
+function randomDocId() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
 function showErr(e) {
   alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
   console.error(e);
@@ -1117,13 +1147,23 @@ async function addGuest() {
   const nameInput = document.getElementById('new-guest-name');
   const name = nameInput.value.trim();
   if (!name) return;
-  const { collection, addDoc } = window._fsFns;
+  const { doc, runTransaction } = window._fsFns;
+  const eventRef = doc(window._db, 'events', eventId);
+  const guestRef = doc(window._db, 'events', eventId, 'guests', randomDocId());
   try {
-    await addDoc(collection(window._db, 'events', eventId, 'guests'), {
-      id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString()
+    await runTransaction(window._db, async (tx) => {
+      const snap = await tx.get(eventRef);
+      const data = snap.data() || {};
+      const count = data.guestCount || 0;
+      if (!data.paid && !isAdmin(currentUser) && count >= FREE_GUEST_LIMIT) throw new Error('GATE');
+      tx.set(guestRef, { id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString() });
+      tx.update(eventRef, { guestCount: count + 1 });
     });
     nameInput.value = '';
-  } catch (e) { showErr(e); }
+  } catch (e) {
+    if (e.message === 'GATE') { openPaymentWhatsapp(); return; }
+    showErr(e);
+  }
 }
 
 async function importCSV(evt) {
@@ -1168,21 +1208,36 @@ async function importCSV(evt) {
         toAdd.push(name);
       }
 
-      const { collection, addDoc } = window._fsFns;
+      const { doc, runTransaction } = window._fsFns;
+      const eventRef = doc(window._db, 'events', eventId);
       let added = 0;
+      let blockedByGate = 0;
       const batchSize = 50;
       for (let i = 0; i < toAdd.length; i += batchSize) {
         const batch = toAdd.slice(i, i + batchSize);
-        await Promise.all(batch.map(name =>
-          addDoc(collection(window._db, 'events', eventId, 'guests'), {
-            id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString()
-          })
-        ));
-        added += batch.length;
+        const addedThisBatch = await runTransaction(window._db, async (tx) => {
+          const snap = await tx.get(eventRef);
+          const data = snap.data() || {};
+          const count = data.guestCount || 0;
+          const unlimited = data.paid || isAdmin(currentUser);
+          const allowed = unlimited ? batch.length : Math.max(0, FREE_GUEST_LIMIT - count);
+          const toWrite = batch.slice(0, allowed);
+          toWrite.forEach(name => {
+            const guestRef = doc(window._db, 'events', eventId, 'guests', randomDocId());
+            tx.set(guestRef, { id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString() });
+          });
+          if (toWrite.length > 0) tx.update(eventRef, { guestCount: count + toWrite.length });
+          return toWrite.length;
+        });
+        added += addedThisBatch;
+        if (addedThisBatch < batch.length) { blockedByGate += (batch.length - addedThisBatch); break; }
       }
 
-      alert('تم استيراد ' + added + ' ضيف' + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' مكرر)' : ''));
+      let msg = 'تم استيراد ' + added + ' ضيف' + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' مكرر)' : '');
+      if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + FREE_GUEST_LIMIT + ' ضيوف المجانيين، ' + blockedByGate + ' اسم ما انضاف. فعّل الدفع عشان تكمل الاستيراد.';
+      alert(msg);
       document.getElementById('csv-import').value = '';
+      if (blockedByGate > 0) openPaymentWhatsapp();
     } catch (e2) {
       showErr(e2);
       document.getElementById('csv-import').value = '';
@@ -1195,13 +1250,23 @@ async function approveRequest(reqDocId) {
   if (paymentGateActive()) { openPaymentWhatsapp(); return; }
   const req = requests.find(r => r.docId === reqDocId);
   if (!req) return;
-  const { collection, addDoc, doc, updateDoc } = window._fsFns;
+  const { doc, updateDoc, runTransaction } = window._fsFns;
+  const eventRef = doc(window._db, 'events', eventId);
+  const guestRef = doc(window._db, 'events', eventId, 'guests', randomDocId());
   try {
-    await addDoc(collection(window._db, 'events', eventId, 'guests'), {
-      id: newGuestId(), name: req.name, reqId: req.reqId, scanned: false, registeredAt: new Date().toISOString()
+    await runTransaction(window._db, async (tx) => {
+      const snap = await tx.get(eventRef);
+      const data = snap.data() || {};
+      const count = data.guestCount || 0;
+      if (!data.paid && !isAdmin(currentUser) && count >= FREE_GUEST_LIMIT) throw new Error('GATE');
+      tx.set(guestRef, { id: newGuestId(), name: req.name, reqId: req.reqId, scanned: false, registeredAt: new Date().toISOString() });
+      tx.update(eventRef, { guestCount: count + 1 });
     });
     await updateDoc(doc(window._db, 'events', eventId, 'requests', reqDocId), { status: 'approved' });
-  } catch (e) { showErr(e); }
+  } catch (e) {
+    if (e.message === 'GATE') { openPaymentWhatsapp(); return; }
+    showErr(e);
+  }
 }
 
 async function rejectRequest(reqDocId) {
