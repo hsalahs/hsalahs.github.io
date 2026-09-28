@@ -72,14 +72,14 @@ test('the admin account sees every event, not just their own, and bypasses the l
   await expect(page.locator('#create-toggle-btn')).toBeVisible();
 });
 
-test('the admin sees a standing list of unpaid events and can activate one from it', async ({ page }) => {
+test('the admin sees a counter banner for unpaid events, and each event has one unified card with its own activate button', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
     store: {
       events: {
-        e1: { name: 'Unpaid Event', ownerUid: 'u1', ownerEmail: 'a@example.com', date: '', venue: '', paid: false, createdAt: { seconds: 1 } },
-        e2: { name: 'Paid Event', ownerUid: 'u2', ownerEmail: 'b@example.com', date: '', venue: '', paid: true, createdAt: { seconds: 2 } },
+        e1: { name: 'Zara Wedding', ownerUid: 'u1', ownerEmail: 'a@example.com', date: '', venue: '', paid: false, createdAt: { seconds: 1 } },
+        e2: { name: 'Layla Wedding', ownerUid: 'u2', ownerEmail: 'b@example.com', date: '', venue: '', paid: true, createdAt: { seconds: 2 } },
       },
     },
   });
@@ -87,10 +87,18 @@ test('the admin sees a standing list of unpaid events and can activate one from 
   await page.goto('/app.html');
   await expect(page.locator('#admin-unpaid-section')).toBeVisible();
   await expect(page.locator('#admin-unpaid-badge')).toHaveText('1');
-  await expect(page.locator('#admin-unpaid-list')).toContainText('Unpaid Event');
-  await expect(page.locator('#admin-unpaid-list')).not.toContainText('Paid Event');
-  await page.locator('#admin-unpaid-list').getByRole('button', { name: '✅ تفعيل' }).click();
+  // The banner is just a counter now — it no longer renders its own copy of
+  // the event, only the one card in the main list does.
+  await expect(page.locator('#admin-unpaid-section')).not.toContainText('Zara Wedding');
+
+  const unpaidCard = page.locator('.event-card', { hasText: 'Zara Wedding' });
+  await expect(unpaidCard.getByRole('button', { name: '✅ تفعيل' })).toBeVisible();
+  const paidCard = page.locator('.event-card', { hasText: 'Layla Wedding' });
+  await expect(paidCard.getByRole('button', { name: '✅ تفعيل' })).toHaveCount(0);
+
+  await unpaidCard.getByRole('button', { name: '✅ تفعيل' }).click();
   await expect(page.locator('#admin-unpaid-section')).toBeHidden();
+  await expect(unpaidCard.getByRole('button', { name: '✅ تفعيل' })).toHaveCount(0);
 });
 
 test('the admin gets a live toast when an event crosses the free-guest cap while watching, not for ones already capped on load', async ({ page }) => {
