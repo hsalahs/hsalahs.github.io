@@ -113,6 +113,13 @@ export function addDoc(collRef, data) {
 }
 
 export function getDoc(ref) {
+  // Lets tests simulate a dropped connection on a specific read, e.g. to
+  // verify a page's init() shows a retry option instead of hanging on
+  // "جاري التحميل..." forever. Cleared automatically after firing once.
+  if (window.__failNextGetDoc) {
+    window.__failNextGetDoc = false;
+    return Promise.reject(new Error('simulated network failure'));
+  }
   const coll = F().store[ref.collPath] || {};
   return Promise.resolve(makeDocSnap(ref.collPath, ref.id, coll[ref.id]));
 }

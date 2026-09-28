@@ -301,7 +301,22 @@ async function init() {
   }
   try { localStorage.setItem(lastEventKey(), eventId); } catch (e) {}
   const { doc, getDoc } = window._fsFns;
-  const snap = await getDoc(doc(window._db, 'events', eventId));
+  let snap;
+  try {
+    snap = await getDoc(doc(window._db, 'events', eventId));
+  } catch (e) {
+    // Same "trapped forever" failure the splash fix closed, one layer
+    // deeper: a dropped connection here (bad venue wifi) used to leave
+    // this stuck on "جاري التحميل..." forever with no way out. This is
+    // the page door staff depend on, so it gets a visible, tappable retry
+    // instead of silently hanging.
+    console.error(e);
+    const msg = document.getElementById('loading-msg');
+    msg.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
+    msg.style.cursor = 'pointer';
+    msg.onclick = () => { msg.onclick = null; msg.style.cursor = ''; init(); };
+    return;
+  }
   if (!snap.exists()) {
     document.getElementById('loading-msg').textContent = '⚠️ هذه المناسبة غير موجودة';
     return;

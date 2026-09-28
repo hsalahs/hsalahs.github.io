@@ -287,3 +287,18 @@ test('a one-tap toolbar shortcut jumps back to "all my events" without opening t
   await page.locator('.toolbar > .icon-btn[title="كل مناسباتي"]').click();
   await expect(page).toHaveURL(/app\.html$/);
 });
+
+test('a dropped connection while loading the dashboard shows a tappable retry instead of hanging on "جاري التحميل..." forever', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([]),
+  });
+  await page.addInitScript(() => { window.__failNextGetDoc = true; });
+  await page.goto('/event.html?id=e1');
+
+  const msg = page.locator('#loading-msg');
+  await expect(msg).toContainText('تعذّر الاتصال');
+  await msg.click();
+  await expect(page.locator('#dashboard')).toBeVisible();
+});

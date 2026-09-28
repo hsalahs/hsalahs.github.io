@@ -17,3 +17,17 @@ test('a bad event id shows an error instead of the form', async ({ page }) => {
   await page.goto('/invite.html?event=does-not-exist');
   await expect(page.locator('#card')).toContainText('هذه المناسبة غير موجودة');
 });
+
+test('a dropped connection while loading the event shows a tappable retry instead of hanging on "جاري التحميل..." forever', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    store: { events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } } },
+  });
+  await page.addInitScript(() => { window.__failNextGetDoc = true; });
+  await page.goto('/invite.html?event=e1');
+
+  const retry = page.locator('#retry-msg');
+  await expect(retry).toContainText('تعذّر الاتصال');
+  await retry.click();
+  await expect(page.locator('#card')).toContainText('حفل تجريبي');
+});
