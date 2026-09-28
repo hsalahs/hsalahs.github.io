@@ -873,7 +873,16 @@ function buildGuestCard(guest) {
     function waitForQr(retriesLeft) {
       const qr = tmp.querySelector('canvas');
       if (qr && qrCanvasHasContent(qr)) return Promise.resolve(qr);
-      if (retriesLeft <= 0) return Promise.resolve(qr || null);
+      // Used to fall back to "whatever canvas exists, blank or not" here once
+      // retries ran out — that silently produced a card with an empty white
+      // box where the QR should be (confirmed on a real desktop Chrome: the
+      // canvas legitimately never gets real ink, sampled or not — most likely
+      // a privacy/anti-fingerprinting feature spoofing canvas readback,
+      // rather than a slow-render race, since it reproduces the same way on
+      // every attempt on that machine). A guest holding an unscannable
+      // invitation with no indication anything went wrong is worse than the
+      // card failing loudly, so this now gives up for real.
+      if (retriesLeft <= 0) return Promise.resolve(null);
       return new Promise(r => setTimeout(r, 100)).then(() => waitForQr(retriesLeft - 1));
     }
 
@@ -1076,6 +1085,7 @@ async function downloadAllCards(from, to) {
   const zip = new JSZip();
   const total = list.length;
   let done = 0;
+  let failed = 0;
 
   const usedNames = new Map();
   function safeFileName(name) {
@@ -1092,6 +1102,8 @@ async function downloadAllCards(from, to) {
       if (card) {
         const base64 = card.toDataURL('image/png').split(',')[1];
         zip.file('Invitation-' + safeFileName(batch[idx].name) + '.png', base64, { base64: true });
+      } else {
+        failed++;
       }
     });
     done += batch.length;
@@ -1099,12 +1111,24 @@ async function downloadAllCards(from, to) {
     await new Promise(r => setTimeout(r, 100));
   }
 
+  // The QR generation can fail silently on some browsers/privacy extensions
+  // (canvas readback blocked or spoofed) — buildGuestCard now returns null
+  // instead of a blank card in that case. Surface it loudly here: a
+  // "successful" download that's silently missing invitations, or an empty
+  // zip that LOOKS like it worked, is worse than telling the owner plainly.
+  if (failed === total) {
+    showToast('❌ ما قدرنا ننشئ أي بطاقة — جرّب متصفح ثاني أو عطّل إضافات الخصوصية لهذا الموقع');
+    return;
+  }
+
   const blob = await zip.generateAsync({ type: 'blob' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = 'Invitations' + label + '.zip';
   link.click();
-  showToast('✅ تم تحميل الملف! (' + total + ' دعوة)');
+  showToast(failed > 0
+    ? '⚠️ تم التحميل، لكن ' + failed + ' من ' + total + ' بطاقة فشلت — جرّب متصفح ثاني لها'
+    : '✅ تم تحميل الملف! (' + total + ' دعوة)');
 }
 
 function askRangeDownload() {
