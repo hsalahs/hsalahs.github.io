@@ -88,7 +88,7 @@ test('the admin account can open a customer event it does not own', async ({ pag
   await expect(page.locator('#denied-msg')).toBeHidden();
 });
 
-test('a fresh unpaid event shows the free-tier note, not the payment gate, and lets the owner add a guest', async ({ page }) => {
+test('a fresh unpaid event shows no payment-gate banner and lets the owner add a guest, with the remaining count tucked into the menu', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: { uid: 'u1', email: 'customer@example.com' },
@@ -96,12 +96,28 @@ test('a fresh unpaid event shows the free-tier note, not the payment gate, and l
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#payment-gate')).toBeHidden();
-  await expect(page.locator('#free-tier-note')).toBeVisible();
-  await expect(page.locator('#free-tier-count')).toHaveText('5');
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('5 ضيوف مجانيين متبقين');
+  await page.getByRole('button', { name: '☰' }).click();
   await page.getByRole('button', { name: '👥 الضيوف' }).click();
   await page.locator('#new-guest-name').fill('ضيف جديد');
   await page.getByRole('button', { name: 'إضافة' }).click();
   await expect(page.locator('.guest-item')).toHaveCount(1);
+});
+
+test('a toast fires exactly when the owner\'s action hits the free-guest cap, not on every page load', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, paid: false, guestCount: 4 } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#toast')).not.toContainText('خلصت الـ5 ضيوف');
+  await page.getByRole('button', { name: '👥 الضيوف' }).click();
+  await page.locator('#new-guest-name').fill('الضيف الخامس');
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('#toast')).toContainText('خلصت الـ5 ضيوف المجانيين');
+  await expect(page.locator('#payment-gate')).toBeVisible();
 });
 
 test('an unpaid event at the free-guest cap blocks the owner from adding more, and shows the payment gate', async ({ page }) => {
