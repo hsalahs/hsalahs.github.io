@@ -114,3 +114,20 @@ test('the admin gets a live toast when an event crosses the free-guest cap while
   });
   await expect(page.locator('#toast')).toContainText('About To Cap');
 });
+
+test('the admin gets a one-time nudge toast on a fresh page load when unpaid events are already capped', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: {
+      events: {
+        e1: { name: 'Already Capped 1', ownerUid: 'u1', ownerEmail: 'a@example.com', date: '', venue: '', paid: false, guestCount: 5, createdAt: { seconds: 1 } },
+        e2: { name: 'Already Capped 2', ownerUid: 'u2', ownerEmail: 'b@example.com', date: '', venue: '', paid: false, guestCount: 6, createdAt: { seconds: 2 } },
+      },
+    },
+  });
+  await page.goto('/app.html');
+  await expect(page.locator('#toast')).toContainText('2 مناسبة غير مدفوعة وصلت لحد الضيوف المجانيين');
+  // Doesn't call out either event by name — that's what the standing list is for.
+  await expect(page.locator('#toast')).not.toContainText('Already Capped');
+});
