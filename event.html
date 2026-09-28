@@ -845,6 +845,23 @@ function drawFadedLine(ctx, x1, x2, y, color) {
   ctx.stroke();
 }
 
+// Event names, guest names and venues are free text with no length limit —
+// a long one (long Arabic full names are common) would otherwise overflow
+// the card at a fixed font size, running into the border or the QR code.
+// Shrinks the font until it fits maxWidth, down to a floor size, then draws
+// it centered at (x, y). fontSpec is a printf-style template with %d for
+// the size, e.g. 'bold %dpx Tajawal, Arial'.
+function fitText(ctx, text, x, y, maxWidth, startSize, minSize, fontSpec) {
+  let size = startSize;
+  while (size > minSize) {
+    ctx.font = fontSpec.replace('%d', size);
+    if (ctx.measureText(text).width <= maxWidth) break;
+    size -= 2;
+  }
+  ctx.font = fontSpec.replace('%d', size);
+  ctx.fillText(text, x, y);
+}
+
 function buildGuestCard(guest) {
   return new Promise((resolve) => {
     const themeColors = THEME_COLORS[eventData.theme || 'gold'] || THEME_COLORS.gold;
@@ -940,9 +957,8 @@ function buildGuestCard(guest) {
       titleGrad.addColorStop(0.5, GOLD_LIGHT);
       titleGrad.addColorStop(1, GOLD);
       ctx.fillStyle = titleGrad;
-      ctx.font = 'bold 58px Tajawal, Arial';
       ctx.textAlign = 'center';
-      ctx.fillText(eventData.name, 500, 118);
+      fitText(ctx, eventData.name, 500, 118, 820, 58, 28, 'bold %dpx Tajawal, Arial');
 
       ctx.fillStyle = '#999';
       ctx.font = '34px Tajawal, Arial';
@@ -972,8 +988,7 @@ function buildGuestCard(guest) {
       ctx.drawImage(qr, 220, 272, 560, 560);
 
       ctx.fillStyle = '#0A0A0A';
-      ctx.font = 'bold 54px Tajawal, Arial';
-      ctx.fillText(guest.name, 500, 940);
+      fitText(ctx, guest.name, 500, 940, 820, 54, 24, 'bold %dpx Tajawal, Arial');
 
       ctx.fillStyle = '#B0AAA0';
       ctx.font = '28px "Playfair Display", Arial';
@@ -983,8 +998,7 @@ function buildGuestCard(guest) {
 
       if (eventData.venue) {
         ctx.fillStyle = GOLD;
-        ctx.font = 'bold 38px "Playfair Display", Arial';
-        ctx.fillText(eventData.venue, 500, 1088);
+        fitText(ctx, eventData.venue, 500, 1088, 820, 38, 20, 'bold %dpx "Playfair Display", Arial');
         ctx.strokeStyle = hexToRgba(GOLD, 0.55);
         ctx.lineWidth = 1.2;
         ctx.beginPath(); ctx.moveTo(300, 1076); ctx.lineTo(360, 1076); ctx.stroke();
