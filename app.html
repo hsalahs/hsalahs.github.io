@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>لوحة المنظّم | دعوات</title>
 <script type="module" src="firebase-init.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -139,6 +140,23 @@
 const ADMIN_EMAILS = ['hsallah@outlook.sa'];
 function isAdmin(user) { return !!user && ADMIN_EMAILS.includes((user.email || '').toLowerCase()); }
 
+// Admin heads-up notifications (new customer / extra-event request) — same
+// EmailJS account already used for guest invitations on the legacy page.
+const EMAILJS_PUBLIC_KEY = 'GAr6CcOiDqo-Mc3m5';
+const EMAILJS_SERVICE_ID = 'service_j15srgf';
+const EMAILJS_TEMPLATE_ID = 'template_fm1b49y';
+const ADMIN_NOTIFY_EMAIL = 'hsallah@outlook.sa';
+if (window.emailjs) emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+
+// Never blocks the calling flow — a failed notification just gets logged.
+function notifyAdmin(name, message) {
+  if (!window.emailjs) return;
+  emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+    name, message, to_email: ADMIN_NOTIFY_EMAIL,
+    time: new Date().toLocaleString('ar-SA', { dateStyle: 'medium', timeStyle: 'short' })
+  }).catch(e => console.error('Admin notify failed:', e));
+}
+
 let authMode = 'login'; // or 'signup'
 
 function toggleAuthMode() {
@@ -251,6 +269,9 @@ async function createNewEvent() {
       }
       tx.set(eventRef, eventData);
     });
+    if (!admin) {
+      notifyAdmin('مناسبة جديدة 🎉', 'عميل جديد سوى مناسبة: "' + name + '" — الإيميل: ' + (user.email || user.uid));
+    }
     window.location.href = 'event.html?id=' + eventId;
   } catch (e) {
     if (e.message === 'LIMIT_REACHED') {
@@ -490,6 +511,7 @@ async function requestExtraEvent() {
     await addDoc(collection(window._db, 'eventRequests'), {
       uid: user.uid, email: user.email || '', status: 'pending', requestedAt: serverTimestamp()
     });
+    notifyAdmin('طلب مناسبة إضافية 🙋', 'طلب من: ' + (user.email || user.uid));
   } catch (e) {
     alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
     console.error(e);
