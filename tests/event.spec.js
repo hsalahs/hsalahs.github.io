@@ -273,3 +273,17 @@ test('the admin can revoke a mistaken activation from the menu', async ({ page }
   await page.getByRole('button', { name: '☰' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('تفعيل الدفع (أدمن)');
 });
+
+test('a one-tap toolbar shortcut jumps back to "all my events" without opening the menu first', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: { events: { e1: { ...EVENT, ownerUid: 'u1' } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  // Not inside the (initially hidden) dropdown menu — a direct toolbar button.
+  await expect(page.locator('#top-menu')).toBeHidden();
+  await page.locator('.toolbar > .icon-btn[title="كل مناسباتي"]').click();
+  await expect(page).toHaveURL(/app\.html$/);
+});
