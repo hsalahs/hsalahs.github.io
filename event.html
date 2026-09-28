@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>لوحة المناسبة | دعوات</title>
-<script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script type="module" src="firebase-init.js"></script>
@@ -77,13 +76,8 @@
   .hero h1 { font-size:26px; font-weight:700; letter-spacing:0.8px; color:var(--gold-light); text-shadow:0 2px 20px rgba(var(--accent-rgb),0.25); margin-bottom:4px; }
   .hero .subtitle { font-size:12px; color:var(--text-soft); letter-spacing:1px; }
   .gold-line { width:52px; height:2px; background:linear-gradient(90deg,transparent,var(--gold),transparent); margin:12px auto 18px; }
-  nav { display:flex; gap:8px; margin-bottom:16px; padding:14px 8px; background:rgba(0,0,0,0.15); backdrop-filter:blur(10px); border-radius:16px; border:1px solid rgba(var(--accent-rgb),0.15); position:sticky; top:8px; z-index:100; }
-  .nav-btn { position:relative; flex:1; padding:10px; border-radius:30px; border:1px solid rgba(var(--accent-rgb),0.3); background:transparent; color:var(--text-soft); font-family:inherit; font-size:13px; cursor:pointer; transition:all 0.3s ease; }
   .nav-badge { position:absolute; top:-6px; left:6px; background:#F44336; color:#fff; font-size:10px; font-weight:700; min-width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; padding:0 4px; box-shadow:0 2px 6px rgba(0,0,0,0.4); }
   .badge-count { background:#F44336; color:#fff; font-size:11px; font-weight:700; min-width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0 4px; }
-  .nav-btn.active { background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; font-weight:700; border-color:transparent; box-shadow:0 6px 20px rgba(var(--accent-rgb),0.25); }
-  .page { display:none; }
-  .page.active { display:block; }
   .card { background:linear-gradient(145deg,var(--glass-bg-1),var(--glass-bg-2)); border:1px solid var(--glass-border); border-radius:14px; padding:16px; margin-bottom:12px; }
   input { width:100%; padding:12px; margin-bottom:10px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(var(--accent-rgb),0.25); color:var(--text-main); font-size:14px; font-family:inherit; }
   /* Safari (notably iOS) renders <input type="date">'s native calendar
@@ -151,24 +145,6 @@
   .pending-info .pname { font-weight:700; font-size:14px; color:var(--text-main); }
   .approve-btn { background:rgba(76,175,80,0.15); border:1px solid rgba(76,175,80,0.55); color:#4CAF50; font-size:13px; padding:6px 12px; border-radius:8px; cursor:pointer; white-space:nowrap; }
   .reject-btn { background:rgba(229,72,77,0.12); border:1px solid rgba(229,72,77,0.45); color:#E5484D; font-size:13px; padding:6px 10px; border-radius:8px; cursor:pointer; }
-  #camera-wrapper { position:relative; width:100%; max-width:320px; margin:0 auto; aspect-ratio:1; border-radius:16px; overflow:hidden; border:2px solid var(--gold); background:#000; }
-  #camera-video { width:100%; height:100%; object-fit:cover; display:block; }
-  .scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-  .scan-frame { width:65%; height:65%; border:2px solid var(--gold); border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,0.45); }
-  .scan-line { position:absolute; width:65%; height:2px; background:linear-gradient(90deg,transparent,var(--gold),transparent); animation:scanLine 2s linear infinite; }
-  @keyframes scanLine { 0% { top:17.5%; } 100% { top:82.5%; } }
-  #scan-counter { font-size:14px; color:var(--gold); font-weight:600; text-align:center; margin-bottom:10px; }
-  .result-card { display:none; padding:24px; border-radius:16px; margin-top:16px; text-align:center; animation:slideUp 0.4s ease-out; }
-  @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-  .result-card.allowed { background:linear-gradient(135deg,rgba(76,175,80,0.12),rgba(76,175,80,0.04)); border:1px solid rgba(76,175,80,0.3); }
-  .result-card.duplicate { background:linear-gradient(135deg,rgba(255,193,7,0.12),rgba(255,193,7,0.04)); border:1px solid rgba(255,193,7,0.3); }
-  .result-card.denied { background:linear-gradient(135deg,rgba(244,67,54,0.12),rgba(244,67,54,0.04)); border:1px solid rgba(244,67,54,0.3); }
-  .result-icon { font-size:48px; margin-bottom:12px; }
-  .result-name { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:var(--gold); margin-bottom:8px; }
-  .result-status { font-size:14px; color:var(--text-soft); }
-  .result-status.ok { color:#4CAF50; }
-  .result-status.dup { color:var(--gold); }
-  .result-status.err { color:#F44336; }
   .link-box { display:flex; gap:8px; align-items:center; }
   .link-box input { flex:1; margin:0; font-size:12px; }
   .empty { text-align:center; color:var(--text-soft); font-size:13px; padding:14px 0; opacity:0.7; }
@@ -318,44 +294,7 @@ setTimeout(() => {
       <div style="font-size:12px; color:#B8B4AC; margin-top:10px;">رقم الدخول للفريق: <span id="scan-pin-display" style="color:#E0BC7A; font-weight:700; letter-spacing:2px;"></span></div>
     </div>
 
-    <nav>
-      <button class="nav-btn active" onclick="showTab('scan', this)">📱 مسح</button>
-      <button class="nav-btn" onclick="showTab('guests', this)">👥 الضيوف</button>
-    </nav>
-
-    <div class="page active" id="page-scan">
-      <div id="scan-counter">تم الدخول: 0 / 0</div>
-      <div class="card" style="text-align:center">
-        <p class="camera-status" id="camera-status">اضغط لتشغيل الكاميرا</p>
-        <button class="btn" id="start-cam-btn" onclick="startCamera()" style="width:100%">📷 تشغيل الكاميرا</button>
-
-        <div id="camera-wrapper" style="display:none">
-          <video id="camera-video" autoplay playsinline muted></video>
-          <div class="scan-overlay">
-            <div class="scan-frame"></div>
-            <div class="scan-line"></div>
-          </div>
-        </div>
-
-        <div class="result-card allowed" id="result-allowed">
-          <div class="result-icon">✅</div>
-          <div class="result-name" id="result-name-ok"></div>
-          <div class="result-status ok">مسموح بالدخول</div>
-        </div>
-        <div class="result-card duplicate" id="result-duplicate">
-          <div class="result-icon">⚠️</div>
-          <div class="result-name" id="result-name-dup"></div>
-          <div class="result-status dup">دخل من قبل!</div>
-        </div>
-        <div class="result-card denied" id="result-denied">
-          <div class="result-icon">❌</div>
-          <div class="result-name">غير مسجّل</div>
-          <div class="result-status err">باركود غير صحيح</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="page" id="page-guests">
+    <div id="page-guests">
       <div class="card">
         <div class="row">
           <input type="text" id="new-guest-name" placeholder="اسم ضيف جديد">
@@ -497,36 +436,8 @@ async function adminDeactivatePayment() {
 }
 let guests = [];
 let requests = [];
-let qrScanner = null;
-let lastScanned = null;
-let scanCooldown = false;
-let audioCtx = null;
-
-// Audible feedback for busy door staff who can't watch the screen every
-// scan — a high sine for allowed, a low square for duplicate/denied.
-function playBeep(success) {
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.connect(g); g.connect(audioCtx.destination);
-    o.frequency.value = success ? 880 : 300;
-    o.type = success ? 'sine' : 'square';
-    g.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-    o.start(audioCtx.currentTime);
-    o.stop(audioCtx.currentTime + 0.4);
-  } catch (e) {}
-}
 let statusFilter = 'all'; // 'all' | 'attended' | 'pending'
 let searchQuery = '';
-
-function showTab(name, btn) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-  if (btn) btn.classList.add('active');
-}
 
 function copyInviteLink() {
   if (paymentGateActive()) { openPaymentWhatsapp(); return; }
@@ -729,7 +640,6 @@ function startListeners() {
   onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     updateStats();
-    updateScanCounter();
     renderGuests();
     guestsListenerOK = true;
     refreshConnectionBanner();
@@ -776,12 +686,6 @@ function updateStats() {
   document.getElementById('stat-total').textContent = guests.length;
   document.getElementById('stat-attended').textContent = guests.filter(g => g.scanned).length;
   document.getElementById('stat-pending').textContent = guests.filter(g => !g.scanned).length;
-}
-
-function updateScanCounter() {
-  const el = document.getElementById('scan-counter');
-  if (!el) return;
-  el.textContent = 'تم الدخول: ' + guests.filter(g => g.scanned).length + ' / ' + guests.length;
 }
 
 function setStatusFilter(mode) {
@@ -1478,95 +1382,6 @@ async function rejectRequest(reqDocId) {
     await updateDoc(doc(window._db, 'events', eventId, 'requests', reqDocId), { status: 'rejected' });
     showToast('🗑 تم رفض الطلب' + (req ? ' — ' + req.name : ''));
   } catch (e) { showErr(e); }
-}
-
-async function startCamera() {
-  const video = document.getElementById('camera-video');
-  const status = document.getElementById('camera-status');
-  status.textContent = 'جاري تشغيل الكاميرا...';
-
-  let retries = 2;
-  while (retries >= 0) {
-    try {
-      qrScanner = new QrScanner(video, result => {
-        if (!scanCooldown) handleScan(result.data);
-      }, { returnDetailedScanResult: true, preferredCamera: 'environment' });
-      await qrScanner.start();
-      document.getElementById('camera-wrapper').style.display = 'block';
-      document.getElementById('start-cam-btn').style.display = 'none';
-      status.textContent = 'وجّه الكاميرا نحو الباركود';
-      return;
-    } catch (e) {
-      if (qrScanner) { try { qrScanner.destroy(); } catch (_) {} qrScanner = null; }
-      retries--;
-      if (retries < 0) {
-        status.textContent = '⚠️ خطأ: ' + (e.name || '') + ' — ' + (e.message || e);
-      } else {
-        status.textContent = 'إعادة المحاولة...';
-        await new Promise(r => setTimeout(r, 800));
-      }
-    }
-  }
-}
-
-function hideResultCards() {
-  document.getElementById('result-allowed').style.display = 'none';
-  document.getElementById('result-duplicate').style.display = 'none';
-  document.getElementById('result-denied').style.display = 'none';
-}
-
-async function handleScan(raw) {
-  const match = raw.trim().toUpperCase().match(/WD-[A-Z0-9]+/);
-  if (!match) return;
-  const val = match[0];
-  if (val === lastScanned) return;
-  lastScanned = val;
-  scanCooldown = true;
-
-  const status = document.getElementById('camera-status');
-  status.textContent = '🔍 جاري التحقق...';
-  hideResultCards();
-
-  const found = guests.find(g => g.id === val);
-
-  if (!found) {
-    document.getElementById('result-denied').style.display = 'block';
-    status.textContent = '❌ باركود غير مسجّل';
-    playBeep(false);
-  } else {
-    const { doc, runTransaction } = window._fsFns;
-    const gRef = doc(window._db, 'events', eventId, 'guests', found.docId);
-    const outcome = await runTransaction(window._db, async (tx) => {
-      const snap = await tx.get(gRef);
-      if (!snap.exists()) return 'missing';
-      if (snap.data().scanned) return 'dup';
-      tx.update(gRef, { scanned: true, scannedAt: new Date().toISOString() });
-      return 'ok';
-    });
-    if (outcome === 'ok') {
-      document.getElementById('result-name-ok').textContent = found.name;
-      document.getElementById('result-allowed').style.display = 'block';
-      status.textContent = '✅ مسموح بالدخول';
-      playBeep(true);
-      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    } else if (outcome === 'dup') {
-      document.getElementById('result-name-dup').textContent = found.name;
-      document.getElementById('result-duplicate').style.display = 'block';
-      status.textContent = '⚠️ دخل من قبل';
-      playBeep(false);
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-    } else {
-      document.getElementById('result-denied').style.display = 'block';
-      status.textContent = '❌ غير مسجّل';
-      playBeep(false);
-    }
-  }
-
-  setTimeout(() => {
-    hideResultCards();
-    scanCooldown = false; lastScanned = null;
-    status.textContent = 'وجّه الكاميرا نحو الباركود';
-  }, 2500);
 }
 
 if (window._auth) init();

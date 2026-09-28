@@ -24,7 +24,6 @@ test('adding a guest confirms with a toast, clears and refocuses the field, and 
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
-  await page.getByRole('button', { name: '👥 الضيوف' }).click();
 
   // Empty name gets a validation toast, not a silent no-op.
   await page.getByRole('button', { name: 'إضافة' }).click();
@@ -68,7 +67,6 @@ test('marking a guest as attended from the list asks for confirmation first, so 
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
-  await page.getByRole('button', { name: '👥 الضيوف' }).click();
 
   page.on('dialog', d => d.dismiss());
   await page.locator('.attend-btn').click();
@@ -176,7 +174,6 @@ test('guest search filters the visible list by name', async ({ page }) => {
     ]),
   });
   await page.goto('/event.html?id=e1');
-  await page.getByRole('button', { name: '👥 الضيوف' }).click();
   await expect(page.locator('.guest-item')).toHaveCount(2);
   await page.locator('#guest-search').fill('fatima');
   await expect(page.locator('.guest-item')).toHaveCount(1);
@@ -216,7 +213,6 @@ test('a fresh unpaid event shows no payment-gate banner and lets the owner add a
   await page.getByRole('button', { name: '☰' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('5 ضيوف مجانيين متبقين');
   await page.getByRole('button', { name: '☰' }).click();
-  await page.getByRole('button', { name: '👥 الضيوف' }).click();
   await page.locator('#new-guest-name').fill('ضيف جديد');
   await page.getByRole('button', { name: 'إضافة' }).click();
   await expect(page.locator('.guest-item')).toHaveCount(1);
@@ -230,7 +226,6 @@ test('a toast fires exactly when the owner\'s action hits the free-guest cap, no
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#toast')).not.toContainText('خلصت الـ5 ضيوف');
-  await page.getByRole('button', { name: '👥 الضيوف' }).click();
   await page.locator('#new-guest-name').fill('الضيف الخامس');
   await page.getByRole('button', { name: 'إضافة' }).click();
   await expect(page.locator('#toast')).toContainText('خلصت الـ5 ضيوف المجانيين');
@@ -245,7 +240,6 @@ test('an unpaid event at the free-guest cap blocks the owner from adding more, a
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#payment-gate')).toBeVisible();
-  await page.getByRole('button', { name: '👥 الضيوف' }).click();
   await page.locator('#new-guest-name').fill('ضيف جديد');
   await page.getByRole('button', { name: 'إضافة' }).click();
   await expect(page.locator('.guest-item')).toHaveCount(0);
@@ -259,7 +253,6 @@ test('CSV import fills only up to the remaining free slots, then stops', async (
   });
   page.on('dialog', d => d.accept());
   await page.goto('/event.html?id=e1');
-  await page.getByRole('button', { name: '👥 الضيوف' }).click();
   await page.locator('#csv-import').setInputFiles({
     name: 'guests.csv', mimeType: 'text/csv',
     buffer: Buffer.from('Guest A\nGuest B\nGuest C\nGuest D\nGuest E'),
@@ -276,7 +269,6 @@ test('a paid event lets the owner add a guest normally, and hides the payment ga
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#payment-gate')).toBeHidden();
-  await page.getByRole('button', { name: '👥 الضيوف' }).click();
   await page.locator('#new-guest-name').fill('ضيف جديد');
   await page.getByRole('button', { name: 'إضافة' }).click();
   await expect(page.locator('.guest-item')).toHaveCount(1);
