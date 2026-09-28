@@ -31,6 +31,27 @@ test('visiting scan.html with no event and nothing remembered shows the invalid-
   await expect(page.locator('#loading-msg')).toContainText('رابط غير صحيح');
 });
 
+test('re-scanning an already-checked-in guest shows a clear red "already used" alert, not a soft warning', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    store: {
+      events: { e1: EVENT },
+      'events/e1/guests': { g1: { name: 'ضيف مكرر', id: 'WD-DUP123', scanned: true } },
+    },
+  });
+  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1'));
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+
+  await page.locator('#manual-code').fill('WD-DUP123');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+
+  const dupCard = page.locator('#result-duplicate');
+  await expect(dupCard).toBeVisible();
+  await expect(dupCard).toContainText('تم استخدام هذه الدعوة مسبقًا');
+  await expect(dupCard.locator('.result-status.dup')).toHaveCSS('color', 'rgb(244, 67, 54)');
+});
+
 test('visiting scan.html with an event swaps the manifest link to bake that event into start_url, for Add to Home Screen', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });

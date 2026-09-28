@@ -16,6 +16,17 @@ function baseStore(guests) {
   };
 }
 
+test('each guest gets a WhatsApp share button, not a plain save button', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await expect(page.locator('.guest-item .dl-btn')).toHaveText('📤 واتساب');
+});
+
 test('guest list sorts numeric names first (in numeric order), then alphabetical', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {

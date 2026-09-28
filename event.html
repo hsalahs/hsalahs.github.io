@@ -769,7 +769,7 @@ function renderGuests() {
       ${g.scanned
         ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}')">↩️ تراجع</button>`
         : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}')">✓ حضر</button>`}
-      <button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">💾 حفظ</button>
+      <button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">📤 واتساب</button>
       <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">🗑</button>
     </div>
   `).join('');
@@ -999,12 +999,21 @@ async function downloadGuestCard(docId) {
   const safeName = String(guest.name).trim().replace(/[\s\/\\:*?"<>|]+/g, '_');
   const fileName = 'Invitation-' + safeName + '.png';
 
+  const caption = 'دعوتك لحفل ' + guest.name.trim().split(' ')[0] + '... 🎉 ' + eventData.name +
+    (eventData.date ? '\nبتاريخ ' + eventData.date : '') +
+    '\nهذا الباركود الخاص بك — أحضره معك للدخول.';
+
   built.toBlob(async (blob) => {
     if (!blob) return;
     try {
       const file = new File([blob], fileName, { type: 'image/png' });
+      // navigator.share opens the phone's own share sheet with the actual QR
+      // image attached — WhatsApp shows up there as one of the apps to pick.
+      // There's no way to skip straight into a specific WhatsApp chat since
+      // we don't collect guest phone numbers, and wa.me links can only carry
+      // text, never an attached image.
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: guest.name });
+        await navigator.share({ files: [file], title: guest.name, text: caption });
         return;
       }
     } catch (e) {
@@ -1018,6 +1027,7 @@ async function downloadGuestCard(docId) {
     link.click();
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 60000);
+    showToast('💾 تم حفظ صورة الدعوة — أرسلها يدويًا عبر واتساب');
   }, 'image/png');
 }
 

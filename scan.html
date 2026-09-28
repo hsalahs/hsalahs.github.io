@@ -44,13 +44,13 @@
   .result-card { display:none; padding:24px; border-radius:16px; margin-top:16px; text-align:center; animation:slideUp 0.4s ease-out; }
   @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
   .result-card.allowed { background:linear-gradient(135deg,rgba(76,175,80,0.12),rgba(76,175,80,0.04)); border:1px solid rgba(76,175,80,0.3); }
-  .result-card.duplicate { background:linear-gradient(135deg,rgba(255,193,7,0.12),rgba(255,193,7,0.04)); border:1px solid rgba(255,193,7,0.3); }
+  .result-card.duplicate { background:linear-gradient(135deg,rgba(244,67,54,0.12),rgba(244,67,54,0.04)); border:1px solid rgba(244,67,54,0.3); }
   .result-card.denied { background:linear-gradient(135deg,rgba(244,67,54,0.12),rgba(244,67,54,0.04)); border:1px solid rgba(244,67,54,0.3); }
   .result-icon { font-size:48px; margin-bottom:12px; }
   .result-name { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:#E0BC7A; margin-bottom:8px; }
   .result-status { font-size:14px; color:#B8B4AC; }
   .result-status.ok { color:#4CAF50; }
-  .result-status.dup { color:#E0BC7A; }
+  .result-status.dup { color:#F44336; }
   .result-status.err { color:#F44336; }
   #connection-banner { display:none; position:sticky; top:0; z-index:1000; background:#5a1a1a; color:#ffd7d7; text-align:center; padding:10px 16px; font-size:13px; font-weight:600; }
 
@@ -135,9 +135,9 @@
         <div class="result-status ok">مسموح بالدخول</div>
       </div>
       <div class="result-card duplicate" id="result-duplicate">
-        <div class="result-icon">⚠️</div>
+        <div class="result-icon">🚫</div>
         <div class="result-name" id="result-name-dup"></div>
-        <div class="result-status dup">دخل من قبل!</div>
+        <div class="result-status dup">تم استخدام هذه الدعوة مسبقًا!</div>
       </div>
       <div class="result-card denied" id="result-denied">
         <div class="result-icon">❌</div>
@@ -402,7 +402,7 @@ async function handleScan(raw) {
     } else if (outcome === 'dup') {
       document.getElementById('result-name-dup').textContent = found.name;
       document.getElementById('result-duplicate').style.display = 'block';
-      status.textContent = '⚠️ دخل من قبل';
+      status.textContent = '🚫 تم استخدام هذه الدعوة مسبقًا';
       playBeep(false);
       if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
     } else {
