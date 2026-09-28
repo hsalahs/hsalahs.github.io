@@ -104,6 +104,56 @@ test('a dropped connection while loading the event shows a tappable retry instea
   await expect(page.locator('#pin-event-name')).toHaveText('حفل تجريبي');
 });
 
+test('the guest list is cached locally as it syncs, and can be searched read-only from the scanner view', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    store: {
+      events: { e1: EVENT },
+      'events/e1/guests': {
+        g1: { name: 'أحمد العتيبي', id: 'WD-1', scanned: true },
+        g2: { name: 'سارة القحطاني', id: 'WD-2', scanned: false },
+      },
+    },
+  });
+  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1'));
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#offline-list-btn')).toBeVisible();
+
+  await page.locator('#offline-list-btn').click();
+  await expect(page.locator('#offline-list-results')).toContainText('أحمد العتيبي');
+  await expect(page.locator('#offline-list-results')).toContainText('سارة القحطاني');
+  await expect(page.locator('#offline-list-results')).toContainText('✓ دخل');
+
+  await page.locator('#offline-search').fill('سارة');
+  await expect(page.locator('#offline-list-results')).toContainText('سارة القحطاني');
+  await expect(page.locator('#offline-list-results')).not.toContainText('أحمد العتيبي');
+});
+
+test('a device that synced before offers the last saved guest list even when the connection is down on a later visit', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.addInitScript(() => {
+    localStorage.setItem('scan_offline_cache_e1', JSON.stringify({
+      eventName: 'حفل تجريبي',
+      guests: [{ name: 'محمد الشمري', id: 'WD-9', scanned: false }],
+      savedAt: new Date().toISOString(),
+    }));
+    window.__failNextGetDoc = true;
+  });
+  await page.goto('/scan.html?event=e1');
+
+  const fallbackBtn = page.getByRole('button', { name: '📋 عرض آخر نسخة محفوظة بدون إنترنت' });
+  await expect(fallbackBtn).toBeVisible();
+  await fallbackBtn.click();
+
+  await expect(page.locator('#scan-event-name')).toHaveText('حفل تجريبي');
+  await expect(page.locator('#offline-list-results')).toContainText('محمد الشمري');
+  // Read-only fallback — the real scan controls stay hidden since check-in
+  // needs a live connection to be trustworthy.
+  await expect(page.locator('#start-cam-btn')).toBeHidden();
+});
+
 test('scan.html has no web app manifest, so "Add to Home Screen" uses the current address-bar URL as-is', async ({ page }) => {
   // Confirmed on a real device: a <link rel="manifest"> gets read by iOS's
   // "Add to Home Screen" before any per-event JS swap can take effect, so
