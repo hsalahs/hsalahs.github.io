@@ -52,6 +52,32 @@ test('re-scanning an already-checked-in guest shows a clear red "already used" a
   await expect(dupCard.locator('.result-status.dup')).toHaveCSS('color', 'rgb(244, 67, 54)');
 });
 
+test('"مسح جديد" tears the camera down and returns to the start-camera screen, instead of trusting it\'s still healthy', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1'));
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+
+  // Simulate a camera that's already "running" (as if startCamera() had
+  // succeeded earlier) using a fake QrScanner-shaped object, then confirm
+  // resetScanState() actually stops and destroys it rather than leaving it
+  // untouched.
+  const calls = await page.evaluate(() => {
+    const log = [];
+    qrScanner = { stop: () => log.push('stop'), destroy: () => log.push('destroy') };
+    document.getElementById('camera-wrapper').style.display = 'block';
+    document.getElementById('start-cam-btn').style.display = 'none';
+    resetScanState();
+    return { log, qrScannerIsNull: qrScanner === null };
+  });
+  expect(calls.log).toEqual(['stop', 'destroy']);
+  expect(calls.qrScannerIsNull).toBe(true);
+  await expect(page.locator('#camera-wrapper')).toBeHidden();
+  await expect(page.locator('#start-cam-btn')).toBeVisible();
+  await expect(page.locator('#camera-status')).toHaveText('اضغط لتشغيل الكاميرا');
+});
+
 test('scan.html has no web app manifest, so "Add to Home Screen" uses the current address-bar URL as-is', async ({ page }) => {
   // Confirmed on a real device: a <link rel="manifest"> gets read by iOS's
   // "Add to Home Screen" before any per-event JS swap can take effect, so
