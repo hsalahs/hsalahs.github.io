@@ -156,7 +156,7 @@ function notifyAdmin(name, message) {
   if (!window.emailjs) return;
   emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
     name, message, to_email: ADMIN_NOTIFY_EMAIL,
-    time: new Date().toLocaleString('ar-SA', { dateStyle: 'medium', timeStyle: 'short' })
+    time: new Date().toLocaleString('ar-SA-u-nu-latn', { dateStyle: 'medium', timeStyle: 'short' })
   }).catch(e => console.error('Admin notify failed:', e));
 }
 
