@@ -235,14 +235,26 @@ function startGuestsListener() {
   });
 }
 
+// Used to just clear the result cards and assume the camera was still
+// healthy — if the stream had actually died or gotten stuck for any reason,
+// "مسح جديد" looked like it did nothing, with no way to recover short of
+// reloading the page. The retired legacy site's equivalent button fully
+// tore the scanner down and put the UI back at "press to start" every
+// time; doing the same here means every tap is a guaranteed-fresh start
+// instead of trusting whatever state the camera happens to be in.
 function resetScanState() {
+  if (qrScanner) {
+    try { qrScanner.stop(); } catch (_) {}
+    try { qrScanner.destroy(); } catch (_) {}
+    qrScanner = null;
+  }
   hideResultCards();
   scanCooldown = false;
   lastScanned = null;
   document.getElementById('manual-code').value = '';
-  document.getElementById('camera-status').textContent = qrScanner
-    ? 'وجّه الكاميرا نحو الباركود'
-    : 'اضغط لتشغيل الكاميرا';
+  document.getElementById('camera-wrapper').style.display = 'none';
+  document.getElementById('start-cam-btn').style.display = 'block';
+  document.getElementById('camera-status').textContent = 'اضغط لتشغيل الكاميرا';
 }
 
 function submitManualCode() {
