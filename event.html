@@ -816,14 +816,18 @@ function renderGuests() {
       <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ حضر' : 'لسه'}</span>
       ${g.scanned
         ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}')">↩️ تراجع</button>`
-        : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}')">✓ حضر</button>`}
+        : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">✓ حضر</button>`}
       <button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">📤 واتساب</button>
       <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">🗑</button>
     </div>
   `).join('');
 }
 
-async function markGuestAttend(docId) {
+async function markGuestAttend(docId, name) {
+  // This is the manual "mark attended" button in the guest list, separate
+  // from actually scanning someone's barcode at the door — a stray tap
+  // here shouldn't silently check someone in.
+  if (!confirm('تسجيل حضور "' + name + '"؟')) return;
   const { doc, updateDoc } = window._fsFns;
   try {
     await updateDoc(doc(window._db, 'events', eventId, 'guests', docId), { scanned: true, scannedAt: new Date().toISOString() });

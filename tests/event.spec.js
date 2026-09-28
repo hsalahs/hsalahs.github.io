@@ -27,6 +27,26 @@ test('each guest gets a WhatsApp share button, not a plain save button', async (
   await expect(page.locator('.guest-item .dl-btn')).toHaveText('📤 واتساب');
 });
 
+test('marking a guest as attended from the list asks for confirmation first, so a stray tap can\'t check someone in', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await page.getByRole('button', { name: '👥 الضيوف' }).click();
+
+  page.on('dialog', d => d.dismiss());
+  await page.locator('.attend-btn').click();
+  await expect(page.locator('.badge')).toHaveText('لسه');
+
+  page.removeAllListeners('dialog');
+  page.on('dialog', d => d.accept());
+  await page.locator('.attend-btn').click();
+  await expect(page.locator('.badge')).toHaveText('✓ حضر');
+});
+
 test('adding sequential numbers creates that many numbered guests without needing a file', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
