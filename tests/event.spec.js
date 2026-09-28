@@ -44,6 +44,22 @@ test('adding a guest confirms with a toast, clears and refocuses the field, and 
   await expect(page.locator('.guest-item')).toHaveCount(2);
 });
 
+test('two guests sharing a first name but not a full name are both allowed — the duplicate check compares the whole name', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([{ id: 'WD-1', name: 'حسن أحمد', scanned: false }]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  const input = page.locator('#new-guest-name');
+  await input.fill('حسن محمد');
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('#toast')).toContainText('تمت إضافة حسن محمد');
+  await expect(page.locator('.guest-item')).toHaveCount(2);
+});
+
 test('the guest-card button is always labeled "حفظ", regardless of whether this device can share files', async ({ page }) => {
   // Kept simple and consistent on purpose rather than switching label text
   // by device capability — "حفظ" reads fine either way: on a device that
