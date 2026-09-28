@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>سكانر الدخول</title>
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0A0A0A">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="سكانر">
+<meta name="mobile-web-app-capable" content="yes">
+
 <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <style>
@@ -239,11 +249,21 @@ function submitManualCode() {
   handleScan(match[0]);
 }
 
+// Installed as a home-screen app (PWA), the icon always opens the bare
+// start_url with no ?event= — there's no way to bake a specific event into
+// a static manifest shared by every wedding. So remember the last event
+// this device scanned for, and silently redirect back into it.
+function lastEventKey() { return 'scan_last_event'; }
+
 async function init() {
   if (!eventId) {
+    let lastEvent = null;
+    try { lastEvent = localStorage.getItem(lastEventKey()); } catch (e) {}
+    if (lastEvent) { window.location.replace('scan.html?event=' + lastEvent); return; }
     document.getElementById('loading-msg').textContent = '⚠️ رابط غير صحيح';
     return;
   }
+  try { localStorage.setItem(lastEventKey(), eventId); } catch (e) {}
   const { doc, getDoc } = window._fsFns;
   const snap = await getDoc(doc(window._db, 'events', eventId));
   if (!snap.exists()) {
@@ -361,6 +381,9 @@ window.addEventListener('load', () => {
     const splash = document.getElementById('splash');
     if (splash) splash.classList.add('hide');
   }, 2200);
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch((e) => console.error('SW registration failed:', e));
+  }
 });
 </script>
 </body>
