@@ -16,7 +16,25 @@ function baseStore(guests) {
   };
 }
 
-test('each guest gets a WhatsApp share button, not a plain save button', async ({ page }) => {
+test('the guest-card button is labeled "حفظ" on a browser that can\'t actually share files, not a misleading "واتساب"', async ({ page }) => {
+  // A desktop browser (and this headless test browser) has no
+  // navigator.canShare support for files, so downloadGuestCard silently
+  // falls back to a plain download — calling that button "واتساب" would
+  // promise a share sheet that never appears.
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await expect(page.locator('.guest-item .dl-btn')).toHaveText('💾 حفظ');
+});
+
+test('the guest-card button is labeled "واتساب" on a device that can actually share the image file', async ({ page }) => {
+  await page.addInitScript(() => {
+    navigator.canShare = () => true;
+  });
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: { uid: 'u1', email: 'customer@example.com' },
