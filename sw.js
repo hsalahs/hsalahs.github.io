@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dawaat-scan-v1';
+const CACHE_NAME = 'dawaat-scan-v2';
 const SHELL_FILES = ['scan.html', 'firebase-init.js', 'utils.js', 'manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

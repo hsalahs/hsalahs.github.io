@@ -153,6 +153,28 @@
 <script>
 const params = new URLSearchParams(window.location.search);
 const eventId = params.get('event');
+
+// The static manifest.webmanifest is shared by every wedding and can't bake
+// in a specific event, so it points at the bare scan.html — that's what the
+// localStorage "remember the last event" fallback below is for. But relying
+// on client storage being shared between the Safari tab and the installed
+// home-screen app turned out to be flaky in practice, so when we know the
+// event up front, swap the manifest link to a data: URI with THIS event
+// baked into start_url. iOS's Add to Home Screen can't fetch a blob: URI for
+// the manifest, but it can read a data: one — do this before the user has a
+// chance to tap "Add to Home Screen", so the icon opens straight into this
+// event with no dependence on shared storage at all.
+if (eventId) {
+  try {
+    fetch('manifest.webmanifest').then(r => r.json()).then(manifest => {
+      manifest.start_url = 'scan.html?event=' + encodeURIComponent(eventId);
+      const json = JSON.stringify(manifest);
+      document.querySelector('link[rel="manifest"]').href =
+        'data:application/manifest+json,' + encodeURIComponent(json);
+    }).catch(() => {});
+  } catch (e) {}
+}
+
 let eventData = null;
 let guests = [];
 let qrScanner = null;

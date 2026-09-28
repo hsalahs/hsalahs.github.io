@@ -30,3 +30,15 @@ test('visiting scan.html with no event and nothing remembered shows the invalid-
   await page.goto('/scan.html');
   await expect(page.locator('#loading-msg')).toContainText('رابط غير صحيح');
 });
+
+test('visiting scan.html with an event swaps the manifest link to bake that event into start_url, for Add to Home Screen', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-event-name')).toHaveText('حفل تجريبي');
+  await expect.poll(() => page.locator('link[rel="manifest"]').getAttribute('href'))
+    .toMatch(/^data:application\/manifest\+json,/);
+  const manifestHref = await page.locator('link[rel="manifest"]').getAttribute('href');
+  const manifestJson = decodeURIComponent(manifestHref.split(',')[1]);
+  expect(JSON.parse(manifestJson).start_url).toBe('scan.html?event=e1');
+});
