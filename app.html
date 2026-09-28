@@ -492,6 +492,13 @@ function checkNewlyCappedEvents(events) {
         showToast('💰 مناسبة "' + ev.name + '" وصلت لحد الضيوف المجانيين — جاهزة للدفع');
       }
     });
+  } else if (capped.size > 0) {
+    // First snapshot after opening the dashboard: don't name events that were
+    // already capped before now (that's what the standing unpaid list is
+    // for), but a fresh page load with pending, ready-to-pay events is worth
+    // one quiet nudge too — otherwise an admin who opens the dashboard AFTER
+    // the cap was hit gets no live signal at all, only the earlier email.
+    showToast('🔔 يوجد ' + capped.size + ' مناسبة غير مدفوعة وصلت لحد الضيوف المجانيين — جاهزة للدفع');
   }
   knownCappedEventIds = capped;
 }

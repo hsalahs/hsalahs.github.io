@@ -540,7 +540,7 @@ async function saveEventEdit() {
 
 async function deleteThisEvent() {
   if (!confirm('حذف "' + eventData.name + '" نهائيًا؟\n\nراح ينحذف كل الضيوف والطلبات المرتبطة فيها، وما تقدر ترجعها بعدين.')) return;
-  const { collection, getDocs, deleteDoc, doc } = window._fsFns;
+  const { collection, getDocs, deleteDoc, doc, runTransaction } = window._fsFns;
   try {
     const guestsSnap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
     const requestsSnap = await getDocs(collection(window._db, 'events', eventId, 'requests'));
@@ -549,6 +549,23 @@ async function deleteThisEvent() {
       ...requestsSnap.docs.map(d => deleteDoc(d.ref))
     ]);
     await deleteDoc(doc(window._db, 'events', eventId));
+
+    // Frees up the owner's event slot. Best-effort and separate from the
+    // deletion above — without this, deleting an event never lowers
+    // accountLimits.eventCount, so the owner stays stuck at their limit
+    // forever and can't create a replacement event. A failure here (e.g. an
+    // already-corrupt accountLimits doc) must never block the deletion
+    // itself, which is why it's not part of one transaction with it.
+    try {
+      const limitRef = doc(window._db, 'accountLimits', eventData.ownerUid);
+      await runTransaction(window._db, async (tx) => {
+        const limitSnap = await tx.get(limitRef);
+        if (!limitSnap.exists()) return;
+        const count = limitSnap.data().eventCount || 0;
+        if (count > 0) tx.update(limitRef, { eventCount: count - 1 });
+      });
+    } catch (e) { console.error('accountLimits decrement failed:', e); }
+
     window.location.href = 'app.html';
   } catch (e) {
     alert('صار خطأ أثناء الحذف: ' + (e.code || '') + ' — ' + e.message);
