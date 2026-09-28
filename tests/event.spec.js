@@ -87,3 +87,31 @@ test('the admin account can open a customer event it does not own', async ({ pag
   await expect(page.locator('#dashboard')).toBeVisible();
   await expect(page.locator('#denied-msg')).toBeHidden();
 });
+
+test('an unpaid event blocks the owner from adding a guest, and shows the payment gate', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, paid: false } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#payment-gate')).toBeVisible();
+  await page.getByRole('button', { name: '👥 الضيوف' }).click();
+  await page.locator('#new-guest-name').fill('ضيف جديد');
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('.guest-item')).toHaveCount(0);
+});
+
+test('a paid event lets the owner add a guest normally, and hides the payment gate', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, paid: true } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#payment-gate')).toBeHidden();
+  await page.getByRole('button', { name: '👥 الضيوف' }).click();
+  await page.locator('#new-guest-name').fill('ضيف جديد');
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+});

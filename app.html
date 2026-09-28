@@ -222,6 +222,7 @@ async function createNewEvent() {
     await runTransaction(window._db, async (tx) => {
       const eventData = {
         name, date, venue, mapsLink, scanPin,
+        paid: false,
         ownerUid: user.uid,
         ownerEmail: user.email || '',
         createdAt: serverTimestamp()
@@ -263,7 +264,7 @@ function renderEvents(events, showOwner) {
     <div class="card event-card">
       <div class="event-card-top">
         <div>
-          <div class="event-name">${escapeHtml(ev.name)}</div>
+          <div class="event-name">${escapeHtml(ev.name)} ${ev.paid ? '<span style="color:#4CAF50; font-size:11px;">✅ مفعّلة</span>' : '<span style="color:#E5484D; font-size:11px;">🔒 غير مفعّلة</span>'}</div>
           <div class="event-date">${ev.date || ''}${ev.venue ? ' · ' + escapeHtml(ev.venue) : ''}</div>
           ${showOwner ? `<div class="event-date">👤 ${escapeHtml(ev.ownerEmail || ev.ownerUid || '')}</div>` : ''}
         </div>

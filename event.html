@@ -90,6 +90,12 @@
   .btn.danger { background:transparent; border:1px solid rgba(255,120,120,0.4); color:#ff9d9d; }
   .row { display:flex; gap:8px; flex-wrap:wrap; }
 
+  #payment-gate { display:none; background:linear-gradient(145deg,rgba(229,72,77,0.10),rgba(229,72,77,0.03)); border:1px solid rgba(229,72,77,0.35); border-radius:14px; padding:16px; margin-bottom:12px; text-align:center; }
+  #payment-gate .pg-title { color:#E5484D; font-weight:700; font-size:14.5px; margin-bottom:6px; }
+  #payment-gate .pg-sub { color:var(--text-soft); font-size:12.5px; margin-bottom:12px; line-height:1.7; }
+  #payment-gate .btn.wa { background:linear-gradient(135deg,#1DA851,#25D366); color:#04170a; width:100%; }
+  .paid-badge { display:inline-block; background:rgba(76,175,80,0.15); color:#4CAF50; font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:20px; margin-bottom:10px; }
+
   .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
   .stat-box { background:linear-gradient(145deg,var(--glass-bg-1),var(--glass-bg-2)); border:1px solid var(--glass-border); border-radius:12px; padding:12px 6px; text-align:center; cursor:pointer; transition:all 0.25s ease; }
   .stat-box.tappable:hover { border-color:rgba(var(--accent-rgb),0.4); }
@@ -253,7 +259,19 @@
       <button class="btn danger" style="width:100%; margin-top:12px;" onclick="deleteThisEvent()">🗑 حذف المناسبة نهائيًا</button>
     </div>
 
-    <div class="card">
+    <div id="payment-gate">
+      <div class="pg-title">🔒 المناسبة لسا ما تفعّلت</div>
+      <div class="pg-sub">تقدر تجهّز مناسبتك وتشوف كل شي، بس لازم تفعّل الدفع قبل ما تضيف ضيوف أو تشارك رابط الدعوة.</div>
+      <button class="btn wa" onclick="openPaymentWhatsapp()">💬 تواصل معنا عبر واتساب</button>
+    </div>
+    <div id="paid-badge-row" style="display:none; text-align:center;">
+      <span class="paid-badge">✅ مفعّلة</span>
+    </div>
+    <div id="admin-paid-toggle" style="display:none; text-align:center; margin-bottom:12px;">
+      <button class="btn ghost" onclick="adminActivatePayment()">✅ تفعيل الدفع (أدمن)</button>
+    </div>
+
+    <div class="card" id="invite-link-card">
       <div style="font-size:12px; color:#B8B4AC; margin-bottom:6px;">رابط الدعوة — شاركه مع ضيوفك</div>
       <div class="link-box">
         <input type="text" id="invite-link" readonly>
@@ -339,9 +357,43 @@
 const ADMIN_EMAILS = ['hsallah@outlook.sa'];
 function isAdmin(user) { return !!user && ADMIN_EMAILS.includes((user.email || '').toLowerCase()); }
 
+const WHATSAPP_NUMBER = '966546664459';
+
 const params = new URLSearchParams(window.location.search);
 const eventId = params.get('id');
 let eventData = null;
+let currentUser = null;
+
+// Event setup (name/date/theme/etc.) stays free — the gate only blocks the
+// actions that actually deliver value: adding guests and sharing the invite
+// link. Admins always bypass it.
+function paymentGateActive() {
+  return !!eventData && !eventData.paid && !isAdmin(currentUser);
+}
+
+function renderPaymentGate() {
+  const gate = document.getElementById('payment-gate');
+  const badgeRow = document.getElementById('paid-badge-row');
+  const adminToggle = document.getElementById('admin-paid-toggle');
+  const active = paymentGateActive();
+  gate.style.display = active ? 'block' : 'none';
+  badgeRow.style.display = (eventData && eventData.paid) ? 'block' : 'none';
+  adminToggle.style.display = (isAdmin(currentUser) && eventData && !eventData.paid) ? 'block' : 'none';
+}
+
+function openPaymentWhatsapp() {
+  const msg = 'أبي أفعّل الدفع لمناسبة "' + eventData.name + '" (رقم: ' + eventId + ')';
+  window.open('https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(msg), '_blank');
+}
+
+async function adminActivatePayment() {
+  const { doc, updateDoc } = window._fsFns;
+  try {
+    await updateDoc(doc(window._db, 'events', eventId), { paid: true });
+    eventData.paid = true;
+    renderPaymentGate();
+  } catch (e) { showErr(e); }
+}
 let guests = [];
 let requests = [];
 let qrScanner = null;
@@ -376,6 +428,7 @@ function showTab(name, btn) {
 }
 
 function copyInviteLink() {
+  if (paymentGateActive()) { openPaymentWhatsapp(); return; }
   const input = document.getElementById('invite-link');
   input.select();
   navigator.clipboard?.writeText(input.value);
@@ -455,6 +508,7 @@ async function init() {
       document.getElementById('denied-msg').innerHTML = 'لازم تسجّل دخول الأول — <a href="app.html" style="color:#E0BC7A">اضغط هنا</a>';
       return;
     }
+    currentUser = user;
     const { doc, getDoc } = window._fsFns;
     const snap = await getDoc(doc(window._db, 'events', eventId));
     if (!snap.exists() || (snap.data().ownerUid !== user.uid && !isAdmin(user))) {
@@ -479,6 +533,7 @@ async function init() {
     document.getElementById('scan-link').value = window.location.origin + window.location.pathname.replace('event.html', 'scan.html') + '?event=' + eventId;
     document.getElementById('scan-pin-display').textContent = eventData.scanPin;
     applyTheme(eventData.theme || 'gold');
+    renderPaymentGate();
     startListeners();
   });
 }
@@ -1015,6 +1070,7 @@ function showErr(e) {
 }
 
 async function addGuest() {
+  if (paymentGateActive()) { openPaymentWhatsapp(); return; }
   const nameInput = document.getElementById('new-guest-name');
   const name = nameInput.value.trim();
   if (!name) return;
@@ -1028,6 +1084,7 @@ async function addGuest() {
 }
 
 async function importCSV(evt) {
+  if (paymentGateActive()) { openPaymentWhatsapp(); evt.target.value = ''; return; }
   const file = evt.target.files[0];
   if (!file) return;
 
@@ -1092,6 +1149,7 @@ async function importCSV(evt) {
 }
 
 async function approveRequest(reqDocId) {
+  if (paymentGateActive()) { openPaymentWhatsapp(); return; }
   const req = requests.find(r => r.docId === reqDocId);
   if (!req) return;
   const { collection, addDoc, doc, updateDoc } = window._fsFns;

@@ -6,6 +6,15 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'hsallah@outlook.sa';
     }
 
+    // Payment gate: an event's owner can add guests / share the invite only
+    // once the admin has flipped `paid` to true (after an off-platform bank
+    // transfer). Reads the event doc itself, not anything in the request, so
+    // a forged request payload can't fake it.
+    function eventIsPaidAndOwnedBy(eventId, uid) {
+      let ev = get(/databases/$(database)/documents/events/$(eventId)).data;
+      return ev.ownerUid == uid && ev.paid == true;
+    }
+
     match /eventRequests/{requestId} {
       allow create: if request.auth != null && request.resource.data.uid == request.auth.uid &&
         request.resource.data.keys().hasOnly(['uid', 'email', 'status', 'requestedAt']) &&
@@ -70,15 +79,35 @@ service cloud.firestore {
           )
         );
 
-      allow update, delete: if request.auth != null &&
+      // The owner can freely edit their event (name/date/venue/theme/etc.)
+      // but cannot touch `paid` or `ownerUid` themselves — only the admin
+      // can activate payment or reassign ownership.
+      allow update: if request.auth != null && (
+        isAdmin() ||
+        (
+          resource.data.ownerUid == request.auth.uid &&
+          request.resource.data.ownerUid == resource.data.ownerUid &&
+          request.resource.data.paid == resource.data.paid
+        )
+      );
+      allow delete: if request.auth != null &&
         (isAdmin() || resource.data.ownerUid == request.auth.uid);
 
       match /guests/{guestId} {
         allow read: if true;
-        allow write: if request.auth != null &&
+
+        // Adding a guest — manually, via CSV import, or by approving a
+        // self-registration request — is the action gated on payment.
+        allow create: if request.auth != null &&
+          (isAdmin() || eventIsPaidAndOwnedBy(eventId, request.auth.uid));
+
+        // Editing/removing existing guests (attendance, deletes) is not
+        // part of the payment gate — unchanged from before.
+        allow update, delete: if request.auth != null &&
           (isAdmin() ||
            get(/databases/$(database)/documents/events/$(eventId)).data.ownerUid == request.auth.uid);
 
+        // Public door-scanner flip (scan.html has no login) — untouched.
         allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scanned', 'scannedAt'])
                       && resource.data.scanned == false
                       && request.resource.data.scanned == true;
