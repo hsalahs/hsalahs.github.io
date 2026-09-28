@@ -78,6 +78,20 @@ test('"مسح جديد" tears the camera down and returns to the start-camera sc
   await expect(page.locator('#camera-status')).toHaveText('اضغط لتشغيل الكاميرا');
 });
 
+test('the splash screen clears on its own even if the entire app script fails to load — it must never trap the page behind it', async ({ page }) => {
+  // This is the exact failure the splash-hide logic used to be vulnerable
+  // to: it lived inside window.addEventListener('load', ...), so if any
+  // subresource never loaded (bad venue wifi, a blocked/slow CDN script),
+  // `load` never fired and the splash sat there forever with nothing
+  // behind it ever appearing — door staff stuck looking at a static
+  // "دعوة زفاف" screen with no way to scan anyone in. Simulating that here
+  // by blocking firebase-init.js outright, the module the rest of the page
+  // depends on entirely.
+  await page.route('**/firebase-init.js', (route) => route.abort());
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#splash')).toHaveClass(/hide/, { timeout: 4000 });
+});
+
 test('scan.html has no web app manifest, so "Add to Home Screen" uses the current address-bar URL as-is', async ({ page }) => {
   // Confirmed on a real device: a <link rel="manifest"> gets read by iOS's
   // "Add to Home Screen" before any per-event JS swap can take effect, so
