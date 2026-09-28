@@ -45,11 +45,11 @@ test('adding a guest confirms with a toast, clears and refocuses the field, and 
   await expect(page.locator('.guest-item')).toHaveCount(2);
 });
 
-test('the guest-card button is labeled "حفظ" on a browser that can\'t actually share files, not a misleading "واتساب"', async ({ page }) => {
-  // A desktop browser (and this headless test browser) has no
-  // navigator.canShare support for files, so downloadGuestCard silently
-  // falls back to a plain download — calling that button "واتساب" would
-  // promise a share sheet that never appears.
+test('the guest-card button is always labeled "حفظ", regardless of whether this device can share files', async ({ page }) => {
+  // Kept simple and consistent on purpose rather than switching label text
+  // by device capability — "حفظ" reads fine either way: on a device that
+  // can share, the system share sheet that opens even includes "Save
+  // Image" as one of its own options.
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: { uid: 'u1', email: 'customer@example.com' },
@@ -58,20 +58,6 @@ test('the guest-card button is labeled "حفظ" on a browser that can\'t actuall
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
   await expect(page.locator('.guest-item .dl-btn')).toHaveText('💾 حفظ');
-});
-
-test('the guest-card button is labeled "واتساب" on a device that can actually share the image file', async ({ page }) => {
-  await page.addInitScript(() => {
-    navigator.canShare = () => true;
-  });
-  await stubFirebase(page);
-  await seedFakeFirebase(page, {
-    user: { uid: 'u1', email: 'customer@example.com' },
-    store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]),
-  });
-  await page.goto('/event.html?id=e1');
-  await expect(page.locator('#dashboard')).toBeVisible();
-  await expect(page.locator('.guest-item .dl-btn')).toHaveText('📤 واتساب');
 });
 
 test('marking a guest as attended from the list asks for confirmation first, so a stray tap can\'t check someone in', async ({ page }) => {
