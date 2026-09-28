@@ -16,6 +16,35 @@ function baseStore(guests) {
   };
 }
 
+test('adding a guest confirms with a toast, clears and refocuses the field, and blocks a duplicate name', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await page.getByRole('button', { name: '👥 الضيوف' }).click();
+
+  // Empty name gets a validation toast, not a silent no-op.
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('#toast')).toContainText('اكتب اسمًا صحيحًا');
+
+  const input = page.locator('#new-guest-name');
+  await input.fill('سارة');
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('#toast')).toContainText('تمت إضافة سارة');
+  await expect(input).toHaveValue('');
+  await expect(input).toBeFocused();
+  await expect(page.locator('.guest-item')).toHaveCount(2);
+
+  // Same name again should be rejected as a duplicate within this list.
+  await input.fill('سارة');
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('#toast')).toContainText('الاسم موجود بالقائمة');
+  await expect(page.locator('.guest-item')).toHaveCount(2);
+});
+
 test('the guest-card button is labeled "حفظ" on a browser that can\'t actually share files, not a misleading "واتساب"', async ({ page }) => {
   // A desktop browser (and this headless test browser) has no
   // navigator.canShare support for files, so downloadGuestCard silently

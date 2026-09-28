@@ -828,7 +828,7 @@ function renderGuests() {
       </div>
       <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ حضر' : 'لسه'}</span>
       ${g.scanned
-        ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}')">↩️ تراجع</button>`
+        ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">↩️ تراجع</button>`
         : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">✓ حضر</button>`}
       <button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">${canShareFiles ? '📤 واتساب' : '💾 حفظ'}</button>
       <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">🗑</button>
@@ -844,13 +844,15 @@ async function markGuestAttend(docId, name) {
   const { doc, updateDoc } = window._fsFns;
   try {
     await updateDoc(doc(window._db, 'events', eventId, 'guests', docId), { scanned: true, scannedAt: new Date().toISOString() });
+    showToast('✅ تم تسجيل حضور ' + name);
   } catch (e) { showErr(e); }
 }
 
-async function undoGuestAttend(docId) {
+async function undoGuestAttend(docId, name) {
   const { doc, updateDoc } = window._fsFns;
   try {
     await updateDoc(doc(window._db, 'events', eventId, 'guests', docId), { scanned: false, scannedAt: null });
+    showToast('↩️ تم التراجع — ' + name + ' لم يصل');
   } catch (e) { showErr(e); }
 }
 
@@ -859,6 +861,7 @@ async function deleteGuest(docId, name) {
   const { doc, deleteDoc } = window._fsFns;
   try {
     await deleteDoc(doc(window._db, 'events', eventId, 'guests', docId));
+    showToast('✅ تم حذف الضيف');
   } catch (e) { showErr(e); }
 }
 
@@ -1295,10 +1298,15 @@ async function addGuest() {
   if (paymentGateActive()) { openPaymentWhatsapp(); return; }
   const nameInput = document.getElementById('new-guest-name');
   const name = nameInput.value.trim();
-  if (!name) return;
+  if (!name) { showToast('⚠️ اكتب اسمًا صحيحًا'); return; }
+  // Only blocks duplicates within this event's own list — the same name
+  // can legitimately exist on both sides of the family, each needing
+  // their own invitation.
+  if (guests.some(g => g.name === name)) { showToast('⚠️ الاسم موجود بالقائمة'); return; }
   const { doc, runTransaction } = window._fsFns;
   const eventRef = doc(window._db, 'events', eventId);
   const guestRef = doc(window._db, 'events', eventId, 'guests', randomDocId());
+  let justHitCap = false;
   try {
     await runTransaction(window._db, async (tx) => {
       const snap = await tx.get(eventRef);
@@ -1307,8 +1315,14 @@ async function addGuest() {
       if (!data.paid && !isAdmin(currentUser) && count >= FREE_GUEST_LIMIT) throw new Error('GATE');
       tx.set(guestRef, { id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString() });
       tx.update(eventRef, { guestCount: count + 1 });
+      justHitCap = !data.paid && !isAdmin(currentUser) && count + 1 >= FREE_GUEST_LIMIT;
     });
     nameInput.value = '';
+    nameInput.focus();
+    // If this is the add that hits the free-guest cap, that more important
+    // notification (fired separately by the live event listener) should
+    // own the toast instead of racing this generic one for the same slot.
+    if (!justHitCap) showToast('✅ تمت إضافة ' + name);
   } catch (e) {
     if (e.message === 'GATE') { openPaymentWhatsapp(); return; }
     showErr(e);
@@ -1463,6 +1477,7 @@ async function approveRequest(reqDocId) {
       tx.update(eventRef, { guestCount: count + 1 });
     });
     await updateDoc(doc(window._db, 'events', eventId, 'requests', reqDocId), { status: 'approved' });
+    showToast('✅ تمت الموافقة — ' + req.name);
   } catch (e) {
     if (e.message === 'GATE') { openPaymentWhatsapp(); return; }
     showErr(e);
@@ -1471,8 +1486,10 @@ async function approveRequest(reqDocId) {
 
 async function rejectRequest(reqDocId) {
   const { doc, updateDoc } = window._fsFns;
+  const req = requests.find(r => r.docId === reqDocId);
   try {
     await updateDoc(doc(window._db, 'events', eventId, 'requests', reqDocId), { status: 'rejected' });
+    showToast('🗑 تم رفض الطلب' + (req ? ' — ' + req.name : ''));
   } catch (e) { showErr(e); }
 }
 
