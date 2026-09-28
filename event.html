@@ -94,7 +94,6 @@
   #payment-gate .pg-title { color:#E5484D; font-weight:700; font-size:14.5px; margin-bottom:6px; }
   #payment-gate .pg-sub { color:var(--text-soft); font-size:12.5px; margin-bottom:12px; line-height:1.7; }
   #payment-gate .btn.wa { background:linear-gradient(135deg,#1DA851,#25D366); color:#04170a; width:100%; }
-  #free-tier-note { display:none; background:rgba(var(--accent-rgb),0.08); border:1px solid rgba(var(--accent-rgb),0.25); border-radius:14px; padding:12px 16px; margin-bottom:12px; text-align:center; color:var(--gold); font-size:13px; font-weight:600; }
 
   .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
   .stat-box { background:linear-gradient(145deg,var(--glass-bg-1),var(--glass-bg-2)); border:1px solid var(--glass-border); border-radius:12px; padding:12px 6px; text-align:center; cursor:pointer; transition:all 0.25s ease; }
@@ -265,9 +264,6 @@
       <div class="pg-sub">أضفت أول 5 ضيوف مجانًا — عشان تضيف أكثر أو تشارك رابط الدعوة لعدد غير محدود، لازم تفعّل الدفع.</div>
       <button class="btn wa" onclick="openPaymentWhatsapp()">💬 تواصل معنا عبر واتساب</button>
     </div>
-    <div id="free-tier-note">
-      🎁 عندك <span id="free-tier-count">5</span> ضيوف مجانيين متبقين — بعدها لازم تفعّل الدفع
-    </div>
 
     <div class="card" id="invite-link-card">
       <div style="font-size:12px; color:#B8B4AC; margin-bottom:6px;">رابط الدعوة — شاركه مع ضيوفك</div>
@@ -377,18 +373,21 @@ function paymentGateActive() {
   return !!eventData && !eventData.paid && !isAdmin(currentUser) && guestCount() >= FREE_GUEST_LIMIT;
 }
 
+// Tracks whether the gate was active on the previous render (null = not
+// rendered yet), so the "you hit the free limit" toast fires exactly once
+// at the moment it happens during this session — never on page load, even
+// if the event was already blocked when they opened it.
+let gateWasActive = null;
+
 function renderPaymentGate() {
   const gate = document.getElementById('payment-gate');
-  const freeNote = document.getElementById('free-tier-note');
   const active = paymentGateActive();
   gate.style.display = active ? 'block' : 'none';
 
-  const stillFree = eventData && !eventData.paid && !isAdmin(currentUser) && !active;
-  freeNote.style.display = stillFree ? 'block' : 'none';
-  if (stillFree) {
-    const remaining = Math.max(0, FREE_GUEST_LIMIT - guestCount());
-    document.getElementById('free-tier-count').textContent = remaining;
+  if (active && gateWasActive === false) {
+    showToast('🎁 خلصت الـ' + FREE_GUEST_LIMIT + ' ضيوف المجانيين! فعّل الدفع عشان تضيف أكثر');
   }
+  gateWasActive = active;
 
   const menuItem = document.getElementById('payment-menu-item');
   if (eventData && eventData.paid) {
