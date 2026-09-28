@@ -371,7 +371,9 @@ function renderPaymentGate() {
 
   const menuItem = document.getElementById('payment-menu-item');
   if (eventData && eventData.paid) {
-    menuItem.innerHTML = '<span style="color:#4CAF50;">✅ المناسبة مفعّلة</span>';
+    menuItem.innerHTML = isAdmin(currentUser)
+      ? '<span style="color:#4CAF50;">✅ مفعّلة — إلغاء التفعيل</span>'
+      : '<span style="color:#4CAF50;">✅ المناسبة مفعّلة</span>';
   } else if (isAdmin(currentUser)) {
     menuItem.innerHTML = '<span style="color:#E5484D;">🔓 تفعيل الدفع (أدمن)</span>';
   } else {
@@ -381,9 +383,12 @@ function renderPaymentGate() {
 
 function handlePaymentMenuClick() {
   closeTopMenu();
-  if (eventData && eventData.paid) return;
-  if (isAdmin(currentUser)) adminActivatePayment();
-  else openPaymentWhatsapp();
+  if (!isAdmin(currentUser)) {
+    if (!eventData || !eventData.paid) openPaymentWhatsapp();
+    return;
+  }
+  if (eventData && eventData.paid) adminDeactivatePayment();
+  else adminActivatePayment();
 }
 
 function openPaymentWhatsapp() {
@@ -392,10 +397,24 @@ function openPaymentWhatsapp() {
 }
 
 async function adminActivatePayment() {
+  if (!confirm('هل تأكدت إن العميل حوّل المبلغ فعليًا؟')) return;
   const { doc, updateDoc } = window._fsFns;
   try {
     await updateDoc(doc(window._db, 'events', eventId), { paid: true });
     eventData.paid = true;
+    renderPaymentGate();
+  } catch (e) { showErr(e); }
+}
+
+// For mistaken approvals or disputed transfers — puts the event back behind
+// the payment gate. The owner immediately loses the ability to add guests
+// or share the invite link again until re-activated.
+async function adminDeactivatePayment() {
+  if (!confirm('هل متأكد إنك تبي تلغي التفعيل؟ العميل بيرجع يُمنع من إضافة ضيوف أو مشاركة الرابط.')) return;
+  const { doc, updateDoc } = window._fsFns;
+  try {
+    await updateDoc(doc(window._db, 'events', eventId), { paid: false });
+    eventData.paid = false;
     renderPaymentGate();
   } catch (e) { showErr(e); }
 }
@@ -540,6 +559,25 @@ async function init() {
     applyTheme(eventData.theme || 'gold');
     renderPaymentGate();
     startListeners();
+    watchPaymentStatus();
+  });
+}
+
+// Live-watches the event doc itself so a customer who already has this page
+// open sees the payment activation the moment the admin flips it — no
+// refresh needed — and gets a toast celebrating it.
+function watchPaymentStatus() {
+  const { doc, onSnapshot } = window._fsFns;
+  onSnapshot(doc(window._db, 'events', eventId), (snap) => {
+    if (!snap.exists()) return;
+    const wasPaid = eventData.paid;
+    eventData = { ...eventData, ...snap.data() };
+    document.getElementById('ev-title').textContent = eventData.name;
+    document.getElementById('ev-sub').textContent = [eventData.date, eventData.venue].filter(Boolean).join(' · ');
+    renderPaymentGate();
+    if (!wasPaid && eventData.paid) {
+      showToast('🎉 تم تفعيل الدفع! تقدر تضيف ضيوف وتشارك رابط الدعوة الحين');
+    }
   });
 }
 

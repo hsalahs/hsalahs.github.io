@@ -115,3 +115,48 @@ test('a paid event lets the owner add a guest normally, and hides the payment ga
   await page.getByRole('button', { name: 'إضافة' }).click();
   await expect(page.locator('.guest-item')).toHaveCount(1);
 });
+
+test('the owner sees a live toast and the gate lifts when the event is activated while the page is open', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, paid: false } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#payment-gate')).toBeVisible();
+  await page.evaluate(() => {
+    const { doc, updateDoc } = window._fsFns;
+    return updateDoc(doc(window._db, 'events', 'e1'), { paid: true });
+  });
+  await expect(page.locator('#toast')).toContainText('تم تفعيل الدفع');
+  await expect(page.locator('#payment-gate')).toBeHidden();
+});
+
+test('declining the confirm dialog leaves the event unpaid', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: { events: { e1: { ...EVENT, ownerUid: 'u1', paid: false } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  page.on('dialog', d => d.dismiss());
+  await page.goto('/event.html?id=e1');
+  await page.getByRole('button', { name: '☰' }).click();
+  await page.locator('#payment-menu-item').click();
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('تفعيل الدفع');
+});
+
+test('the admin can revoke a mistaken activation from the menu', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: { events: { e1: { ...EVENT, ownerUid: 'u1', paid: true } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  page.on('dialog', d => d.accept());
+  await page.goto('/event.html?id=e1');
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('إلغاء التفعيل');
+  await page.locator('#payment-menu-item').click();
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('تفعيل الدفع (أدمن)');
+});

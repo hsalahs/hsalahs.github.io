@@ -98,6 +98,14 @@
       مسجّل دخول بحساب: <span id="current-email" style="color:#E0BC7A"></span>
     </div>
 
+    <div id="admin-unpaid-section" style="display:none; margin-bottom:16px;">
+      <div class="sub" style="margin-bottom:8px; text-align:right; display:flex; align-items:center; justify-content:flex-end; gap:8px;">
+        🔒 مناسبات غير مدفوعة
+        <span class="badge-count" id="admin-unpaid-badge">0</span>
+      </div>
+      <div id="admin-unpaid-list"></div>
+    </div>
+
     <div id="admin-requests-section" style="display:none; margin-bottom:16px;">
       <div class="sub" style="margin-bottom:8px; text-align:right; display:flex; align-items:center; justify-content:flex-end; gap:8px;">
         🙋 طلبات مناسبات إضافية
@@ -421,7 +429,40 @@ function watchEvents(user) {
     myEventsCount = admin ? events.filter(ev => ev.ownerUid === user.uid).length : events.length;
     updateCreateGate(admin);
     renderEvents(events, admin);
+    if (admin) renderUnpaidEvents(events);
   });
+}
+
+function renderUnpaidEvents(events) {
+  const unpaid = events.filter(ev => !ev.paid);
+  const section = document.getElementById('admin-unpaid-section');
+  const list = document.getElementById('admin-unpaid-list');
+  if (unpaid.length === 0) { section.style.display = 'none'; list.innerHTML = ''; return; }
+  section.style.display = 'block';
+  document.getElementById('admin-unpaid-badge').textContent = unpaid.length > 99 ? '99+' : String(unpaid.length);
+  list.innerHTML = unpaid.map(ev => `
+    <div class="card event-card-top">
+      <div>
+        <div class="event-name">${escapeHtml(ev.name)}</div>
+        <div class="event-date">👤 ${escapeHtml(ev.ownerEmail || ev.ownerUid || '')}</div>
+      </div>
+      <div class="event-actions">
+        <button class="btn small" style="margin:0; width:auto; padding:8px 14px;" onclick="quickActivatePayment('${ev.id}')">✅ تفعيل</button>
+        <a class="btn ghost small" style="margin:0; width:auto; padding:8px 14px; text-decoration:none;" href="event.html?id=${ev.id}">فتح</a>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function quickActivatePayment(eventId) {
+  if (!confirm('هل تأكدت إن العميل حوّل المبلغ فعليًا؟')) return;
+  const { doc, updateDoc } = window._fsFns;
+  try {
+    await updateDoc(doc(window._db, 'events', eventId), { paid: true });
+  } catch (e) {
+    alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
+    console.error(e);
+  }
 }
 
 function watchMyLimitAndRequest(user) {
