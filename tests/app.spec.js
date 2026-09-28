@@ -92,3 +92,25 @@ test('the admin sees a standing list of unpaid events and can activate one from 
   await page.locator('#admin-unpaid-list').getByRole('button', { name: '✅ تفعيل' }).click();
   await expect(page.locator('#admin-unpaid-section')).toBeHidden();
 });
+
+test('the admin gets a live toast when an event crosses the free-guest cap while watching, not for ones already capped on load', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: {
+      events: {
+        e1: { name: 'Already Capped', ownerUid: 'u1', ownerEmail: 'a@example.com', date: '', venue: '', paid: false, guestCount: 5, createdAt: { seconds: 1 } },
+        e2: { name: 'About To Cap', ownerUid: 'u2', ownerEmail: 'b@example.com', date: '', venue: '', paid: false, guestCount: 4, createdAt: { seconds: 2 } },
+      },
+    },
+  });
+  await page.goto('/app.html');
+  await expect(page.locator('#admin-unpaid-badge')).toHaveText('2');
+  await expect(page.locator('#toast')).not.toContainText('Already Capped');
+
+  await page.evaluate(() => {
+    const { doc, updateDoc } = window._fsFns;
+    return updateDoc(doc(window._db, 'events', 'e2'), { guestCount: 5 });
+  });
+  await expect(page.locator('#toast')).toContainText('About To Cap');
+});
