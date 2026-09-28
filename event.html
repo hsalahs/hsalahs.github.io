@@ -393,6 +393,19 @@ const WHATSAPP_NUMBER = '966546664459';
 // before paying — keep in sync with FREE_GUEST_LIMIT in firestore.rules.
 const FREE_GUEST_LIMIT = 5;
 
+// The guest-card button uses the Web Share API to hand off the actual QR
+// image (with WhatsApp as one of the apps to pick), falling back to a
+// plain download when that's not supported — desktop browsers mostly
+// don't support sharing files at all, so labeling the button "واتساب"
+// there is actively misleading since it just saves the file with no share
+// sheet ever appearing. Detecting this once up front (rather than after a
+// user complains it "doesn't share") lets the label match what actually
+// happens on this device.
+const canShareFiles = !!(navigator.canShare && (() => {
+  try { return navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] }); }
+  catch (e) { return false; }
+})());
+
 // Admin heads-up email — same EmailJS account used in app.html.
 const EMAILJS_PUBLIC_KEY = 'GAr6CcOiDqo-Mc3m5';
 const EMAILJS_SERVICE_ID = 'service_j15srgf';
@@ -817,7 +830,7 @@ function renderGuests() {
       ${g.scanned
         ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}')">↩️ تراجع</button>`
         : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">✓ حضر</button>`}
-      <button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">📤 واتساب</button>
+      <button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">${canShareFiles ? '📤 واتساب' : '💾 حفظ'}</button>
       <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">🗑</button>
     </div>
   `).join('');
