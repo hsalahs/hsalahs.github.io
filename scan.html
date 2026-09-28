@@ -168,6 +168,19 @@ setTimeout(() => {
     </div>
 
     <button class="btn ghost" id="new-scan-btn" style="margin-top:14px; display:none" onclick="resetScanState()">🔄 مسح جديد</button>
+
+    <!-- Live check-in needs a connection (it's a transactional write, so
+         it can't be trusted to work correctly offline), but staff still
+         need SOME way to help a guest at the door when the connection
+         drops — reading off a name list doesn't need to be perfect, it
+         just needs to exist. This shows the last successfully-synced
+         copy, cached locally, entirely independent of the network. -->
+    <button class="btn ghost" id="offline-list-btn" style="margin-top:10px; display:none" onclick="toggleOfflineList()">📋 عرض الأسماء بدون إنترنت</button>
+    <div id="offline-list-section" style="display:none; margin-top:14px; text-align:right;">
+      <div class="sub" id="offline-list-meta"></div>
+      <input type="text" id="offline-search" placeholder="🔍 ابحث بالاسم" oninput="renderOfflineList()" style="margin-top:8px;">
+      <div id="offline-list-results" style="max-height:320px; overflow-y:auto; margin-top:8px;"></div>
+    </div>
   </div>
 </div>
 
@@ -218,7 +231,68 @@ function showScanner() {
   document.getElementById('scanner-view').style.display = 'block';
   document.getElementById('scan-event-name').textContent = eventData.name;
   document.getElementById('new-scan-btn').style.display = 'block';
+  document.getElementById('offline-list-btn').style.display = 'block';
   startGuestsListener();
+}
+
+function offlineCacheKey() { return 'scan_offline_cache_' + eventId; }
+
+// Live check-in has to stay a real transactional write (that's what
+// prevents two people using the same barcode), so it can't be trusted to
+// work offline. But door staff still need SOME fallback when the
+// connection drops mid-event — being able to at least read off a name is
+// far better than nothing. This mirrors the last successfully-synced
+// guest list into localStorage on every update, so it survives a
+// disconnect (and even a page reload) independent of the network.
+function cacheGuestsOffline() {
+  try {
+    localStorage.setItem(offlineCacheKey(), JSON.stringify({
+      eventName: eventData ? eventData.name : '',
+      guests: guests.map(g => ({ name: g.name, id: g.id, scanned: !!g.scanned })),
+      savedAt: new Date().toISOString(),
+    }));
+  } catch (e) {}
+}
+
+function readOfflineCache() {
+  try {
+    const raw = localStorage.getItem(offlineCacheKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function toggleOfflineList() {
+  const section = document.getElementById('offline-list-section');
+  const showing = section.style.display === 'block';
+  section.style.display = showing ? 'none' : 'block';
+  if (!showing) renderOfflineList();
+}
+
+function renderOfflineList() {
+  const cache = readOfflineCache();
+  const meta = document.getElementById('offline-list-meta');
+  const results = document.getElementById('offline-list-results');
+  if (!cache) {
+    meta.textContent = '⚠️ ما فيه نسخة محفوظة بعد — لازم تتصل بالإنترنت مرة وحدة أول عشان تتحفظ نسخة';
+    results.innerHTML = '';
+    return;
+  }
+  const savedTime = new Date(cache.savedAt).toLocaleTimeString('ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit' });
+  meta.textContent = '📋 آخر نسخة محفوظة (' + savedTime + ') — للقراءة فقط، ما تسجّل حضور';
+  const query = (document.getElementById('offline-search').value || '').trim();
+  const filtered = query ? cache.guests.filter(g => g.name.includes(query)) : cache.guests;
+  results.innerHTML = filtered.map(g => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 4px; border-bottom:1px solid rgba(224,188,122,0.15);">
+      <span>${escapeHtmlOffline(g.name)}</span>
+      <span style="font-size:12px; color:${g.scanned ? '#4CAF50' : '#8a857a'};">${g.scanned ? '✓ دخل' : 'لسه'}</span>
+    </div>
+  `).join('') || '<div class="sub" style="text-align:center; padding:16px 0;">ما فيه نتائج</div>';
+}
+
+function escapeHtmlOffline(s) {
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
 }
 
 function updateScanCounter() {
@@ -241,6 +315,7 @@ function startGuestsListener() {
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     updateScanCounter();
     refreshConnectionBanner(true);
+    cacheGuestsOffline();
   }, (error) => {
     console.error('guests onSnapshot error:', error);
     refreshConnectionBanner(false);
@@ -315,6 +390,26 @@ async function init() {
     msg.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
     msg.style.cursor = 'pointer';
     msg.onclick = () => { msg.onclick = null; msg.style.cursor = ''; init(); };
+    // Can't even fetch the event to unlock the scanner, but if this device
+    // synced successfully before (set up earlier with a working connection),
+    // it already has a saved guest list — offer that instead of leaving
+    // staff with nothing but "try again" while a line forms at the door.
+    if (readOfflineCache()) {
+      const fallbackBtn = document.createElement('button');
+      fallbackBtn.className = 'btn ghost';
+      fallbackBtn.style.marginTop = '14px';
+      fallbackBtn.textContent = '📋 عرض آخر نسخة محفوظة بدون إنترنت';
+      fallbackBtn.onclick = () => {
+        document.getElementById('loading-msg').style.display = 'none';
+        document.getElementById('scanner-view').style.display = 'block';
+        document.getElementById('scan-event-name').textContent = readOfflineCache().eventName;
+        document.getElementById('offline-list-btn').style.display = 'none';
+        document.getElementById('start-cam-btn').style.display = 'none';
+        document.getElementById('new-scan-btn').style.display = 'none';
+        toggleOfflineList();
+      };
+      msg.insertAdjacentElement('afterend', fallbackBtn);
+    }
     return;
   }
   if (!snap.exists()) {
