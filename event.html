@@ -291,7 +291,10 @@ setTimeout(() => {
         <input type="text" id="scan-link" readonly>
         <button class="btn" onclick="copyScanLink()">نسخ</button>
       </div>
-      <div style="font-size:12px; color:#B8B4AC; margin-top:10px;">رقم الدخول للفريق: <span id="scan-pin-display" style="color:#E0BC7A; font-weight:700; letter-spacing:2px;"></span></div>
+      <div style="font-size:12px; color:#B8B4AC; margin-top:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        رقم الدخول للفريق: <span id="scan-pin-display" style="color:#E0BC7A; font-weight:700; letter-spacing:2px;"></span>
+        <button class="btn ghost" style="width:auto; margin:0; padding:4px 10px; font-size:11px;" onclick="regenerateScanPin()">🔄 كود جديد</button>
+      </div>
     </div>
 
     <div id="page-guests">
@@ -450,6 +453,23 @@ function copyScanLink() {
   const input = document.getElementById('scan-link');
   input.select();
   navigator.clipboard?.writeText(input.value);
+}
+
+// A device that entered the old PIN stays unlocked indefinitely — there was
+// no way to revoke one the owner doesn't have physical access to (a security
+// company's own phone, kept long after the event). scan.html re-checks the
+// stored unlock against the live PIN on every load, so generating a new one
+// here locks every already-unlocked device out next time they open the page.
+async function regenerateScanPin() {
+  if (!confirm('توليد كود دخول جديد؟ أي جهاز دخل بالكود القديم بيحتاج الكود الجديد.')) return;
+  const { doc, updateDoc } = window._fsFns;
+  const newPin = String(Math.floor(1000 + Math.random() * 9000));
+  try {
+    await updateDoc(doc(window._db, 'events', eventId), { scanPin: newPin });
+    eventData.scanPin = newPin;
+    document.getElementById('scan-pin-display').textContent = newPin;
+    showToast('✅ تم توليد كود جديد');
+  } catch (e) { showErr(e); }
 }
 
 function toggleEditEvent() {

@@ -35,8 +35,13 @@
   .sub { color:#B8B4AC; font-size:12px; text-align:center; margin-bottom:22px; }
   .card { background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.2); border-radius:14px; padding:20px; text-align:center; }
   input { width:100%; padding:14px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:20px; font-family:inherit; text-align:center; letter-spacing:6px; }
+  /* The default input above is tuned for the 4-digit PIN (big, spaced-out
+     digits) — wrong shape entirely for an email/password field. */
+  input.text-input { font-size:15px; letter-spacing:normal; text-align:right; }
   .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
   .btn.ghost { width:100%; background:transparent; border:1px solid rgba(224,188,122,0.3); color:#E0BC7A; }
+  .toggle-row { text-align:center; font-size:13px; color:#B8B4AC; margin-top:14px; }
+  .toggle-row a { color:#E0BC7A; cursor:pointer; text-decoration:underline; }
   .counter { text-align:center; color:#E0BC7A; font-size:15px; font-weight:700; margin-bottom:14px; }
   .manual-divider { display:flex; align-items:center; gap:10px; color:#6f6a62; font-size:12px; margin:16px 0 12px; }
   .manual-divider::before, .manual-divider::after { content:''; flex:1; height:1px; background:rgba(224,188,122,0.2); }
@@ -126,6 +131,19 @@ setTimeout(() => {
       <input type="tel" inputmode="numeric" maxlength="4" id="pin-input" placeholder="0000" onkeydown="if(event.key==='Enter') checkPin()">
       <button class="btn" onclick="checkPin()">دخول</button>
     </div>
+
+    <!-- For an admin checking in on a device they don't normally use (a
+         security company's own phone, say) — a real sign-in with their
+         actual account, not a shared code, so nothing worth leaking ever
+         sits in this page's public source. -->
+    <div class="toggle-row" id="admin-login-toggle"><a onclick="showAdminLogin()">🔑 تسجيل دخول كأدمن</a></div>
+    <div class="card" id="admin-login-card" style="display:none; margin-top:12px;">
+      <div class="err" id="admin-login-err"></div>
+      <input type="email" class="text-input" id="admin-email" placeholder="البريد الإلكتروني" onkeydown="if(event.key==='Enter') document.getElementById('admin-pass').focus()">
+      <input type="password" class="text-input" id="admin-pass" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter') submitAdminLogin()">
+      <button class="btn" onclick="submitAdminLogin()">دخول</button>
+      <div class="toggle-row"><a onclick="hideAdminLogin()">رجوع لكود الدخول</a></div>
+    </div>
   </div>
 
   <div id="scanner-view" style="display:none">
@@ -175,12 +193,19 @@ setTimeout(() => {
          drops — reading off a name list doesn't need to be perfect, it
          just needs to exist. This shows the last successfully-synced
          copy, cached locally, entirely independent of the network. -->
-    <button class="btn ghost" id="offline-list-btn" style="margin-top:10px; display:none" onclick="toggleOfflineList()">📋 عرض الأسماء بدون إنترنت</button>
+    <button class="btn ghost" id="offline-list-btn" style="margin-top:10px; display:none" onclick="toggleOfflineList()">📋 عرض الأسماء</button>
     <div id="offline-list-section" style="display:none; margin-top:14px; text-align:right;">
       <div class="sub" id="offline-list-meta"></div>
       <input type="text" id="offline-search" placeholder="🔍 ابحث بالاسم" oninput="renderOfflineList()" style="margin-top:8px;">
       <div id="offline-list-results" style="max-height:320px; overflow-y:auto; margin-top:8px;"></div>
     </div>
+
+    <!-- Once a device enters the PIN it stays unlocked indefinitely — there
+         was no way to hand a personal phone back "locked" at the end of a
+         shift. This lets whoever is holding the device end their own
+         session; it's not shown for an admin, since their access comes
+         back automatically from their own account either way. -->
+    <button class="btn ghost" id="lock-device-btn" style="margin-top:16px; display:none; opacity:0.7; font-size:12px;" onclick="lockDevice()">🔒 تسجيل خروج من هذا الجهاز</button>
   </div>
 </div>
 
@@ -194,6 +219,32 @@ let qrScanner = null;
 let lastScanned = null;
 let scanCooldown = false;
 let audioCtx = null;
+
+// Same admin allowlist as app.html/event.html. An admin who's already
+// signed in on this device (their session persists across all pages, same
+// origin) shouldn't have to ask the customer for the door code — they
+// already have full access everywhere else.
+const ADMIN_EMAILS = ['hsallah@outlook.sa'];
+function isAdmin(user) { return !!user && ADMIN_EMAILS.includes((user.email || '').toLowerCase()); }
+
+// Firebase Auth restores a persisted session asynchronously, so the first
+// onAuthStateChanged callback is the earliest point we can reliably know
+// whether this device is signed in — checking auth.currentUser directly
+// right after load would almost always read null even for an admin.
+// The unsubscribe is deferred to a microtask (not called from inside this
+// same synchronous callback) because Firebase Auth's real SDK — and this
+// project's test stub — can invoke the callback synchronously before
+// onAuthStateChanged() has even returned, which would mean calling `unsub`
+// before it's assigned.
+function waitForAuth() {
+  return new Promise((resolve) => {
+    const { onAuthStateChanged } = window._authFns;
+    const unsub = onAuthStateChanged(window._auth, (user) => {
+      resolve(user);
+      Promise.resolve().then(() => unsub && unsub());
+    });
+  });
+}
 
 // Audible feedback for busy door staff who can't watch the screen every
 // scan — a high sine for allowed, a low square for duplicate/denied.
@@ -222,17 +273,80 @@ async function checkPin() {
     return;
   }
   err.style.display = 'none';
-  try { localStorage.setItem(unlockKey(), '1'); } catch (e) {}
-  showScanner();
+  // The PIN itself is stored (not just a "1" flag) so a later PIN change
+  // from the dashboard invalidates this device automatically next load —
+  // the owner can revoke a device they don't have physical access to just
+  // by regenerating the code, without this page ever re-checking the
+  // network for it.
+  try { localStorage.setItem(unlockKey(), val); } catch (e) {}
+  showScanner(false);
 }
 
-function showScanner() {
+function showAdminLogin() {
+  document.getElementById('admin-login-toggle').style.display = 'none';
+  document.getElementById('admin-login-card').style.display = 'block';
+  document.getElementById('admin-email').focus();
+}
+
+function hideAdminLogin() {
+  document.getElementById('admin-login-card').style.display = 'none';
+  document.getElementById('admin-login-toggle').style.display = 'block';
+  document.getElementById('admin-login-err').style.display = 'none';
+}
+
+// A real sign-in with the admin's own account, rather than a shared code —
+// this page's source is public (static hosting, no backend), so anything
+// written into it as a literal string is effectively public too. A real
+// password, checked by Firebase's own servers, isn't.
+async function submitAdminLogin() {
+  const email = document.getElementById('admin-email').value.trim();
+  const pass = document.getElementById('admin-pass').value;
+  const err = document.getElementById('admin-login-err');
+  const showErr = (msg) => { err.textContent = msg; err.style.display = 'block'; };
+  err.style.display = 'none';
+  if (!email || !pass) { showErr('عبّي البريد وكلمة المرور'); return; }
+
+  const { signInWithEmailAndPassword, signOut } = window._authFns;
+  try {
+    const cred = await signInWithEmailAndPassword(window._auth, email, pass);
+    if (!isAdmin(cred.user)) {
+      await signOut(window._auth);
+      showErr('هذا الحساب ليس حساب الأدمن');
+      return;
+    }
+    showScanner(false);
+  } catch (e) {
+    const map = {
+      'auth/invalid-credential': 'البريد أو كلمة المرور غلط',
+      'auth/invalid-email': 'صيغة البريد غير صحيحة',
+    };
+    showErr(map[e.code] || ('خطأ: ' + e.message));
+  }
+}
+
+function showScanner(viaAdmin) {
   document.getElementById('pin-gate').style.display = 'none';
   document.getElementById('scanner-view').style.display = 'block';
   document.getElementById('scan-event-name').textContent = eventData.name;
   document.getElementById('new-scan-btn').style.display = 'block';
   document.getElementById('offline-list-btn').style.display = 'block';
+  document.getElementById('lock-device-btn').style.display = viaAdmin ? 'none' : 'block';
   startGuestsListener();
+}
+
+// Lets whoever is holding an unlocked device end their own session — e.g.
+// security staff handing a personal phone back at the end of their shift,
+// or an admin done checking in on a borrowed device — without needing the
+// owner to change the door code for everyone. Clears both possible sources
+// of access: the saved PIN, and a signed-in admin session, since either one
+// could be why this device is currently unlocked.
+function lockDevice() {
+  try { localStorage.removeItem(unlockKey()); } catch (e) {}
+  try { window._authFns.signOut(window._auth); } catch (e) {}
+  document.getElementById('scanner-view').style.display = 'none';
+  document.getElementById('pin-input').value = '';
+  document.getElementById('pin-gate').style.display = 'block';
+  hideAdminLogin();
 }
 
 function offlineCacheKey() { return 'scan_offline_cache_' + eventId; }
@@ -417,13 +531,23 @@ async function init() {
     return;
   }
   eventData = snap.data();
+
+  const user = await waitForAuth();
   document.getElementById('loading-msg').style.display = 'none';
 
+  if (isAdmin(user)) {
+    showScanner(true);
+    return;
+  }
+
+  // Compares against the live PIN (not just "was this device ever
+  // unlocked") so regenerating the code from the dashboard revokes any
+  // device that already got in, next time it loads.
   let alreadyUnlocked = false;
-  try { alreadyUnlocked = localStorage.getItem(unlockKey()) === '1'; } catch (e) {}
+  try { alreadyUnlocked = localStorage.getItem(unlockKey()) === eventData.scanPin; } catch (e) {}
 
   if (alreadyUnlocked) {
-    showScanner();
+    showScanner(false);
   } else {
     document.getElementById('pin-gate').style.display = 'block';
     document.getElementById('pin-event-name').textContent = eventData.name;
