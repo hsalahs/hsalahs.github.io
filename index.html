@@ -4,9 +4,40 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>دعوات — دعوات رقمية بباركود لمناسبتك</title>
+<meta name="description" content="أنشئ دعوة رقمية أنيقة لكل ضيف، وامسح باركودهم عند الباب من جوالك — بدون ورق وبدون تعقيد. حتى 5 ضيوف مجانًا لكل مناسبة.">
+<meta name="theme-color" content="#0A0A0A">
+<link rel="canonical" href="https://hsalahs.github.io/">
+<!-- What WhatsApp, X, Telegram and search results show when this link is
+     shared: a card with the picture, title and description instead of a bare
+     address. The image must be an absolute address. -->
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ar_SA">
+<meta property="og:site_name" content="دعوات">
+<meta property="og:url" content="https://hsalahs.github.io/">
+<meta property="og:title" content="دعوات — دعوة أنيقة لكل ضيف وباب ذكي لمناسبتك">
+<meta property="og:description" content="أنشئ دعوة رقمية لكل ضيف، وامسح باركودهم عند الباب من جوالك. حتى 5 ضيوف مجانًا لكل مناسبة — بدون بطاقة، بدون التزام.">
+<meta property="og:image" content="https://hsalahs.github.io/icons/og-image.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="دعوات — دعوة أنيقة لكل ضيف وباب ذكي لمناسبتك">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="دعوات — دعوة أنيقة لكل ضيف وباب ذكي لمناسبتك">
+<meta name="twitter:description" content="أنشئ دعوة رقمية لكل ضيف، وامسح باركودهم عند الباب من جوالك. حتى 5 ضيوف مجانًا لكل مناسبة.">
+<meta name="twitter:image" content="https://hsalahs.github.io/icons/og-image.jpg">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="manifest" href="manifest.webmanifest">
+<!-- Deliberately no <link rel="manifest"> here (same reasoning as scan.html):
+     with one, "Add to Home Screen" saves the manifest's start_url — the
+     organizer panel, app.html — instead of the page you're actually on, so a
+     visitor who saves this landing page gets a login form when they open the
+     icon. Without it iOS saves this page's own address; these meta tags are
+     enough for the full-screen app look and the name under the icon. The
+     organizer panel (app.html) keeps the manifest, so saving THAT page still
+     opens the panel. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="دعوات">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <!-- A <link> here (discovered by the browser's preloader while it's still
      parsing <head>) starts the font fetch far earlier than an @import
      buried inside <style> (which isn't seen until the CSS itself is being
@@ -61,6 +92,13 @@
     box-shadow:0 10px 34px rgba(224,188,122,0.28);
   }
   .btn-secondary { display:block; margin-top:14px; font-size:13px; color:#8a857a; text-decoration:underline; }
+  .btn-row { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:18px; }
+  .btn-outline { display:inline-block; padding:12px 20px; border-radius:12px; text-decoration:none; font-size:14px; font-weight:500; color:#E0BC7A; border:1px solid rgba(224,188,122,0.4); background:rgba(224,188,122,0.05); }
+  .btn-wa { border-color:rgba(37,211,102,0.45); color:#7be0a4; background:rgba(37,211,102,0.07); }
+  .price-card { background:rgba(255,255,255,0.03); border:1px solid rgba(224,188,122,0.2); border-radius:16px; padding:22px 20px; text-align:center; }
+  .price-card p { font-size:13.5px; color:#B8B4AC; line-height:1.9; margin-bottom:6px; }
+  .price-card p b { color:#E0BC7A; }
+  .price-card .btn-outline { margin-top:14px; }
   .trial-note { margin-top:14px; font-size:12.5px; color:#E0BC7A; opacity:0.9; }
 
   .card-preview {
@@ -147,11 +185,17 @@ setTimeout(() => {
     <p>أنشئ صفحة دعوة رقمية بدقيقتين، شارك الرابط مع ضيوفك، وامسح باركودهم عند الباب — بدون ورق، بدون تعقيد.</p>
     <a class="btn-primary" href="app.html">ابدأ الآن</a>
     <div class="trial-note">🎁 حتى 5 ضيوف مجانًا لكل مناسبة — بدون بطاقة، بدون التزام</div>
+    <div class="btn-row">
+      <a class="btn-outline" href="invite.html?demo=1">👀 جرّب نموذج حي</a>
+      <a class="btn-outline btn-wa" href="https://wa.me/966546664459?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A3%D8%A8%D8%BA%D9%89%20%D8%A3%D8%B9%D8%B1%D9%81%20%D8%A3%D9%83%D8%AB%D8%B1%20%D8%B9%D9%86%20%D8%AE%D8%AF%D9%85%D8%A9%20%D8%AF%D8%B9%D9%88%D8%A7%D8%AA%20%D9%88%D9%83%D9%8A%D9%81%20%D8%A3%D8%A8%D8%AF%D8%A3." target="_blank" rel="noopener" data-wa="general">💬 كلّمنا على واتساب</a>
+    </div>
     <a class="btn-secondary" href="app.html">عندك حساب؟ سجّل دخول</a>
 
     <div class="card-preview">
       <div class="cp-title">دعوة زفاف</div>
-      <div class="cp-date">الخميس ٣ سبتمبر ٢٠٢٦</div>
+      <!-- Refreshed to "three weeks from today" by the script at the bottom, so
+           the sample never shows a date that has already passed. -->
+      <div class="cp-date" id="cp-date">الخميس ٢٢ أكتوبر ٢٠٢٦</div>
       <div class="cp-qr"></div>
       <div class="cp-name">اسم الضيف</div>
       <div class="cp-id">WD-XXXXXXXXX</div>
@@ -209,6 +253,14 @@ setTimeout(() => {
     </div>
   </div>
 
+  <div class="section-title">كم السعر؟</div>
+  <div class="section-sub">بسيط وواضح</div>
+  <div class="price-card">
+    <p><b>🎁 أول 5 ضيوف مجانًا لكل مناسبة</b> — تجرّب كل شي بنفسك، بدون بطاقة وبدون التزام.</p>
+    <p>لما تكبر القائمة، نتفق معك على باقة تناسب عدد ضيوفك، ونفعّل مناسبتك.</p>
+    <a class="btn-outline btn-wa" href="https://wa.me/966546664459?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A3%D8%A8%D8%BA%D9%89%20%D8%A3%D8%B9%D8%B1%D9%81%20%D8%A3%D8%B3%D8%B9%D8%A7%D8%B1%20%D8%AE%D8%AF%D9%85%D8%A9%20%D8%AF%D8%B9%D9%88%D8%A7%D8%AA%20%D9%88%D8%A7%D9%84%D8%A8%D8%A7%D9%82%D8%A9%20%D8%A7%D9%84%D9%85%D9%86%D8%A7%D8%B3%D8%A8%D8%A9%20%D9%84%D9%85%D9%86%D8%A7%D8%B3%D8%A8%D8%AA%D9%8A." target="_blank" rel="noopener" data-wa="pricing">💬 اسأل عن الأسعار على واتساب</a>
+  </div>
+
   <div class="cta-final">
     <h2>جهّز دعوتك الرقمية الحين</h2>
     <p>تحتاج بس بريد إلكتروني عشان تبدأ — جرّب حتى 5 ضيوف مجانًا، وادفع بس لو قررت تكمل</p>
@@ -217,5 +269,19 @@ setTimeout(() => {
 
   <footer>دعوات — دعوات رقمية بباركود · <a href="guide.html" style="color:inherit; text-decoration:underline;">دليل الاستخدام</a></footer>
 </div>
+<script>
+// The sample card's date: three weeks from today, in the visitor's own
+// calendar day, so it never shows a date that has already passed. The
+// address of the page keeps a fixed fallback in the markup for the (unlikely)
+// case this script can't run.
+(function () {
+  try {
+    const d = new Date(Date.now() + 21 * 86400000);
+    const el = document.getElementById('cp-date');
+    el.textContent = d.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    el.dataset.iso = d.toISOString().slice(0, 10);
+  } catch (e) {}
+})();
+</script>
 </body>
 </html>
