@@ -6,12 +6,16 @@
 <title>لوحة المناسبة | دعوات</title>
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script type="module" src="firebase-init.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- A <link> here (discovered by the browser's preloader while it's still
+     parsing <head>) starts the font fetch far earlier than an @import
+     buried inside <style> (which isn't seen until the CSS itself is being
+     parsed) — same fonts, just not stalling first paint on discovering
+     them. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
 
   /* ===== THEME SYSTEM — 5 palettes, same as the original wedding site ===== */
@@ -327,6 +331,11 @@ setTimeout(() => {
   </div>
 </div>
 
+<!-- Moved out of <head> so they don't block first paint on three separate
+     CDN fetches — nothing needs them until the script below runs. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="utils.js"></script>
 <script>
 const ADMIN_EMAILS = ['hsallah@outlook.sa'];
