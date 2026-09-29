@@ -139,3 +139,11 @@ test('the admin gets a one-time nudge toast on a fresh page load when unpaid eve
   // Doesn't call out either event by name — that's what the standing list is for.
   await expect(page.locator('#toast')).not.toContainText('Already Capped');
 });
+
+test('an anonymous door-scanner identity left on the same browser does not pass for a logged-in customer', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'anon-1', isAnonymous: true, email: null }, store: {} });
+  await page.goto('/app.html');
+  await expect(page.locator('#auth-view')).toBeVisible();
+  await expect(page.locator('#app-view')).toBeHidden();
+});

@@ -1,10 +1,24 @@
 const { test, expect } = require('@playwright/test');
 const { stubFirebase, seedFakeFirebase } = require('./helpers');
 
+// No door code on the event doc — it lives in events/e1/private/scan, which
+// scan.html can't read. The page never compares the code itself; it submits
+// it and Firestore's rules accept or deny.
 const EVENT = {
   name: 'حفل تجريبي', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض',
-  scanPin: '1234', theme: 'gold', createdAt: { seconds: 1 },
+  theme: 'gold', createdAt: { seconds: 1 },
 };
+
+// A door device that already proved the code: an anonymous identity that
+// Firebase restored across reloads, plus its session doc.
+const DEVICE = { uid: 'anon-1', isAnonymous: true, email: null };
+function unlockedStore(guests = {}) {
+  return {
+    events: { e1: EVENT },
+    'events/e1/guests': guests,
+    'events/e1/scanSessions': { 'anon-1': { pin: '1234', createdAt: 'x' } },
+  };
+}
 
 test('visiting scan.html with an event remembers it in localStorage', async ({ page }) => {
   await stubFirebase(page);
@@ -31,15 +45,95 @@ test('visiting scan.html with no event and nothing remembered shows the invalid-
   await expect(page.locator('#loading-msg')).toContainText('رابط غير صحيح');
 });
 
+test('the page never receives the door code — unlocking submits it and lets the server rule decide', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    store: { events: { e1: EVENT }, 'events/e1/guests': {}, 'events/e1/private': { scan: { scanPin: '1234' } } },
+  });
+  await page.addInitScript(() => { window.__fakeFirebase.auth.nextAnonUid = 'anon-new'; });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+
+  // Nothing secret reached the browser: the event doc it fetched has no code.
+  expect(await page.evaluate(() => eventData.scanPin)).toBeUndefined();
+
+  await page.locator('#pin-input').fill('1234');
+  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+
+  // What actually happened: an anonymous identity, and a session doc keyed
+  // by it carrying the submitted code — the thing the security rule checks.
+  const state = await page.evaluate(() => ({
+    user: window.__fakeFirebase.auth.user,
+    session: window.__fakeFirebase.store['events/e1/scanSessions']['anon-new'],
+  }));
+  expect(state.user.isAnonymous).toBe(true);
+  expect(state.session.pin).toBe('1234');
+});
+
+test('a code the server rule rejects shows "رقم غير صحيح" and keeps the scanner locked', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  // The stub has no rules; this is what the real rule's denial looks like.
+  await page.addInitScript(() => { window.__fakeFirebase.denyPaths = ['events/e1/scanSessions']; });
+  await page.goto('/scan.html?event=e1');
+
+  await page.locator('#pin-input').fill('0000');
+  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await expect(page.locator('#pin-err')).toHaveText('رقم غير صحيح');
+  await expect(page.locator('#scanner-view')).toBeHidden();
+});
+
+test('if anonymous sign-in itself is unavailable, the code screen says so instead of blaming the code', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.addInitScript(() => { window.__fakeFirebase.auth.nextSignInError = { code: 'auth/admin-restricted-operation' }; });
+  await page.goto('/scan.html?event=e1');
+
+  await page.locator('#pin-input').fill('1234');
+  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await expect(page.locator('#pin-err')).toContainText('تسجيل الدخول المجهول غير مفعّل');
+  await expect(page.locator('#scanner-view')).toBeHidden();
+});
+
+test('a device that proved the code before is let straight back in after a reload', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#pin-gate')).toBeHidden();
+});
+
+test('regenerating the door code from the dashboard locks out a device that unlocked with the old one', async ({ page }) => {
+  // After a code change the rule denies reading the device's own session
+  // doc (its stored code no longer matches the live one) — that denial is
+  // how the device learns it needs the new code.
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.addInitScript(() => { window.__fakeFirebase.denyPaths = ['events/e1/scanSessions/anon-1']; });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect(page.locator('#scanner-view')).toBeHidden();
+});
+
+test('a code change while the scanner is open sends it back to the code screen with a clear reason', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  // Session read still passes (init lets the device in), but the guest
+  // listener is then denied — exactly what a revoked session looks like.
+  await page.addInitScript(() => { window.__fakeFirebase.denyPaths = ['events/e1/guests']; });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect(page.locator('#pin-err')).toContainText('تغيّر كود الدخول');
+  await expect(page.locator('#connection-banner')).toBeHidden();
+});
+
 test('re-scanning an already-checked-in guest shows a clear red "already used" alert, not a soft warning', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
-    store: {
-      events: { e1: EVENT },
-      'events/e1/guests': { g1: { name: 'ضيف مكرر', id: 'WD-DUP123', scanned: true } },
-    },
+    user: DEVICE,
+    store: unlockedStore({ g1: { name: 'ضيف مكرر', id: 'WD-DUP123', scanned: true } }),
   });
-  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1234'));
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
 
@@ -52,10 +146,34 @@ test('re-scanning an already-checked-in guest shows a clear red "already used" a
   await expect(dupCard.locator('.result-status.dup')).toHaveCSS('color', 'rgb(244, 67, 54)');
 });
 
+test('a check-in write that fails on the network resets the scanner instead of silently ignoring every scan after it', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: DEVICE,
+    store: unlockedStore({ g1: { name: 'ضيف', id: 'WD-NET1', scanned: false } }),
+  });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+
+  // First attempt: the transaction dies mid-flight (bad venue wifi).
+  await page.evaluate(() => {
+    const real = window._fsFns.runTransaction;
+    window._fsFns.runTransaction = () => { window._fsFns.runTransaction = real; return Promise.reject(new Error('network')); };
+  });
+  await page.locator('#manual-code').fill('WD-NET1');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+  await expect(page.locator('#camera-status')).toContainText('تعذّر تسجيل الدخول');
+
+  // Second attempt must go through — the failure used to leave scanCooldown
+  // stuck on true, so this would have been ignored.
+  await page.locator('#manual-code').fill('WD-NET1');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+  await expect(page.locator('#result-allowed')).toBeVisible();
+});
+
 test('"مسح جديد" tears the camera down and returns to the start-camera screen, instead of trusting it\'s still healthy', async ({ page }) => {
   await stubFirebase(page);
-  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
-  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1234'));
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
 
@@ -107,15 +225,12 @@ test('a dropped connection while loading the event shows a tappable retry instea
 test('the guest list is cached locally as it syncs, and can be searched read-only from the scanner view', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
-    store: {
-      events: { e1: EVENT },
-      'events/e1/guests': {
-        g1: { name: 'أحمد العتيبي', id: 'WD-1', scanned: true },
-        g2: { name: 'سارة القحطاني', id: 'WD-2', scanned: false },
-      },
-    },
+    user: DEVICE,
+    store: unlockedStore({
+      g1: { name: 'أحمد العتيبي', id: 'WD-1', scanned: true },
+      g2: { name: 'سارة القحطاني', id: 'WD-2', scanned: false },
+    }),
   });
-  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1234'));
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
   await expect(page.locator('#offline-list-btn')).toBeVisible();
@@ -187,10 +302,21 @@ test('an admin who is already signed in on this device skips the PIN gate entire
   await expect(page.locator('#lock-device-btn')).toBeVisible();
 });
 
-test('a signed-in customer who is not the admin still has to enter the door PIN', async ({ page }) => {
+test('the event\'s own organizer opening their scan link skips the PIN gate — their sign-in already proves it', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: EVENT }, 'events/e1/guests': {} },
+  });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeHidden();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+});
+
+test('a signed-in customer who is neither the admin nor this event\'s owner still has to enter the door PIN', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u2', email: 'someone-else@example.com' },
     store: { events: { e1: EVENT }, 'events/e1/guests': {} },
   });
   await page.goto('/scan.html?event=e1');
@@ -198,10 +324,32 @@ test('a signed-in customer who is not the admin still has to enter the door PIN'
   await expect(page.locator('#scanner-view')).toBeHidden();
 });
 
-test('"تسجيل خروج من هذا الجهاز" clears the saved unlock and returns to the PIN screen', async ({ page }) => {
+test('a signed-in non-owner customer who already proved the code keeps their session across reloads, like a door device does', async ({ page }) => {
+  // Someone helping at a friend's wedding while signed in to their own
+  // account: their real uid holds the session doc instead of an anonymous
+  // one, and it should be honoured the same way on the next load.
   await stubFirebase(page);
-  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
-  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1234'));
+  await seedFakeFirebase(page, {
+    user: { uid: 'u2', email: 'someone-else@example.com' },
+    store: {
+      events: { e1: EVENT },
+      'events/e1/guests': {},
+      'events/e1/scanSessions': { u2: { pin: '1234', createdAt: 'x' } },
+    },
+  });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#pin-gate')).toBeHidden();
+
+  // And logging out drops that session too, not only anonymous ones.
+  await page.locator('#lock-device-btn').click();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  expect(await page.evaluate(() => window.__fakeFirebase.store['events/e1/scanSessions'].u2)).toBeUndefined();
+});
+
+test('"تسجيل خروج من هذا الجهاز" deletes the device\'s session, signs it out, and returns to the PIN screen', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
   await expect(page.locator('#lock-device-btn')).toBeVisible();
@@ -209,8 +357,12 @@ test('"تسجيل خروج من هذا الجهاز" clears the saved unlock and
   await page.locator('#lock-device-btn').click();
   await expect(page.locator('#scanner-view')).toBeHidden();
   await expect(page.locator('#pin-gate')).toBeVisible();
-  const remembered = await page.evaluate(() => localStorage.getItem('scan_unlocked_e1'));
-  expect(remembered).toBeNull();
+  const state = await page.evaluate(() => ({
+    user: window.__fakeFirebase.auth.user,
+    session: window.__fakeFirebase.store['events/e1/scanSessions']['anon-1'],
+  }));
+  expect(state.user).toBeNull();
+  expect(state.session).toBeUndefined();
 });
 
 test('an admin can sign in with their real account on a borrowed device, instead of typing the door PIN', async ({ page }) => {
@@ -260,20 +412,5 @@ test('a wrong password on the admin-login form shows an error instead of a gener
   await page.getByRole('button', { name: 'دخول' }).nth(1).click();
 
   await expect(page.locator('#admin-login-err')).toContainText('البريد أو كلمة المرور غلط');
-  await expect(page.locator('#scanner-view')).toBeHidden();
-});
-
-test('regenerating the door code from the dashboard locks out a device that unlocked with the old one', async ({ page }) => {
-  // The unlock check compares against the LIVE scanPin, not just "was this
-  // device ever unlocked" — so a device that got in with an old code is
-  // kicked back to the PIN screen the next time it loads, even without the
-  // owner having physical access to it.
-  await stubFirebase(page);
-  await seedFakeFirebase(page, {
-    store: { events: { e1: { ...EVENT, scanPin: '9999' } }, 'events/e1/guests': {} },
-  });
-  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1234'));
-  await page.goto('/scan.html?event=e1');
-  await expect(page.locator('#pin-gate')).toBeVisible();
   await expect(page.locator('#scanner-view')).toBeHidden();
 });

@@ -31,9 +31,13 @@ async function stubFirebase(page) {
 async function seedFakeFirebase(page, { user = null, store = {} } = {}) {
   await page.addInitScript(({ user, store }) => {
     window.__fakeFirebase = {
-      auth: { user, listeners: [], nextSignInResult: null, nextSignInError: null, nextResetError: null },
+      auth: { user, listeners: [], nextSignInResult: null, nextSignInError: null, nextResetError: null, nextAnonUid: null },
       store,
       listeners: {},
+      // Path prefixes the stub should reject with permission-denied — see the
+      // firestore stub. Tests set this in an addInitScript registered after
+      // seedFakeFirebase (init scripts run in registration order).
+      denyPaths: [],
     };
   }, { user, store });
 }

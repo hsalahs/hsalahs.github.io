@@ -1,12 +1,28 @@
 // Test-only stand-in for firebase-firestore.js: a tiny in-memory Firestore
 // clone covering exactly the operations this project uses (no indexes, no
 // real query planner — just enough to drive deterministic UI tests).
+//
+// It enforces no security rules. Tests that need to see how a page reacts
+// to a rule denying something (a wrong door code, a revoked scanner session,
+// rules not deployed yet) list path prefixes in
+// window.__fakeFirebase.denyPaths — any read or write whose path starts with
+// one of them fails with the SDK's permission-denied error shape.
 const F = () => window.__fakeFirebase;
 
 function ensureColl(path) {
   const s = F().store;
   if (!s[path]) s[path] = {};
   return s[path];
+}
+
+function isDenied(path) {
+  return (F().denyPaths || []).some(prefix => path.startsWith(prefix));
+}
+
+function permissionDenied(path) {
+  const e = new Error('Missing or insufficient permissions. (' + path + ')');
+  e.code = 'permission-denied';
+  return e;
 }
 
 function notify(path) {
@@ -83,12 +99,18 @@ export function increment(n) {
   return { __increment: n };
 }
 
+export function deleteField() {
+  return { __deleteField: true };
+}
+
 function resolveIncrements(existing, patch) {
   const out = { ...existing };
   for (const k of Object.keys(patch)) {
     const v = patch[k];
     if (v && typeof v === 'object' && '__increment' in v) {
       out[k] = (existing && typeof existing[k] === 'number' ? existing[k] : 0) + v.__increment;
+    } else if (v && typeof v === 'object' && '__deleteField' in v) {
+      delete out[k];
     } else {
       out[k] = v;
     }
@@ -97,6 +119,7 @@ function resolveIncrements(existing, patch) {
 }
 
 export function setDoc(ref, data, opts) {
+  if (isDenied(ref.path)) return Promise.reject(permissionDenied(ref.path));
   const coll = ensureColl(ref.collPath);
   coll[ref.id] = opts && opts.merge ? resolveIncrements(coll[ref.id] || {}, data) : { ...data };
   notify(ref.collPath);
@@ -105,6 +128,7 @@ export function setDoc(ref, data, opts) {
 }
 
 export function addDoc(collRef, data) {
+  if (isDenied(collRef.path)) return Promise.reject(permissionDenied(collRef.path));
   const coll = ensureColl(collRef.path);
   const id = 'auto_' + Math.random().toString(36).slice(2, 10);
   coll[id] = { ...data };
@@ -120,11 +144,13 @@ export function getDoc(ref) {
     window.__failNextGetDoc = false;
     return Promise.reject(new Error('simulated network failure'));
   }
+  if (isDenied(ref.path)) return Promise.reject(permissionDenied(ref.path));
   const coll = F().store[ref.collPath] || {};
   return Promise.resolve(makeDocSnap(ref.collPath, ref.id, coll[ref.id]));
 }
 
 export function getDocs(refOrQuery) {
+  if (isDenied(refOrQuery.path)) return Promise.reject(permissionDenied(refOrQuery.path));
   if (refOrQuery.__type === 'query') {
     return Promise.resolve(buildQuerySnapshot(refOrQuery.path, refOrQuery.filters));
   }
@@ -132,6 +158,7 @@ export function getDocs(refOrQuery) {
 }
 
 export function updateDoc(ref, patch) {
+  if (isDenied(ref.path)) return Promise.reject(permissionDenied(ref.path));
   const coll = ensureColl(ref.collPath);
   if (!coll[ref.id]) return Promise.reject(new Error('not-found: ' + ref.path));
   coll[ref.id] = resolveIncrements(coll[ref.id], patch);
@@ -141,6 +168,7 @@ export function updateDoc(ref, patch) {
 }
 
 export function deleteDoc(ref) {
+  if (isDenied(ref.path)) return Promise.reject(permissionDenied(ref.path));
   const coll = ensureColl(ref.collPath);
   delete coll[ref.id];
   notify(ref.collPath);
@@ -148,8 +176,14 @@ export function deleteDoc(ref) {
   return Promise.resolve();
 }
 
-export function onSnapshot(refOrQuery, cb) {
+export function onSnapshot(refOrQuery, cb, errCb) {
   const path = refOrQuery.path;
+  if (isDenied(path)) {
+    // The real SDK reports a denied listener asynchronously through the
+    // error callback, and never delivers data.
+    Promise.resolve().then(() => errCb && errCb(permissionDenied(path)));
+    return () => {};
+  }
   if (refOrQuery.__type === 'doc') {
     const emit = () => {
       const coll = F().store[refOrQuery.collPath] || {};
@@ -177,24 +211,28 @@ export function runTransaction(db, updateFn) {
   const touched = new Set();
   const tx = {
     get(ref) {
+      if (isDenied(ref.path)) return Promise.reject(permissionDenied(ref.path));
       const coll = F().store[ref.collPath] || {};
       return Promise.resolve(makeDocSnap(ref.collPath, ref.id, coll[ref.id]));
     },
     set(ref, data) {
+      if (isDenied(ref.path)) throw permissionDenied(ref.path);
       ensureColl(ref.collPath)[ref.id] = { ...data };
       touched.add(ref.collPath); touched.add(ref.path);
     },
     update(ref, patch) {
+      if (isDenied(ref.path)) throw permissionDenied(ref.path);
       const coll = ensureColl(ref.collPath);
       coll[ref.id] = resolveIncrements(coll[ref.id] || {}, patch);
       touched.add(ref.collPath); touched.add(ref.path);
     },
     delete(ref) {
+      if (isDenied(ref.path)) throw permissionDenied(ref.path);
       delete ensureColl(ref.collPath)[ref.id];
       touched.add(ref.collPath); touched.add(ref.path);
     },
   };
-  return Promise.resolve(updateFn(tx)).then((result) => {
+  return Promise.resolve().then(() => updateFn(tx)).then((result) => {
     touched.forEach(notify);
     return result;
   });

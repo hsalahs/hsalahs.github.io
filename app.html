@@ -255,7 +255,9 @@ async function createNewEvent() {
 
   const { serverTimestamp, doc, runTransaction } = window._fsFns;
   const eventId = newEventId();
-  const scanPin = String(Math.floor(1000 + Math.random() * 9000)); // 4-digit PIN for the door/security team
+  // The door code is no longer written here: it lives in an owner-only
+  // sub-document (see loadScanPin in event.html), which the dashboard
+  // creates the first time the owner opens the event.
   const user = window._auth.currentUser;
   const admin = isAdmin(user);
   const eventRef = doc(window._db, 'events', eventId);
@@ -264,7 +266,7 @@ async function createNewEvent() {
   try {
     await runTransaction(window._db, async (tx) => {
       const eventData = {
-        name, date, venue, mapsLink, scanPin,
+        name, date, venue, mapsLink,
         paid: false, guestCount: 0,
         ownerUid: user.uid,
         ownerEmail: user.email || '',
@@ -395,7 +397,10 @@ function initAuthWatcher() {
   const { onAuthStateChanged } = window._authFns;
   onAuthStateChanged(window._auth, (user) => {
     document.getElementById('auth-loading').style.display = 'none';
-    if (user) {
+    // An anonymous identity is what scan.html signs a door device in with;
+    // on the same browser it must not pass for "logged in" here — the
+    // login form stays up, and a real sign-in replaces it.
+    if (user && !user.isAnonymous) {
       document.getElementById('auth-view').style.display = 'none';
       document.getElementById('app-view').style.display = 'block';
       document.getElementById('current-email').textContent = user.email || '';
