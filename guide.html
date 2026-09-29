@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>دليل الاستخدام — دعوات</title>
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Tajawal:wght@400;500;700&display=swap">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh; overflow-x:hidden; position:relative; }
+  body::before {
+    content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(224,188,122,0.12), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 100% 100%, rgba(201,155,74,0.08), transparent 55%),
+      linear-gradient(160deg, #0C0C0C 0%, #0A0A0A 50%, #060606 100%);
+  }
+  .wrap { position:relative; z-index:1; max-width:560px; margin:0 auto; padding:0 20px 70px; }
+  nav { display:flex; justify-content:space-between; align-items:center; padding:22px 0; }
+  .logo { font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:#E0BC7A; text-decoration:none; }
+  .nav-back { font-size:13px; color:#B8B4AC; text-decoration:none; border:1px solid rgba(224,188,122,0.3); padding:8px 18px; border-radius:30px; }
+
+  .hero { text-align:center; padding:26px 0 8px; }
+  .hero h1 { font-size:30px; font-weight:700; color:#FAF8F4; margin-bottom:10px; }
+  .hero h1 span { color:#E0BC7A; }
+  .hero p { font-size:14.5px; color:#B8B4AC; line-height:1.9; max-width:400px; margin:0 auto; }
+
+  .toc { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:26px 0 8px; }
+  .toc a { font-size:12.5px; color:#E0BC7A; text-decoration:none; border:1px solid rgba(224,188,122,0.3); padding:7px 14px; border-radius:30px; }
+
+  section { margin-top:44px; scroll-margin-top:16px; }
+  h2 { font-size:20px; color:#E0BC7A; margin-bottom:6px; }
+  .lead { font-size:13px; color:#8a857a; line-height:1.8; margin-bottom:16px; }
+
+  .steps { display:flex; flex-direction:column; gap:12px; }
+  .step { display:flex; gap:14px; align-items:flex-start; background:rgba(255,255,255,0.03); border:1px solid rgba(224,188,122,0.15); border-radius:14px; padding:15px 16px; }
+  .step-num { width:28px; height:28px; flex-shrink:0; border-radius:50%; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; margin-top:2px; }
+  .step h3 { font-size:14.5px; margin-bottom:4px; color:#FAF8F4; }
+  .step p, .step li { font-size:13px; color:#B8B4AC; line-height:1.85; }
+  .step ul { padding-inline-start:18px; margin-top:4px; }
+  b.k { color:#E0BC7A; font-weight:700; white-space:nowrap; }
+
+  .note { margin-top:14px; background:rgba(224,188,122,0.06); border:1px solid rgba(224,188,122,0.22); border-radius:14px; padding:13px 16px; font-size:13px; color:#d8d3c8; line-height:1.85; }
+  .warn { background:rgba(229,72,77,0.08); border-color:rgba(229,72,77,0.3); color:#f0c4c4; }
+
+  .result { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+  .result div { font-size:13px; padding:9px 12px; border-radius:10px; background:rgba(255,255,255,0.04); color:#d8d3c8; }
+
+  details { background:rgba(255,255,255,0.03); border:1px solid rgba(224,188,122,0.15); border-radius:14px; padding:0 16px; margin-bottom:10px; }
+  summary { cursor:pointer; padding:14px 0; font-size:14px; font-weight:700; color:#FAF8F4; list-style:none; }
+  summary::-webkit-details-marker { display:none; }
+  summary::before { content:'＋'; color:#E0BC7A; margin-inline-end:10px; }
+  details[open] summary::before { content:'－'; }
+  details p { font-size:13px; color:#B8B4AC; line-height:1.9; padding-bottom:14px; }
+
+  .cta { text-align:center; margin-top:48px; padding:28px 22px; border-radius:20px; background:rgba(224,188,122,0.06); border:1px solid rgba(224,188,122,0.2); }
+  .cta h2 { color:#FAF8F4; font-size:17px; margin-bottom:8px; }
+  .cta p { font-size:13px; color:#8a857a; margin-bottom:16px; }
+  .btn-wa { display:inline-block; padding:13px 30px; border-radius:14px; text-decoration:none; background:linear-gradient(135deg,#C99B4A 0%,#E0BC7A 45%,#F3E0BC 100%); color:#1a1400; font-weight:700; font-size:15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <nav>
+    <a class="logo" href="index.html">دعوات</a>
+    <a class="nav-back" href="app.html">← مناسباتي</a>
+  </nav>
+
+  <div class="hero">
+    <h1>دليل <span>الاستخدام</span></h1>
+    <p>من إنشاء المناسبة إلى مسح الباركود على الباب — خطوة بخطوة، بدون تعقيد.</p>
+  </div>
+
+  <div class="toc">
+    <a href="#start">١. إنشاء مناسبة</a>
+    <a href="#guests">٢. الضيوف</a>
+    <a href="#invite">٣. رابط الدعوة</a>
+    <a href="#door">٤. يوم المناسبة</a>
+    <a href="#faq">أسئلة شائعة</a>
+  </div>
+
+  <section id="start">
+    <h2>١. إنشاء مناسبتك</h2>
+    <div class="lead">من صفحة «مناسباتي» بعد تسجيل الدخول.</div>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div>
+        <h3>اضغط <b class="k">➕ إنشاء مناسبة جديدة</b></h3>
+        <p>اكتب اسم المناسبة والتاريخ والمكان. رابط الموقع على الخريطة اختياري، ولو أضفته يظهر للضيف في دعوته.</p>
+      </div></div>
+      <div class="step"><div class="step-num">2</div><div>
+        <h3>افتح المناسبة</h3>
+        <p>ستجد لوحة التحكم: أعداد الضيوف، رابط الدعوة، رابط السكانر، وقائمة الضيوف. تقدر تغيّر لون التصميم من الدوائر الملوّنة، وتعدّل بيانات المناسبة من ☰ ← <b class="k">✏️ تعديل المناسبة</b>.</p>
+      </div></div>
+    </div>
+    <div class="note">🎁 حتى 5 ضيوف مجانًا لكل مناسبة — بدون بطاقة، بدون التزام. لإضافة عدد أكبر، تواصل معنا عبر واتساب ونفعّل لك المناسبة.</div>
+  </section>
+
+  <section id="guests">
+    <h2>٢. إضافة الضيوف</h2>
+    <div class="lead">كل ضيف يحصل على بطاقة دعوة فيها اسمه وباركود خاص به. ثلاث طرق للإضافة:</div>
+    <div class="steps">
+      <div class="step"><div class="step-num">أ</div><div>
+        <h3>ضيف ضيف</h3>
+        <p>اكتب الاسم في خانة «اسم ضيف جديد» واضغط <b class="k">إضافة</b>. لو الاسم مكرر بالكامل ينبهك.</p>
+      </div></div>
+      <div class="step"><div class="step-num">ب</div><div>
+        <h3>قائمة جاهزة</h3>
+        <p>من ☰ اختر <b class="k">📂 استيراد قائمة (CSV / أسماء)</b> وارفع ملفًا فيه الأسماء، اسم في كل سطر.</p>
+      </div></div>
+      <div class="step"><div class="step-num">ج</div><div>
+        <h3>أرقام متسلسلة</h3>
+        <p>لدعوات بأرقام بدل الأسماء: من ☰ اختر <b class="k">🔢 إضافة أرقام متسلسلة (مثال: 1–200)</b>.</p>
+      </div></div>
+    </div>
+    <div class="note">بعد الإضافة تظهر البطاقة بجانب اسم كل ضيف، اضغط <b class="k">حفظ</b> وأرسلها له. ولتحميل الكل دفعة واحدة: ☰ ← <b class="k">📦 تحميل كل الدعوات (ZIP)</b>، أو جزء منها بـ <b class="k">📥 تحميل نطاق معيّن (مثال: 1–100)</b>. وتقدر تأخذ نسخة من القائمة بـ <b class="k">📄 تصدير قائمة الضيوف (CSV)</b>.</div>
+  </section>
+
+  <section id="invite">
+    <h2>٣. دعهم يسجلون بأنفسهم</h2>
+    <div class="lead">بدل ما تكتب كل الأسماء، شارك رابط الدعوة والضيف يسجّل اسمه بنفسه وأنت توافق.</div>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div>
+        <h3>انسخ <b class="k">رابط الدعوة</b> وشاركه</h3>
+        <p>اضغط «نسخ» بجانبه في لوحة المناسبة، وأرسله في الواتساب أو أي مكان.</p>
+      </div></div>
+      <div class="step"><div class="step-num">2</div><div>
+        <h3>الضيف يفتح الرابط ويرسل طلبه</h3>
+        <p>يكتب اسمه ويرسل. صفحته تبقى تنتظر الرد، وتحتفظ باسمه في جواله.</p>
+      </div></div>
+      <div class="step"><div class="step-num">3</div><div>
+        <h3>توافق من <b class="k">📥 الطلبات</b></h3>
+        <p>من ☰ افتح «📥 الطلبات» وستجد الأسماء الجديدة، وافق أو ارفض. لحظة الموافقة تظهر للضيف بطاقته بالباركود في نفس الصفحة.</p>
+      </div></div>
+    </div>
+    <div class="note">عشان يوصلك تنبيه لما أحد يسجل: من ☰ فعّل <b class="k">🔔 تفعيل إشعارات الطلبات</b>. التنبيه يصلك طالما صفحة اللوحة مفتوحة في المتصفح؛ لو أغلقتها تمامًا لن يصلك، فراجع «📥 الطلبات» من وقت لوقت.</div>
+  </section>
+
+  <section id="door">
+    <h2>٤. يوم المناسبة: السكانر</h2>
+    <div class="lead">لفريق الأمن عند الباب. ما يحتاجون حساب، ولا يقدرون يعدّلوا أو يحذفوا أي شي في مناسبتك.</div>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div>
+        <h3>أرسل لهم شيئين من لوحة المناسبة</h3>
+        <ul>
+          <li><b class="k">رابط السكانر</b> (اضغط «نسخ»)</li>
+          <li><b class="k">رقم الدخول للفريق</b> (٤ أرقام تحت الرابط)</li>
+        </ul>
+      </div></div>
+      <div class="step"><div class="step-num">2</div><div>
+        <h3>الموظف يفتح الرابط ويكتب الرقم مرة واحدة</h3>
+        <p>بعدها يبقى الجهاز مفتوحًا حتى لو أغلق الصفحة وفتحها، ما يحتاج يكتب الرقم كل مرة، إلا إذا غيّرت الرقم أو سجّل خروج.</p>
+      </div></div>
+      <div class="step"><div class="step-num">3</div><div>
+        <h3>اضغط <b class="k">تشغيل الكاميرا</b> ووجّهها للباركود</h3>
+        <p>أو اكتب رقم الباركود يدويًا مثل <span dir="ltr">WD-ABC123</span> واضغط <b class="k">تحقق</b>. النتيجة تظهر فورًا:</p>
+        <div class="result">
+          <div>✅ مسموح بالدخول</div>
+          <div>🚫 تم استخدام هذه الدعوة مسبقًا</div>
+          <div>❌ باركود غير مسجّل</div>
+        </div>
+      </div></div>
+      <div class="step"><div class="step-num">4</div><div>
+        <h3>للبحث بالاسم: <b class="k">📋 عرض الأسماء</b></h3>
+        <p>للتأكد من اسم ضيف نسي بطاقته. للقراءة والبحث فقط، وتشتغل حتى لو ضعف الإنترنت (تعرض آخر قائمة حُمّلت على هذا الجهاز).</p>
+      </div></div>
+    </div>
+    <div class="note warn"><b>للأمان:</b> إذا انتهى دوام أحد الموظفين أو تسرّب الرقم، اضغط <b class="k">🔄 كود جديد</b> من لوحة المناسبة. أي جهاز فاتح بالرقم القديم يرجع لشاشة الرقم خلال دقيقة، ويحتاج الرقم الجديد. والموظف نفسه يقدر يضغط <b class="k">🔒 تسجيل خروج من هذا الجهاز</b> ليقفل جهازه.</div>
+  </section>
+
+  <section id="faq">
+    <h2>أسئلة شائعة</h2>
+    <div class="lead">&nbsp;</div>
+    <details>
+      <summary>الضيف سجّل وما ظهرت له البطاقة</summary>
+      <p>تأكد أنك وافقت على طلبه من «📥 الطلبات». إن كان وافقت ولسا ما ظهرت، يفتح رابط الدعوة من نفس الجوال والمتصفح اللي سجّل منه (يتعرف عليه تلقائيًا). لو غيّر الجوال أو مسح بيانات المتصفح، ما نقدر نعرف طلبه؛ الحل الأسرع أنك تضيفه بنفسك من «إضافة» وترسل له بطاقته بـ «حفظ».</p>
+    </details>
+    <details>
+      <summary>الباركود يقول «تم استخدام هذه الدعوة مسبقًا» وأنا متأكد أنه ما دخل</summary>
+      <p>كل دعوة تدخل شخصًا واحدًا مرة واحدة. لو حصلت مشكلة (مثلًا مسح مرتين من خطأ)، تقدر تتحقق بنفسك من لوحة المناسبة: جنب اسم الضيف حالته «حضر» أو «لسه»، وتقدر تعلّمه يدويًا.</p>
+    </details>
+    <details>
+      <summary>الكاميرا ما تشتغل في الآيفون</summary>
+      <p>غالبًا إذن الكاميرا مرفوض. افتح: الإعدادات ← Safari ← الكاميرا ← اختر «سماح»، ثم حدّث الصفحة. ولو ما زالت ما تشتغل، اكتب رقم الباركود يدويًا في خانة «أو أدخل الكود يدويًا».</p>
+    </details>
+    <details>
+      <summary>الموظف يكتب الرقم ويقول «رقم غير صحيح»</summary>
+      <p>تأكد أنك عطيته الرقم الحالي؛ يمكن تغيّر لو ضغطت «🔄 كود جديد». الرقم الحالي دايمًا ظاهر لك في لوحة المناسبة تحت رابط السكانر.</p>
+    </details>
+    <details>
+      <summary>هل يشتغل السكانر بدون إنترنت؟</summary>
+      <p>تسجيل الدخول على الباب يحتاج إنترنت، لأن كل دخول يُسجَّل مباشرة عشان ما يدخل نفس الباركود مرتين. جرّب الشبكة عند الباب قبل الحفل بيوم، ولو ضعفت يكفي «📋 عرض الأسماء» للتحقق اليدوي مؤقتًا.</p>
+    </details>
+    <details>
+      <summary>كيف أستعد قبل الحفل؟</summary>
+      <p>قبل يوم أو يومين: أضف ضيفًا تجريبيًا، اطبع أو افتح بطاقته على جوال ثاني، وامسحها بالسكانر من جوال الموظف. تتأكد أن الكاميرا والإنترنت والرقم كلها تمام قبل ما يكون في ضغط.</p>
+    </details>
+  </section>
+
+  <div class="cta">
+    <h2>تحتاج مساعدة؟</h2>
+    <p>راسلنا على واتساب ونرد عليك.</p>
+    <a class="btn-wa" href="https://wa.me/966546664459" target="_blank" rel="noopener">💬 تواصل معنا عبر واتساب</a>
+  </div>
+
+</div>
+</body>
+</html>
