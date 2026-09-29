@@ -323,14 +323,6 @@ async function checkPin() {
     await setDoc(sessionRef(user.uid), { pin: val, createdAt: new Date().toISOString() });
   } catch (e) {
     if (e.code === 'permission-denied') {
-      // TRANSITIONAL — remove once the new firestore.rules are deployed.
-      // Before they are, the rules know nothing about sessions (so the
-      // write above is always denied) and the code is still a readable
-      // field on the event doc, so fall back to comparing it here rather
-      // than leaving the door dead in the window between the site deploy
-      // and the rules deploy. Once an event has been migrated the field is
-      // gone and this branch can't unlock anything.
-      if (eventData.scanPin !== undefined && val === eventData.scanPin) { showScanner(); return; }
       showPinError('رقم غير صحيح');
     } else {
       console.error(e);
