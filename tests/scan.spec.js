@@ -179,9 +179,12 @@ test('an admin who is already signed in on this device skips the PIN gate entire
   await expect(page.locator('#pin-gate')).toBeHidden();
   await expect(page.locator('#scanner-view')).toBeVisible();
   await expect(page.locator('#scan-event-name')).toHaveText('حفل تجريبي');
-  // No self-logout offered — admin access comes back automatically from
-  // their own account regardless, so the button would do nothing useful.
-  await expect(page.locator('#lock-device-btn')).toBeHidden();
+  // The logout button has to show here too: a device that auto-bypasses
+  // because it's already signed in and a device where the admin just
+  // signed in manually are indistinguishable after a reload — both are
+  // just "a device with a persisted admin session" — so this is the only
+  // way to end that session on either kind.
+  await expect(page.locator('#lock-device-btn')).toBeVisible();
 });
 
 test('a signed-in customer who is not the admin still has to enter the door PIN', async ({ page }) => {
@@ -222,9 +225,6 @@ test('an admin can sign in with their real account on a borrowed device, instead
   await page.getByRole('button', { name: 'دخول' }).nth(1).click();
 
   await expect(page.locator('#scanner-view')).toBeVisible();
-  // Unlike the auto-detected admin session, this one came from a manual
-  // sign-in on a device that isn't theirs — they need a way to end it
-  // before handing the phone back.
   await expect(page.locator('#lock-device-btn')).toBeVisible();
 
   await page.locator('#lock-device-btn').click();
