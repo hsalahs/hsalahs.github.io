@@ -178,3 +178,34 @@ test('after a rejection, trying again creates a fresh request under a new id', a
   expect(ids).toHaveLength(2);
   expect(ids.filter(i => i !== 'REQ-OLD')[0]).toMatch(/^REQ-[0-9A-F]{32}$/);
 });
+
+test('the sample invitation (?demo=1) walks through registration and approval without touching the database', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: {} } });
+  // Any read or write against these would fail loudly — the demo must not need them.
+  await page.addInitScript(() => { window.__fakeFirebase.denyPaths = ['events', 'accountLimits']; });
+  await page.goto('/invite.html?demo=1');
+
+  await expect(page.locator('#demo-banner')).toContainText('نموذج تجريبي');
+  await expect(page.locator('#card')).toContainText('حفل زفاف أحمد وسارة');
+  await page.locator('#g-name').fill('خالد');
+  await page.getByRole('button', { name: 'تأكيد الحضور' }).click();
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة المنظّم');
+  await expect(page.locator('#card')).toContainText('يوافق المنظّم', { timeout: 3000 });
+  await expect(page.locator('#card')).toContainText('تم تأكيد حضورك', { timeout: 5000 });
+
+  const state = await page.evaluate(() => ({
+    store: JSON.stringify(window.__fakeFirebase.store),
+    saved: (() => { try { return localStorage.getItem('inv_reqid_null'); } catch (e) { return null; } })(),
+  }));
+  expect(state.store).toBe('{"events":{}}');   // nothing was created
+  expect(state.saved).toBeNull();               // and nothing remembered on the phone
+});
+
+test('the sample invitation does not need the database to load at all', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: {} });
+  await page.addInitScript(() => { window.__failNextGetDoc = true; window.__fakeFirebase.denyPaths = ['events']; });
+  await page.goto('/invite.html?demo=1');
+  await expect(page.locator('#g-name')).toBeVisible();
+});

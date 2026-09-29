@@ -149,6 +149,17 @@
 const params = new URLSearchParams(window.location.search);
 const eventId = params.get('event');
 const card = document.getElementById('card');
+// ?demo=1 — a sample invitation for prospective customers, opened from the
+// landing page. It is the real invitation page with a made-up event: nothing
+// is read from or written to the database, so it can't be spammed and never
+// touches a real event.
+const isDemo = params.get('demo') === '1';
+const DEMO_EVENT = {
+  name: 'حفل زفاف أحمد وسارة',
+  date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+  venue: 'قاعة الأفراح — الرياض',
+  theme: 'gold',
+};
 // localStorage can throw (Safari private browsing, or a browser policy
 // blocking storage entirely) — this runs as the very first thing in this
 // script, so an uncaught throw here would silently kill everything below
@@ -223,9 +234,28 @@ function newReqId() {
   return 'REQ-' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
+function startDemo() {
+  currentEvent = DEMO_EVENT;
+  document.body.setAttribute('data-theme', DEMO_EVENT.theme);
+  document.body.insertAdjacentHTML('afterbegin',
+    '<div id="demo-banner" style="position:fixed; top:0; left:0; right:0; z-index:50; text-align:center; padding:10px 14px; font-size:13px; line-height:1.7; color:#1a1400; background:linear-gradient(135deg,#C99B4A,#E0BC7A,#F3E0BC);">' +
+    '👀 هذا نموذج تجريبي — ما يُحفظ فيه أي شي. ' +
+    '<a href="app.html" style="color:#1a1400; font-weight:700; text-decoration:underline;">أنشئ دعوتك أنت</a></div>');
+  renderForm(DEMO_EVENT);
+}
+
 async function submitRequest() {
   const name = document.getElementById('g-name').value.trim();
   if (!name) return;
+  if (isDemo) {
+    // Show what the guest goes through, without a request being created: the
+    // waiting screen, then the card the organizer's approval would produce.
+    renderPending();
+    card.insertAdjacentHTML('beforeend',
+      '<div style="margin-top:14px; font-size:12px; color:#8a857a; line-height:1.7;">في الدعوة الحقيقية يوافق المنظّم على طلبك — هنا نوافق تلقائيًا عشان تشوف الشكل النهائي</div>');
+    setTimeout(() => renderApproved(DEMO_EVENT, { name, id: 'WD-DEMO2026A' }), 1800);
+    return;
+  }
   const { doc, setDoc } = window._fsFns;
   const reqId = newReqId();
   try {
@@ -595,7 +625,8 @@ async function init() {
   else renderForm(currentEvent);
 }
 
-if (window._db) init();
+if (isDemo) startDemo();          // needs no database at all
+else if (window._db) init();
 else window.addEventListener('appDbReady', init);
 </script>
 </body>
