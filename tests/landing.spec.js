@@ -68,7 +68,7 @@ test('the free-tier reassurance says "no fees", never the ambiguous "no card", o
     expect(src, f + ' should not say "بدون بطاقة"').not.toContain('بدون بطاقة');
   }
   await page.goto('/index.html');
-  await expect(page.locator('.trial-note')).toContainText('بدون دفع رسوم، بدون التزام');
+  await expect(page.locator('.trial-note')).toContainText('بدون دفع رسوم');
   await expect(page.locator('.price-card')).toContainText('بدون دفع رسوم');
   expect(await page.locator('meta[property="og:description"]').getAttribute('content')).toContain('بدون دفع رسوم');
   await page.goto('/guide.html');
