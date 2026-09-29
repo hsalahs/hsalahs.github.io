@@ -279,7 +279,7 @@ async function checkPin() {
   // by regenerating the code, without this page ever re-checking the
   // network for it.
   try { localStorage.setItem(unlockKey(), val); } catch (e) {}
-  showScanner(false);
+  showScanner();
 }
 
 function showAdminLogin() {
@@ -314,7 +314,7 @@ async function submitAdminLogin() {
       showErr('هذا الحساب ليس حساب الأدمن');
       return;
     }
-    showScanner(false);
+    showScanner();
   } catch (e) {
     const map = {
       'auth/invalid-credential': 'البريد أو كلمة المرور غلط',
@@ -324,13 +324,21 @@ async function submitAdminLogin() {
   }
 }
 
-function showScanner(viaAdmin) {
+function showScanner() {
   document.getElementById('pin-gate').style.display = 'none';
   document.getElementById('scanner-view').style.display = 'block';
   document.getElementById('scan-event-name').textContent = eventData.name;
   document.getElementById('new-scan-btn').style.display = 'block';
   document.getElementById('offline-list-btn').style.display = 'block';
-  document.getElementById('lock-device-btn').style.display = viaAdmin ? 'none' : 'block';
+  // Always shown, even for an admin auto-detected as already signed in on
+  // this device: hiding it here was the actual bug. A device that starts
+  // out auto-bypassing and a device where the admin just signed in
+  // manually look IDENTICAL after a reload — both are just "a device with
+  // a persisted admin session" — so there's no way to tell them apart to
+  // hide the button selectively. Hiding it meant that once an admin
+  // reloaded a borrowed phone, the only way to end that session vanished
+  // from the UI entirely.
+  document.getElementById('lock-device-btn').style.display = 'block';
   startGuestsListener();
 }
 
@@ -536,7 +544,7 @@ async function init() {
   document.getElementById('loading-msg').style.display = 'none';
 
   if (isAdmin(user)) {
-    showScanner(true);
+    showScanner();
     return;
   }
 
@@ -547,7 +555,7 @@ async function init() {
   try { alreadyUnlocked = localStorage.getItem(unlockKey()) === eventData.scanPin; } catch (e) {}
 
   if (alreadyUnlocked) {
-    showScanner(false);
+    showScanner();
   } else {
     document.getElementById('pin-gate').style.display = 'block';
     document.getElementById('pin-event-name').textContent = eventData.name;
