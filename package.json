@@ -2,9 +2,12 @@
   "name": "dawaat-invitations",
   "private": true,
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:rules": "npx --yes firebase-tools@15.32.0 emulators:exec --only firestore --project demo-rules-test \"node rules-tests/firestore-rules.test.mjs\""
   },
   "devDependencies": {
-    "@playwright/test": "^1.47.0"
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "^1.47.0",
+    "firebase": "^12.19.0"
   }
 }
