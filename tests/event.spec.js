@@ -164,6 +164,37 @@ test('guest list sorts numeric names first (in numeric order), then alphabetical
   expect(names).toEqual(['2', '10', 'أحمد', 'زينب']);
 });
 
+test('a burst of near-simultaneous guest updates collapses into one render instead of one per update', async ({ page }) => {
+  // Simulates a bulk import or several door scanners checking guests in
+  // around the same moment — the guest list used to do a full DOM rebuild
+  // for every single update in a row, which is the kind of thing that
+  // stutters on a large guest list. renderGuests() calls are now coalesced
+  // into a single animation frame per burst.
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  const renderCount = await page.evaluate(async () => {
+    let count = 0;
+    const original = renderGuests;
+    renderGuests = function (...args) { count++; return original.apply(this, args); };
+    const { doc, updateDoc } = window._fsFns;
+    for (let i = 0; i < 5; i++) {
+      await updateDoc(doc(window._db, 'events', 'e1', 'guests', 'g0'), { scanned: i % 2 === 0 });
+    }
+    // Let the coalesced animation-frame render actually fire before restoring.
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    renderGuests = original;
+    return count;
+  });
+
+  expect(renderCount).toBe(1);
+});
+
 test('stat tiles reflect attended vs pending counts', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
