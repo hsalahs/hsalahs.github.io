@@ -203,12 +203,27 @@ service cloud.firestore {
         // event owner. Field-shape validation is the only spam guard
         // available on the free plan (no Cloud Functions for real rate
         // limiting), but it blocks arbitrary extra fields and outsized junk.
+        //
+        // The document is named after the request's own id (reqId), which
+        // the guest's browser generates as 128 random bits and keeps as its
+        // only key to the request. The length check is what stops a guest
+        // from naming theirs something guessable.
         allow create: if request.resource.data.keys().hasOnly(['name', 'reqId', 'status', 'createdAt']) &&
+          request.resource.data.reqId == requestId &&
+          requestId.size() >= 20 &&
           request.resource.data.status == 'pending' &&
           request.resource.data.name is string &&
           request.resource.data.name.size() > 0 &&
           request.resource.data.name.size() <= 100;
-        allow read: if true;
+
+        // Opening ONE request by its exact id is open to anyone (that's how a
+        // guest sees their own status and, once approved, their card) —
+        // useless without knowing the id. Listing them is not: it used to be
+        // open to anyone with the invite link, which exposed every guest's
+        // name, and (after approval) their barcode id, to a stranger.
+        allow get: if true;
+        allow list: if isAdmin() || isOwner(eventId);
+
         allow update, delete: if isAdmin() || isOwner(eventId);
       }
     }
