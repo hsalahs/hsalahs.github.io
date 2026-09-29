@@ -83,6 +83,7 @@
   input { width:100%; padding:13px; margin-bottom:14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(var(--accent-rgb),0.25); color:var(--text-main); font-size:15px; font-family:inherit; text-align:center; }
   input:focus { outline:none; border-color:var(--gold); }
   .btn { width:100%; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
+  .kind-btn { display:block; text-align:center; text-decoration:none; margin-top:10px; font-size:17px; }
   .status-icon { font-size:44px; margin-bottom:10px; }
   .status-msg { font-size:15px; line-height:1.9; }
   #qr-box { margin-top:18px; padding:16px; background:#fff; border-radius:12px; display:inline-block; }
@@ -125,6 +126,33 @@
     </div>
   </div>
   <script>
+  // The sample invitation (?demo=1) opens with a splash that matches the
+  // kind of event picked (?type=…); with no pick yet it is the neutral product
+  // splash. Real invitations keep the wedding splash. This has to run before
+  // first paint and depend on nothing else, so it's inline, guarded, and tiny.
+  (function () {
+    try {
+      const p = new URLSearchParams(location.search);
+      if (p.get('demo') !== '1') return;
+      const GRAD = '<path d="M70 16 L130 42 L70 68 L10 42 Z" fill="url(#ringGold)"/><path d="M36 56 V72 C36 82 104 82 104 72 V56 L70 70 Z" stroke="url(#ringGold)" stroke-width="5" stroke-linejoin="round"/><rect x="121.5" y="44" width="5" height="32" rx="2.5" fill="url(#ringGold)"/><circle cx="124" cy="79" r="5.5" fill="url(#ringGold)"/>';
+      const STAR = '<path d="M70 10 L81 38 L110 41 L88 60 L95 86 L70 72 L45 86 L52 60 L30 41 L59 38 Z" fill="url(#ringGold)"/>';
+      const KINDS = {
+        wedding:    ['دعوة زفاف', 'Wedding Invitation', null],
+        graduation: ['دعوة حفل تخرج', 'Graduation Invitation', GRAD],
+        event:      ['دعوة فعالية', 'Event Invitation', STAR],
+      };
+      const k = KINDS[p.get('type')] || ['دعوات', 'Digital Invitations', null];
+      document.querySelector('#splash .splash-title').textContent = k[0];
+      document.querySelector('#splash .splash-subtitle').textContent = k[1];
+      if (k[2]) {
+        const svg = document.querySelector('#splash .splash-rings svg');
+        svg.querySelectorAll('circle, path').forEach(n => n.remove());
+        svg.insertAdjacentHTML('beforeend', k[2]);
+      }
+    } catch (e) {}
+  })();
+  </script>
+  <script>
   // Isolated on purpose, and NOT gated on window.load — if this lived
   // inside the big application script below and something earlier in that
   // script threw (a slow/failed CDN script, a bug, a bad connection), the
@@ -145,6 +173,7 @@
      another CDN — nothing needs it until the script below runs. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="utils.js"></script>
+<script src="format.js"></script>
 <script>
 const params = new URLSearchParams(window.location.search);
 const eventId = params.get('event');
@@ -153,13 +182,25 @@ const card = document.getElementById('card');
 // landing page. It is the real invitation page with a made-up event: nothing
 // is read from or written to the database, so it can't be spammed and never
 // touches a real event.
+//
+// Opening it with no ?type= asks which kind of event the visitor is planning;
+// each kind is a different made-up event (name, place, colours, splash), so
+// someone planning a graduation sees a graduation invitation, not a wedding
+// one. ?type= can also be linked to directly (e.g. sent to a school).
 const isDemo = params.get('demo') === '1';
-const DEMO_EVENT = {
-  name: 'حفل زفاف أحمد وسارة',
-  date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
-  venue: 'قاعة الأفراح — الرياض',
-  theme: 'gold',
+const DEMO_KINDS = {
+  wedding:    { label: 'زفاف',   emoji: '💍', name: 'حفل زفاف أحمد وسارة',      venue: 'قاعة الأفراح — الرياض',        theme: 'gold' },
+  graduation: { label: 'تخرج',   emoji: '🎓', name: 'حفل تخرج دفعة 2026',       venue: 'مدرسة الأمل الأهلية — الدمام', theme: 'sapphire' },
+  event:      { label: 'فعالية', emoji: '🎉', name: 'ملتقى ريادة الأعمال 2026', venue: 'مركز المؤتمرات — الرياض',      theme: 'emerald' },
 };
+// hasOwnProperty, so ?type=constructor and the like can't pick up inherited keys.
+const demoKind = Object.prototype.hasOwnProperty.call(DEMO_KINDS, params.get('type')) ? params.get('type') : null;
+const DEMO_EVENT = demoKind ? {
+  name: DEMO_KINDS[demoKind].name,
+  date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+  venue: DEMO_KINDS[demoKind].venue,
+  theme: DEMO_KINDS[demoKind].theme,
+} : null;
 // localStorage can throw (Safari private browsing, or a browser policy
 // blocking storage entirely) — this runs as the very first thing in this
 // script, so an uncaught throw here would silently kill everything below
@@ -216,7 +257,7 @@ function renderForm(eventData) {
   card.innerHTML = `
     <div class="ornament">✦</div>
     <h1>${escapeHtml(eventData.name)}</h1>
-    <div class="sub">${[eventData.date, eventData.venue].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+    <div class="sub">${[formatEventDate(eventData.date), eventData.venue].filter(Boolean).map(escapeHtml).join(' · ')}</div>
     ${eventInfoHtml(eventData)}
     <div class="gold-line"></div>
     <input type="text" id="g-name" placeholder="الاسم الكامل" onkeydown="if(event.key==='Enter') submitRequest()">
@@ -234,13 +275,26 @@ function newReqId() {
   return 'REQ-' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
+function renderDemoChooser() {
+  card.innerHTML = `
+    <div class="ornament">✦</div>
+    <h1>جرّب دعوتك</h1>
+    <div class="sub">اختر نوع مناسبتك لتشوف كيف تطلع دعوتها</div>
+    <div class="gold-line"></div>
+    ${Object.entries(DEMO_KINDS).map(([k, v]) => `<a class="btn kind-btn" href="?demo=1&type=${k}">${v.emoji} ${v.label}</a>`).join('')}
+  `;
+}
+
 function startDemo() {
-  currentEvent = DEMO_EVENT;
-  document.body.setAttribute('data-theme', DEMO_EVENT.theme);
+  const link = 'color:#1a1400; font-weight:700; text-decoration:underline; white-space:nowrap;';
   document.body.insertAdjacentHTML('afterbegin',
     '<div id="demo-banner" style="position:fixed; top:0; left:0; right:0; z-index:50; text-align:center; padding:10px 14px; font-size:13px; line-height:1.7; color:#1a1400; background:linear-gradient(135deg,#C99B4A,#E0BC7A,#F3E0BC);">' +
-    '👀 هذا نموذج تجريبي — ما يُحفظ فيه أي شي. ' +
-    '<a href="app.html" style="color:#1a1400; font-weight:700; text-decoration:underline;">أنشئ دعوتك أنت</a></div>');
+    '👀 هذا نموذج تجريبي' + (demoKind ? ' لدعوة ' + DEMO_KINDS[demoKind].label : '') + ' — ما يُحفظ فيه أي شي. ' +
+    (demoKind ? '<a href="?demo=1" style="' + link + '">غيّر النوع</a> · ' : '') +
+    '<a href="app.html" style="' + link + '">أنشئ دعوتك أنت</a></div>');
+  if (!demoKind) { renderDemoChooser(); return; }
+  currentEvent = DEMO_EVENT;
+  document.body.setAttribute('data-theme', DEMO_EVENT.theme);
   renderForm(DEMO_EVENT);
 }
 
@@ -441,7 +495,7 @@ function buildInviteCard(eventData, guest) {
 
       ctx.fillStyle = '#999';
       ctx.font = '34px Tajawal, Arial';
-      ctx.fillText(eventData.date || '', 500, 172);
+      ctx.fillText(formatEventDate(eventData.date), 500, 172);
 
       drawFadedLine(ctx, 280, 720, 205, GOLD);
 

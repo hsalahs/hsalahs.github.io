@@ -626,3 +626,15 @@ test('guests approved before the invite page stopped reading the guests collecti
   await expect(page.locator('#dashboard')).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store['events/e1/requests'].r1.guestId)).toBe('WD-OLD1');
 });
+
+test('the dashboard shows the event date as words with Western digits', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([]),
+  });
+  await page.addInitScript(() => { window.__fakeFirebase.store.events.e1 = { ...window.__fakeFirebase.store.events.e1, date: '2026-10-29' }; });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await expect(page.locator('#ev-sub')).toContainText('الخميس 29 أكتوبر 2026');
+});

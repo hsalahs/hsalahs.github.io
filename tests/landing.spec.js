@@ -74,3 +74,42 @@ test('the free-tier reassurance says "no fees", never the ambiguous "no card", o
   await page.goto('/guide.html');
   await expect(page.locator('#start .note')).toContainText('بدون دفع رسوم');
 });
+
+test('the landing page opens with the product splash, not a wedding one', async ({ page }) => {
+  await page.goto('/index.html');
+  await expect(page.locator('#splash .splash-title')).toHaveText('دعوات');
+  await expect(page.locator('#splash .splash-subtitle')).toHaveText('Digital Invitations');
+});
+
+test('the sample card starts as a wedding, then shows a graduation and an event, and comes back around', async ({ page }) => {
+  await page.clock.install();
+  await page.goto('/index.html');
+  const title = page.locator('.cp-title');
+  await expect(title).toHaveText('دعوة زفاف');
+  await page.clock.runFor(3000);
+  await expect(title).toHaveText('دعوة حفل تخرج');
+  await page.clock.runFor(3000);
+  await expect(title).toHaveText('دعوة فعالية');
+  await page.clock.runFor(3000);
+  await expect(title).toHaveText('دعوة زفاف');
+});
+
+test('for a visitor who asked their device for reduced motion, the sample card keeps its first title', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.clock.install();
+  await page.goto('/index.html');
+  await page.clock.runFor(15000);
+  await expect(page.locator('.cp-title')).toHaveText('دعوة زفاف');
+});
+
+test('the sample card date reads as words with Western digits', async ({ page }) => {
+  await page.goto('/index.html');
+  const text = await page.locator('#cp-date').textContent();
+  expect(text).toMatch(/^(الأحد|الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت) \d{1,2} \S+ \d{4}$/);
+  expect(text).not.toMatch(/[\u0660-\u0669]/);
+});
+
+test('the steps are numbered 1, 2, 3 in Western digits', async ({ page }) => {
+  await page.goto('/index.html');
+  expect(await page.locator('.step-num').allTextContents()).toEqual(['1', '2', '3']);
+});

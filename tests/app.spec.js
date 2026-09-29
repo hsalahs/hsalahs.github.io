@@ -147,3 +147,16 @@ test('an anonymous door-scanner identity left on the same browser does not pass 
   await expect(page.locator('#auth-view')).toBeVisible();
   await expect(page.locator('#app-view')).toBeHidden();
 });
+
+test('the events list shows each event date as words with Western digits', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: {
+      events: { e1: { name: 'Test Event', ownerUid: 'u1', ownerEmail: 'customer@example.com', date: '2026-10-29', venue: 'الرياض', createdAt: { seconds: 1 } } },
+      accountLimits: { u1: { eventLimit: 1, eventCount: 1 } },
+    },
+  });
+  await page.goto('/app.html');
+  await expect(page.locator('.event-date').first()).toContainText('الخميس 29 أكتوبر 2026');
+});

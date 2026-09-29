@@ -105,7 +105,7 @@
     margin:44px auto 0; max-width:260px; background:#FAFAF8; border-radius:20px; padding:22px 18px;
     box-shadow:0 20px 60px rgba(0,0,0,0.5); border:6px solid #C9A84C; transform:rotate(-2deg);
   }
-  .card-preview .cp-title { font-family:'Playfair Display',serif; font-weight:700; color:#C9A84C; font-size:17px; margin-bottom:2px; }
+  .card-preview .cp-title { transition:opacity 0.3s ease; font-family:'Playfair Display',serif; font-weight:700; color:#C9A84C; font-size:17px; margin-bottom:2px; }
   .card-preview .cp-date { color:#999; font-size:11px; margin-bottom:14px; }
   .card-preview .cp-qr { width:100%; aspect-ratio:1; background:
       repeating-linear-gradient(45deg,#0A0A0A 0 4px, transparent 4px 8px),
@@ -154,8 +154,8 @@
         <path d="M70 22 L74 31 L83 32 L76 39 L78 48 L70 43 L62 48 L64 39 L57 32 L66 31 Z" fill="url(#ringGold)"/>
       </svg>
     </div>
-    <div class="splash-title">دعوة زفاف</div>
-    <div class="splash-subtitle">Wedding Invitation</div>
+    <div class="splash-title">دعوات</div>
+    <div class="splash-subtitle">Digital Invitations</div>
     <div class="splash-line"></div>
   </div>
 </div>
@@ -195,7 +195,7 @@ setTimeout(() => {
       <div class="cp-title">دعوة زفاف</div>
       <!-- Refreshed to "three weeks from today" by the script at the bottom, so
            the sample never shows a date that has already passed. -->
-      <div class="cp-date" id="cp-date">الخميس ٢٢ أكتوبر ٢٠٢٦</div>
+      <div class="cp-date" id="cp-date">الخميس 22 أكتوبر 2026</div>
       <div class="cp-qr"></div>
       <div class="cp-name">اسم الضيف</div>
       <div class="cp-id">WD-XXXXXXXXX</div>
@@ -206,21 +206,21 @@ setTimeout(() => {
   <div class="section-sub">ثلاث خطوات بس</div>
   <div class="steps">
     <div class="step">
-      <div class="step-num">١</div>
+      <div class="step-num">1</div>
       <div class="step-text">
         <h3>أنشئ مناسبتك</h3>
         <p>اسم المناسبة، التاريخ، والمكان — وتاخذ رابط دعوة خاص فيها فورًا.</p>
       </div>
     </div>
     <div class="step">
-      <div class="step-num">٢</div>
+      <div class="step-num">2</div>
       <div class="step-text">
         <h3>شارك الرابط مع ضيوفك</h3>
         <p>كل ضيف يعبّي اسمه، وأنت توافق عليه — يوصله باركود شخصي قابل للحفظ.</p>
       </div>
     </div>
     <div class="step">
-      <div class="step-num">٣</div>
+      <div class="step-num">3</div>
       <div class="step-text">
         <h3>امسح عند الباب</h3>
         <p>سكانر من جوالك يتحقق من كل باركود لحظيًا ويمنع الدخول المكرر تلقائيًا.</p>
@@ -269,17 +269,40 @@ setTimeout(() => {
 
   <footer>دعوات — دعوات رقمية بباركود · <a href="guide.html" style="color:inherit; text-decoration:underline;">دليل الاستخدام</a></footer>
 </div>
+<script src="format.js"></script>
 <script>
-// The sample card's date: three weeks from today, in the visitor's own
-// calendar day, so it never shows a date that has already passed. The
-// address of the page keeps a fixed fallback in the markup for the (unlikely)
-// case this script can't run.
+// The sample card's date: three weeks from today, so it never shows a date
+// that has already passed (the markup keeps a fixed fallback in case this
+// script can't run). Formatted by format.js — Western digits, whatever the
+// visitor's device would have chosen.
 (function () {
   try {
     const d = new Date(Date.now() + 21 * 86400000);
+    const iso = d.toISOString().slice(0, 10);
     const el = document.getElementById('cp-date');
-    el.textContent = d.toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-    el.dataset.iso = d.toISOString().slice(0, 10);
+    el.textContent = formatEventDate(iso);
+    el.dataset.iso = iso;
+  } catch (e) {}
+})();
+
+// The sample card's title rotates through the kinds of event the service is
+// for, so a visitor who isn't planning a wedding sees themselves in it. The
+// wedding comes first and is what the markup says. Skipped for visitors whose
+// device asks for reduced motion — they just keep the first title.
+(function () {
+  try {
+    const title = document.querySelector('.cp-title');
+    if (!title || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const titles = ['دعوة زفاف', 'دعوة حفل تخرج', 'دعوة فعالية'];
+    let i = 0;
+    setInterval(() => {
+      title.style.opacity = '0';
+      setTimeout(() => {
+        i = (i + 1) % titles.length;
+        title.textContent = titles[i];
+        title.style.opacity = '1';
+      }, 300);
+    }, 2600);
   } catch (e) {}
 })();
 </script>
