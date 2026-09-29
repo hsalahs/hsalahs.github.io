@@ -41,17 +41,29 @@ service cloud.firestore {
         get(/databases/$(database)/documents/events/$(eventId)/scanSessions/$(request.auth.uid)).data.pin == currentScanPin(eventId);
     }
 
-    // Free tier + payment gate: an event's owner can add up to
-    // FREE_GUEST_LIMIT guests for free; beyond that (or to share the invite
-    // unlimited) the admin must flip `paid` to true (after an off-platform
-    // bank transfer). getAfter (not get) on guestCount so the check sees the
-    // post-transaction count — the client must bump it in the same
-    // transaction as the guest write, it can't just be read as a stale
-    // value. Keep the 5 in sync with FREE_GUEST_LIMIT in utils.js.
+    // Guest limit. Every event may hold FREE_GUEST_LIMIT (5) guests for free;
+    // beyond that the ADMIN sets a number for the event (`guestLimit`, agreed
+    // with the customer off-platform — the owner can never write it). Events
+    // activated before limits existed (paid == true, no guestLimit) stay
+    // unlimited until the admin gives them a number. Keep the 5 in sync with
+    // FREE_GUEST_LIMIT in utils.js, and this with guestCapOf() there.
+    function guestCap(ev) {
+      return ev.get('guestLimit', null) != null
+        ? ev.guestLimit
+        : (ev.get('paid', false) == true ? 1000000 : 5);
+    }
+
+    // Adding a guest must come with a bump of the event's guestCount in the
+    // same transaction (getAfter sees the post-transaction doc), and the
+    // bumped count must fit under the cap. Requiring the bump is what stops
+    // an owner from writing guest documents directly and leaving the counter
+    // — which the cap is measured against — where it was.
     function eventCanAcceptGuest(eventId, uid) {
       let ev = get(/databases/$(database)/documents/events/$(eventId)).data;
       let evAfter = getAfter(/databases/$(database)/documents/events/$(eventId)).data;
-      return ev.ownerUid == uid && (ev.paid == true || evAfter.guestCount <= 5);
+      return ev.ownerUid == uid &&
+        evAfter.get('guestCount', 0) > ev.get('guestCount', 0) &&
+        evAfter.get('guestCount', 0) <= guestCap(evAfter);
     }
 
     // Lets the owner's guestCount update go through even for events created
@@ -128,6 +140,11 @@ service cloud.firestore {
         (
           isAdmin() ||
           (
+            // A customer's new event always starts on the free tier: they
+            // can't create it already activated, with a limit, or with guests.
+            request.resource.data.get('paid', false) == false &&
+            !('guestLimit' in request.resource.data) &&
+            request.resource.data.get('guestCount', 0) == 0 &&
             existsAfter(/databases/$(database)/documents/accountLimits/$(request.auth.uid)) &&
             getAfter(/databases/$(database)/documents/accountLimits/$(request.auth.uid)).data.eventCount <=
             getAfter(/databases/$(database)/documents/accountLimits/$(request.auth.uid)).data.eventLimit
@@ -135,14 +152,15 @@ service cloud.firestore {
         );
 
       // The owner can freely edit their event (name/date/venue/theme/etc.)
-      // but cannot touch `paid` or `ownerUid` themselves — only the admin
-      // can activate payment or reassign ownership.
+      // but cannot touch `paid`, `guestLimit` or `ownerUid` themselves — only
+      // the admin can activate an event, set its guest limit or reassign it.
       allow update: if request.auth != null && (
         isAdmin() ||
         (
           resource.data.ownerUid == request.auth.uid &&
           request.resource.data.ownerUid == resource.data.ownerUid &&
           request.resource.data.paid == resource.data.paid &&
+          request.resource.data.get('guestLimit', null) == resource.data.get('guestLimit', null) &&
           guestCountNotDecreased()
         )
       );
@@ -177,8 +195,8 @@ service cloud.firestore {
         allow read: if isAdmin() || isOwner(eventId) || hasScanSession(eventId);
 
         // Adding a guest — manually, via CSV import, or by approving a
-        // self-registration request — is the action gated on the free tier
-        // (first 5) / payment.
+        // self-registration request — is the action held to the event's
+        // guest limit (see guestCap).
         allow create: if request.auth != null &&
           (isAdmin() || eventCanAcceptGuest(eventId, request.auth.uid));
 

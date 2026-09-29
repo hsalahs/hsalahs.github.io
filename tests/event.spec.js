@@ -359,37 +359,219 @@ test('the owner sees a live toast and the gate lifts when the event is activated
     const { doc, updateDoc } = window._fsFns;
     return updateDoc(doc(window._db, 'events', 'e1'), { paid: true });
   });
-  await expect(page.locator('#toast')).toContainText('تم تفعيل الدفع');
+  await expect(page.locator('#toast')).toContainText('تم تفعيل مناسبتك');
   await expect(page.locator('#payment-gate')).toBeHidden();
 });
 
-test('declining the confirm dialog leaves the event unpaid', async ({ page }) => {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, {
-    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
-    store: { events: { e1: { ...EVENT, ownerUid: 'u1', paid: false } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+// Admin: activating an event means typing the number of guests it may have.
+// Answers the prompt with `answer` (null = cancel) and accepts any confirm.
+function answerPrompt(page, answer) {
+  const seen = { prompts: [], alerts: [], confirms: [] };
+  page.on('dialog', d => {
+    if (d.type() === 'prompt') { seen.prompts.push(d.message()); return answer === null ? d.dismiss() : d.accept(String(answer)); }
+    if (d.type() === 'alert') seen.alerts.push(d.message());
+    if (d.type() === 'confirm') seen.confirms.push(d.message());
+    return d.accept();
   });
-  page.on('dialog', d => d.dismiss());
+  return seen;
+}
+const adminEvent = (extra) => ({
+  user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+  store: { events: { e1: { ...EVENT, ownerUid: 'u1', paid: false, guestCount: 0, ...extra } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+});
+const storedEvent = (page) => page.evaluate(() => window.__fakeFirebase.store.events.e1);
+
+test('the admin cannot activate an event without a number: cancelling the prompt leaves it unactivated', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, adminEvent({}));
+  const seen = answerPrompt(page, null);
   await page.goto('/event.html?id=e1');
   await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('تفعيل (أدمن)');
   await page.locator('#payment-menu-item').click();
   await page.getByRole('button', { name: '☰' }).click();
-  await expect(page.locator('#payment-menu-item')).toContainText('تفعيل الدفع');
+  await expect(page.locator('#payment-menu-item')).toContainText('تفعيل (أدمن)');
+  expect(seen.prompts).toHaveLength(1);
+  const ev = await storedEvent(page);
+  expect(ev.paid).toBe(false);
+  expect(ev.guestLimit).toBeUndefined();
 });
 
-test('the admin can revoke a mistaken activation from the menu', async ({ page }) => {
+test('the admin activates an event by typing the number of guests, and it is saved with it', async ({ page }) => {
   await stubFirebase(page);
-  await seedFakeFirebase(page, {
-    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
-    store: { events: { e1: { ...EVENT, ownerUid: 'u1', paid: true } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
-  });
-  page.on('dialog', d => d.accept());
+  await seedFakeFirebase(page, adminEvent({}));
+  answerPrompt(page, 150);
   await page.goto('/event.html?id=e1');
   await page.getByRole('button', { name: '☰' }).click();
-  await expect(page.locator('#payment-menu-item')).toContainText('إلغاء التفعيل');
   await page.locator('#payment-menu-item').click();
   await page.getByRole('button', { name: '☰' }).click();
-  await expect(page.locator('#payment-menu-item')).toContainText('تفعيل الدفع (أدمن)');
+  await expect(page.locator('#payment-menu-item')).toContainText('مفعّلة (150 ضيف) — تعديل الحد');
+  const ev = await storedEvent(page);
+  expect(ev.paid).toBe(true);
+  expect(ev.guestLimit).toBe(150);
+});
+
+test('the admin can type the number with Eastern Arabic digits', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, adminEvent({}));
+  answerPrompt(page, '١٢٠');
+  await page.goto('/event.html?id=e1');
+  await page.getByRole('button', { name: '☰' }).click();
+  await page.locator('#payment-menu-item').click();
+  expect((await storedEvent(page)).guestLimit).toBe(120);
+});
+
+for (const [label, answer] of [['text', 'كثير'], ['a decimal', '12.5'], ['a negative number', '-5'], ['zero on an event that is not activated', '0'], ['a number over the maximum', '2001'], ['an empty answer', '']]) {
+  test('an invalid answer (' + label + ') saves nothing', async ({ page }) => {
+    await stubFirebase(page);
+    await seedFakeFirebase(page, adminEvent({}));
+    const seen = answerPrompt(page, answer);
+    await page.goto('/event.html?id=e1');
+    await page.getByRole('button', { name: '☰' }).click();
+    await page.locator('#payment-menu-item').click();
+    await expect.poll(() => seen.prompts.length).toBe(1);
+    const ev = await storedEvent(page);
+    expect(ev.paid).toBe(false);
+    expect(ev.guestLimit).toBeUndefined();
+  });
+}
+
+test('a very large number asks for confirmation, and declining it saves nothing', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, adminEvent({}));
+  page.on('dialog', d => d.type() === 'prompt' ? d.accept('1500') : d.dismiss());
+  await page.goto('/event.html?id=e1');
+  await page.getByRole('button', { name: '☰' }).click();
+  await page.locator('#payment-menu-item').click();
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('تفعيل (أدمن)');
+  expect((await storedEvent(page)).guestLimit).toBeUndefined();
+});
+
+test('the admin can change the number later, and 0 switches the event back to the free tier', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, adminEvent({ paid: true, guestLimit: 50 }));
+  let answer = '80';
+  page.on('dialog', d => d.type() === 'prompt' ? d.accept(answer) : d.accept());
+  await page.goto('/event.html?id=e1');
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('مفعّلة (50 ضيف) — تعديل الحد');
+  await page.locator('#payment-menu-item').click();
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('مفعّلة (80 ضيف)');
+  expect((await storedEvent(page)).guestLimit).toBe(80);
+
+  answer = '0';
+  await page.locator('#payment-menu-item').click();
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('تفعيل (أدمن)');
+  const ev = await storedEvent(page);
+  expect(ev.paid).toBe(false);
+  expect(ev.guestLimit).toBeUndefined();
+});
+
+test('setting a limit below the current guest count warns the admin first', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, adminEvent({ guestCount: 30 }));
+  const seen = answerPrompt(page, 10);
+  await page.goto('/event.html?id=e1');
+  await page.getByRole('button', { name: '☰' }).click();
+  await page.locator('#payment-menu-item').click();
+  await expect.poll(() => seen.confirms.length).toBe(1);
+  expect(seen.confirms[0]).toContain('30');
+});
+
+test('an activated event stops at the admin-set number: the owner is blocked, sees "N of M", and the WhatsApp message asks to raise it', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, paid: true, guestLimit: 3, guestCount: 2 } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#payment-gate')).toBeHidden();
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('2 من 3 ضيف');
+  await page.getByRole('button', { name: '☰' }).click();
+
+  await page.locator('#new-guest-name').fill('الثالث');
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+  await expect(page.locator('#toast')).toContainText('وصلت لحد الضيوف (3)');
+  await expect(page.locator('#payment-gate')).toBeVisible();
+  await expect(page.locator('#pg-title')).toContainText('لحد الضيوف (3)');
+
+  await page.locator('#new-guest-name').fill('الرابع');
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+  expect((await storedEvent(page)).guestCount).toBe(3);
+
+  await page.evaluate(() => { window.__opened = []; window.open = (u) => { window.__opened.push(u); }; });
+  await page.getByRole('button', { name: /واتساب/ }).click();
+  const opened = await page.evaluate(() => window.__opened);
+  expect(opened).toHaveLength(1);
+  expect(decodeURIComponent(opened[0])).toContain('أزيد عدد الضيوف');
+});
+
+test('CSV import stops at the admin-set number and says how many names were left out', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, paid: true, guestLimit: 4, guestCount: 1 } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  const messages = [];
+  page.on('dialog', d => { messages.push(d.message()); d.accept(); });
+  await page.goto('/event.html?id=e1');
+  await page.locator('#csv-import').setInputFiles({
+    name: 'guests.csv', mimeType: 'text/csv',
+    buffer: Buffer.from('A\nB\nC\nD\nE'),
+  });
+  await expect(page.locator('.guest-item')).toHaveCount(3);
+  expect(messages.join(' ')).toContain('وصلت لحد الـ4 ضيف، 2 اسم ما انضاف');
+  expect((await storedEvent(page)).guestCount).toBe(4);
+});
+
+test('the owner sees a live toast when the admin raises the number while the page is open, and can add again', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, paid: true, guestLimit: 5, guestCount: 5 } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#payment-gate')).toBeVisible();
+  await page.evaluate(() => {
+    const { doc, updateDoc } = window._fsFns;
+    return updateDoc(doc(window._db, 'events', 'e1'), { guestLimit: 100 });
+  });
+  await expect(page.locator('#toast')).toContainText('تم تحديث حد الضيوف إلى 100');
+  await expect(page.locator('#payment-gate')).toBeHidden();
+  await page.locator('#new-guest-name').fill('ضيف');
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+});
+
+test('an event activated before limits existed stays unlimited, and the admin sees that it has no number', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, paid: true, guestCount: 400 } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#payment-gate')).toBeHidden();
+  await page.locator('#new-guest-name').fill('ضيف');
+  await page.getByRole('button', { name: 'إضافة' }).click();
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+});
+
+test('an unlimited older event shows the admin "no limit" and lets them give it a number', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, adminEvent({ paid: true }));
+  answerPrompt(page, 200);
+  await page.goto('/event.html?id=e1');
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('مفعّلة (بلا حد)');
+  await page.locator('#payment-menu-item').click();
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.locator('#payment-menu-item')).toContainText('مفعّلة (200 ضيف)');
 });
 
 test('a one-tap toolbar shortcut jumps back to "all my events" without opening the menu first', async ({ page }) => {

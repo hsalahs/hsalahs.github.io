@@ -155,6 +155,66 @@ await check('a customer cannot create a doc for someone else', () => assertFails
 await check('an unauthenticated visitor cannot create one', () => assertFails(unauth().doc('accountLimits/cust5').set({ eventLimit: 1, eventCount: 1 })));
 await check('the admin can create one for a customer with no doc yet (approving an extra-event request)', () => assertSucceeds(admin().doc('accountLimits/cust6').set({ eventLimit: 2, eventCount: 0 })));
 
+console.log('\nguest limits (5 free; beyond that the number the admin sets; nothing else):');
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await db.doc('events/lim_free').set({ name: 'F', ownerUid: 'owner1', paid: false, guestCount: 4 });
+  await db.doc('events/lim_full').set({ name: 'F', ownerUid: 'owner1', paid: false, guestCount: 5 });
+  await db.doc('events/lim_two').set({ name: 'F', ownerUid: 'owner1', paid: false, guestCount: 2 });
+  await db.doc('events/lim_50').set({ name: 'L', ownerUid: 'owner1', paid: true, guestLimit: 50, guestCount: 49 });
+  await db.doc('events/lim_50full').set({ name: 'L', ownerUid: 'owner1', paid: true, guestLimit: 50, guestCount: 50 });
+  await db.doc('events/lim_legacy').set({ name: 'O', ownerUid: 'owner1', paid: true, guestCount: 900 });
+  await db.doc('events/lim_nocount').set({ name: 'N', ownerUid: 'owner1', paid: false });
+  await db.doc('events/lim_door').set({ name: 'D', ownerUid: 'owner1', paid: true, guestLimit: 50, guestCount: 1 });
+  await db.doc('events/lim_door/private/scan').set({ scanPin: '555555' });
+});
+// What event.html does: the guest write and the counter bump in ONE transaction.
+const addGuests = (db, eventId, n, newCount) => db.runTransaction(async (tx) => {
+  for (let i = 0; i < n; i++) tx.set(db.collection('events/' + eventId + '/guests').doc('x' + i + Math.random().toString(36).slice(2)), { id: 'WD-' + i, name: 'G' + i, scanned: false });
+  tx.update(db.doc('events/' + eventId), { guestCount: newCount });
+});
+await check('free tier: the 5th guest is allowed', () => assertSucceeds(addGuests(owner(), 'lim_free', 1, 5)));
+await check('free tier: the 6th guest is refused', () => assertFails(addGuests(owner(), 'lim_full', 1, 6)));
+await check('free tier: writing a guest without bumping the counter is refused (the old bypass)', () => assertFails(owner().collection('events/lim_full/guests').doc('sneak').set({ id: 'WD-S', name: 'S', scanned: false })));
+await check('free tier: the same sneak on an event under the cap is refused too', () => assertFails(owner().collection('events/lim_two/guests').doc('sneak').set({ id: 'WD-S', name: 'S', scanned: false })));
+await check('free tier: an import of 3 that lands exactly on 5 is allowed', () => assertSucceeds(addGuests(owner(), 'lim_two', 3, 5)));
+await check('free tier: an import that would land on 6 is refused', async () => {
+  await testEnv.withSecurityRulesDisabled(ctx => ctx.firestore().doc('events/lim_two').update({ guestCount: 2 }));
+  await assertFails(addGuests(owner(), 'lim_two', 4, 6));
+});
+await check('admin-set limit 50: guest number 50 is allowed', () => assertSucceeds(addGuests(owner(), 'lim_50', 1, 50)));
+await check('admin-set limit 50: guest number 51 is refused', () => assertFails(addGuests(owner(), 'lim_50full', 1, 51)));
+await check('older activated event with no number: still unlimited', () => assertSucceeds(addGuests(owner(), 'lim_legacy', 1, 901)));
+await check('an event with no counter yet: the first guest still goes in', () => assertSucceeds(addGuests(owner(), 'lim_nocount', 1, 1)));
+await check('a stranger cannot add guests', () => assertFails(addGuests(user('u9', 'other@example.com'), 'lim_50', 1, 50)));
+await check('a door device with a valid session cannot add guests', async () => {
+  await assertSucceeds(anon('devL').doc('events/lim_door/scanSessions/devL').set({ pin: '555555', createdAt: 'x' }));
+  await assertFails(addGuests(anon('devL'), 'lim_door', 1, 2));
+});
+await check('the owner cannot give their own event a guest limit', () => assertFails(owner().doc('events/lim_full').update({ guestLimit: 500 })));
+await check('the owner cannot raise the limit they were given', () => assertFails(owner().doc('events/lim_50full').update({ guestLimit: 5000 })));
+await check('the owner cannot remove the limit they were given', async () => {
+  await assertFails(owner().doc('events/lim_50full').update({ guestLimit: firebase.firestore.FieldValue.delete() }));
+});
+await check('the owner cannot activate their own event', () => assertFails(owner().doc('events/lim_full').update({ paid: true })));
+await check('the owner can still edit the event\'s details', () => assertSucceeds(owner().doc('events/lim_50full').update({ name: 'New name' })));
+await check('the admin can activate an event with a number', () => assertSucceeds(admin().doc('events/lim_full').update({ paid: true, guestLimit: 80 })));
+await check('...and then the owner can add up to that number', () => assertSucceeds(addGuests(owner(), 'lim_full', 1, 6)));
+await check('the admin can raise it later', () => assertSucceeds(admin().doc('events/lim_50full').update({ guestLimit: 80 })));
+await check('...and the owner can then go past the old number', () => assertSucceeds(addGuests(owner(), 'lim_50full', 1, 51)));
+await check('the admin can switch it back to the free tier', () => assertSucceeds(admin().doc('events/lim_50full').update({ paid: false, guestLimit: firebase.firestore.FieldValue.delete() })));
+const newEvent = (db, uid, id, extra) => {
+  const b = db.batch();
+  b.set(db.doc('events/' + id), { name: 'New', ownerUid: uid, paid: false, guestCount: 0, ...extra });
+  b.set(db.doc('accountLimits/' + uid), { eventLimit: 1, eventCount: 1 });
+  return b.commit();
+};
+await check('a customer\'s new event starts free: creating it that way works', () => assertSucceeds(newEvent(user('nc1', 'n1@example.com'), 'nc1', 'ne1', {})));
+await check('a customer cannot create an event that is already activated', () => assertFails(newEvent(user('nc2', 'n2@example.com'), 'nc2', 'ne2', { paid: true })));
+await check('a customer cannot create an event that already has a guest limit', () => assertFails(newEvent(user('nc3', 'n3@example.com'), 'nc3', 'ne3', { guestLimit: 500 })));
+await check('a customer cannot create an event with the counter already set back', () => assertFails(newEvent(user('nc4', 'n4@example.com'), 'nc4', 'ne4', { guestCount: 3 })));
+await check('the admin can create an event with a limit', () => assertSucceeds(admin().doc('events/ne5').set({ name: 'A', ownerUid: 'admin1', paid: true, guestLimit: 100, guestCount: 0 })));
+
 await testEnv.cleanup();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

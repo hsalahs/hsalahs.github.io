@@ -29,6 +29,40 @@ function isAdmin(user) { return !!user && ADMIN_EMAILS.includes((user.email || '
 // one stays a manually-matched magic number).
 const FREE_GUEST_LIMIT = 5;
 
+// The admin sets each event's guest limit by hand (events/{id}.guestLimit),
+// agreed with the customer off-platform; only the admin can write it. No
+// guestLimit means the free tier — except events activated before limits
+// existed (paid: true and no number), which stay unlimited until the admin
+// gives them one. Keep in sync with guestCap() in firestore.rules.
+const MAX_GUEST_LIMIT = 2000;
+const CONFIRM_ABOVE_GUESTS = 1000;
+function guestCapOf(ev) {
+  if (!ev) return FREE_GUEST_LIMIT;
+  if (typeof ev.guestLimit === 'number') return ev.guestLimit;
+  return ev.paid ? Infinity : FREE_GUEST_LIMIT;
+}
+
+// Asks the admin how many guests an event may have. Returns an integer from
+// 1 to MAX_GUEST_LIMIT, 0 for "switch it off" (only offered when the event
+// is already activated), or null if they cancelled or typed something invalid.
+function askGuestLimit({ name, current, activated, guestCount }) {
+  const hint = activated ? '\nاكتب 0 لإلغاء التفعيل (يرجع للحد المجاني).' : '';
+  const answer = prompt(
+    'كم ضيف تسمح لمناسبة "' + name + '"؟ (من 1 إلى ' + MAX_GUEST_LIMIT + ')' + hint,
+    current == null ? '' : String(current)
+  );
+  if (answer === null) return null;
+  // Accept Eastern Arabic-Indic digits typed on an Arabic keyboard.
+  const typed = answer.trim().replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660));
+  if (!/^\d+$/.test(typed)) { alert('اكتب رقمًا صحيحًا فقط.'); return null; }
+  const n = parseInt(typed, 10);
+  if (n === 0) return activated ? 0 : (alert('اكتب رقمًا من 1 إلى ' + MAX_GUEST_LIMIT + '.'), null);
+  if (n > MAX_GUEST_LIMIT) { alert('الحد الأقصى ' + MAX_GUEST_LIMIT + ' ضيف.'); return null; }
+  if (n > CONFIRM_ABOVE_GUESTS && !confirm('الرقم كبير (' + n + ' ضيف). هل هو صحيح؟')) return null;
+  if (guestCount > n && !confirm('العميل عنده الآن ' + guestCount + ' ضيف، أكثر من ' + n + '. سيتوقف عن إضافة ضيوف جدد. متأكد؟')) return null;
+  return n;
+}
+
 // Admin heads-up notifications (new customer / extra-event request /
 // approaching the free-guest cap) — same EmailJS account used by both
 // app.html and event.html.

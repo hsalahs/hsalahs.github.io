@@ -83,7 +83,7 @@ test('the admin sees a counter banner for unpaid events, and each event has one 
       },
     },
   });
-  page.on('dialog', d => d.accept());
+  page.on('dialog', d => d.type() === 'prompt' ? d.accept('120') : d.accept());
   await page.goto('/app.html');
   await expect(page.locator('#admin-unpaid-section')).toBeVisible();
   await expect(page.locator('#admin-unpaid-badge')).toHaveText('1');
@@ -99,6 +99,38 @@ test('the admin sees a counter banner for unpaid events, and each event has one 
   await unpaidCard.getByRole('button', { name: '✅ تفعيل' }).click();
   await expect(page.locator('#admin-unpaid-section')).toBeHidden();
   await expect(unpaidCard.getByRole('button', { name: '✅ تفعيل' })).toHaveCount(0);
+  // Activating saved the number the admin typed, and the card shows it.
+  await expect(unpaidCard).toContainText('مفعّلة (120 ضيف)');
+  expect(await page.evaluate(() => window.__fakeFirebase.store.events.e1.guestLimit)).toBe(120);
+});
+
+test('cancelling the number prompt leaves the event unactivated', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: { events: { e1: { name: 'Zara Wedding', ownerUid: 'u1', ownerEmail: 'a@example.com', date: '', venue: '', paid: false, createdAt: { seconds: 1 } } } },
+  });
+  page.on('dialog', d => d.dismiss());
+  await page.goto('/app.html');
+  await page.locator('.event-card', { hasText: 'Zara Wedding' }).getByRole('button', { name: '✅ تفعيل' }).click();
+  await expect(page.locator('#admin-unpaid-badge')).toHaveText('1');
+  expect(await page.evaluate(() => window.__fakeFirebase.store.events.e1.paid)).toBe(false);
+});
+
+test('the admin is told when an event with an admin-set number reaches it', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: { events: { e1: { name: 'Big Wedding', ownerUid: 'u1', ownerEmail: 'a@example.com', date: '', venue: '', paid: true, guestLimit: 50, guestCount: 49, createdAt: { seconds: 1 } } } },
+  });
+  await page.goto('/app.html');
+  await expect(page.locator('.event-card', { hasText: 'Big Wedding' })).toContainText('مفعّلة (50 ضيف)');
+  await page.evaluate(() => {
+    const { doc, updateDoc } = window._fsFns;
+    return updateDoc(doc(window._db, 'events', 'e1'), { guestCount: 50 });
+  });
+  await expect(page.locator('#toast')).toContainText('Big Wedding');
+  await expect(page.locator('#toast')).toContainText('لحد الضيوف (50)');
 });
 
 test('the admin gets a live toast when an event crosses the free-guest cap while watching, not for ones already capped on load', async ({ page }) => {
@@ -135,7 +167,7 @@ test('the admin gets a one-time nudge toast on a fresh page load when unpaid eve
     },
   });
   await page.goto('/app.html');
-  await expect(page.locator('#toast')).toContainText('2 مناسبة غير مدفوعة وصلت لحد الضيوف المجانيين');
+  await expect(page.locator('#toast')).toContainText('2 مناسبة وصلت لحد الضيوف');
   // Doesn't call out either event by name — that's what the standing list is for.
   await expect(page.locator('#toast')).not.toContainText('Already Capped');
 });

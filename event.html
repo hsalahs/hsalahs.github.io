@@ -268,8 +268,8 @@ setTimeout(() => {
 
     <div id="rules-warning" style="display:none; background:rgba(229,72,77,0.10); border:1px solid rgba(229,72,77,0.35); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:12.5px; color:#ffb3b3; line-height:1.7;">⚠️ (للأدمن فقط) قواعد أمان Firestore الجديدة غير منشورة بعد — كود دخول السكانر لسا مكشوف لأي شخص معه رابط الدعوة. انشر ملف firestore.rules من Firebase.</div>
     <div id="payment-gate">
-      <div class="pg-title">🔒 وصلت لحد الضيوف المجانيين</div>
-      <div class="pg-sub">أضفت أول 5 ضيوف مجانًا — عشان تضيف أكثر أو تشارك رابط الدعوة لعدد غير محدود، لازم تفعّل الدفع.</div>
+      <div class="pg-title" id="pg-title">🔒 وصلت لحد الضيوف المجانيين</div>
+      <div class="pg-sub" id="pg-sub">أضفت أول 5 ضيوف مجانًا — لإضافة المزيد تواصل معنا ونتفق على العدد المناسب لمناسبتك.</div>
       <button class="btn wa" onclick="openPaymentWhatsapp()">💬 تواصل معنا عبر واتساب</button>
     </div>
 
@@ -343,10 +343,11 @@ function guestCount() {
 }
 
 // Event setup (name/date/theme/etc.) and the first FREE_GUEST_LIMIT guests
-// stay free — the gate only blocks adding MORE guests or sharing the invite
-// link once that free quota is used up. Admins always bypass it.
+// stay free. After that the event holds as many guests as the admin has set
+// for it (guestLimit — see guestCapOf in utils.js); the gate only blocks
+// adding MORE guests once that number is used up. Admins always bypass it.
 function paymentGateActive() {
-  return !!eventData && !eventData.paid && !isAdmin(currentUser) && guestCount() >= FREE_GUEST_LIMIT;
+  return !!eventData && !isAdmin(currentUser) && guestCount() >= guestCapOf(eventData);
 }
 
 // Tracks whether the gate was active on the previous render (null = not
@@ -360,22 +361,40 @@ function renderPaymentGate() {
   const active = paymentGateActive();
   gate.style.display = active ? 'block' : 'none';
 
+  const cap = guestCapOf(eventData);
+  const onFreeTier = !eventData || !eventData.paid;
+  if (active) {
+    document.getElementById('pg-title').textContent = onFreeTier
+      ? '🔒 وصلت لحد الضيوف المجانيين'
+      : '🔒 وصلت لحد الضيوف (' + cap + ')';
+    document.getElementById('pg-sub').textContent = onFreeTier
+      ? 'أضفت أول ' + FREE_GUEST_LIMIT + ' ضيوف مجانًا — لإضافة المزيد تواصل معنا ونتفق على العدد المناسب لمناسبتك.'
+      : 'وصلت للعدد المتفق عليه لمناسبتك (' + cap + ' ضيف) — لزيادته تواصل معنا.';
+  }
+
   if (active && gateWasActive === false) {
-    showToast('🎁 خلصت الـ' + FREE_GUEST_LIMIT + ' ضيوف المجانيين! فعّل الدفع عشان تضيف أكثر');
+    showToast(onFreeTier
+      ? '🎁 خلصت الـ' + FREE_GUEST_LIMIT + ' ضيوف المجانيين! تواصل معنا لتضيف أكثر'
+      : '🔒 وصلت لحد الضيوف (' + cap + ')! تواصل معنا لزيادة العدد');
     notifyAdmin(
-      'وصل لحد الضيوف المجانيين 💰',
-      'مناسبة "' + eventData.name + '" وصلت للحد المجاني (' + FREE_GUEST_LIMIT + ' ضيوف) — العميل جاهز للدفع. الإيميل: ' + (currentUser.email || currentUser.uid)
+      onFreeTier ? 'وصل لحد الضيوف المجانيين 💰' : 'وصل لحد الضيوف المتفق عليه',
+      'مناسبة "' + eventData.name + '" وصلت للحد (' + cap + ' ضيف) — العميل بانتظار التواصل. الإيميل: ' + (currentUser.email || currentUser.uid)
     );
   }
   gateWasActive = active;
 
   const menuItem = document.getElementById('payment-menu-item');
   if (eventData && eventData.paid) {
-    menuItem.innerHTML = isAdmin(currentUser)
-      ? '<span style="color:#4CAF50;">✅ مفعّلة — إلغاء التفعيل</span>'
-      : '<span style="color:#4CAF50;">✅ المناسبة مفعّلة</span>';
+    const limited = Number.isFinite(cap);
+    if (isAdmin(currentUser)) {
+      menuItem.innerHTML = '<span style="color:#4CAF50;">✅ مفعّلة (' + (limited ? cap + ' ضيف' : 'بلا حد') + ') — تعديل الحد</span>';
+    } else if (limited) {
+      menuItem.innerHTML = '<span style="color:' + (active ? '#E5484D' : '#4CAF50') + ';">' + (active ? '🔒 ' : '✅ ') + guestCount() + ' من ' + cap + ' ضيف</span>';
+    } else {
+      menuItem.innerHTML = '<span style="color:#4CAF50;">✅ المناسبة مفعّلة</span>';
+    }
   } else if (isAdmin(currentUser)) {
-    menuItem.innerHTML = '<span style="color:#E5484D;">🔓 تفعيل الدفع (أدمن)</span>';
+    menuItem.innerHTML = '<span style="color:#E5484D;">🔓 تفعيل (أدمن)</span>';
   } else if (active) {
     menuItem.innerHTML = '<span style="color:#E5484D;">🔒 وصلت للحد المجاني</span>';
   } else {
@@ -386,37 +405,41 @@ function renderPaymentGate() {
 function handlePaymentMenuClick() {
   closeTopMenu();
   if (!isAdmin(currentUser)) {
-    if (!eventData || !eventData.paid) openPaymentWhatsapp();
+    if (!eventData || !eventData.paid || paymentGateActive()) openPaymentWhatsapp();
     return;
   }
-  if (eventData && eventData.paid) adminDeactivatePayment();
-  else adminActivatePayment();
+  adminSetGuestLimit();
 }
 
 function openPaymentWhatsapp() {
-  const msg = 'أبي أفعّل الدفع لمناسبة "' + eventData.name + '" (رقم: ' + eventId + ')';
+  const msg = (eventData.paid ? 'أبي أزيد عدد الضيوف لمناسبة "' : 'أبي أفعّل مناسبة "') + eventData.name + '" (رقم: ' + eventId + ')';
   window.open('https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(msg), '_blank');
 }
 
-async function adminActivatePayment() {
-  if (!confirm('هل تأكدت إن العميل حوّل المبلغ فعليًا؟')) return;
-  const { doc, updateDoc } = window._fsFns;
+// The admin types the number of guests the customer is allowed (agreed with
+// them off-platform) BEFORE anything is saved — activating without a number
+// is not possible. The same action edits the number later, and 0 switches the
+// event back to the free tier.
+async function adminSetGuestLimit() {
+  const activated = !!eventData.paid;
+  const n = askGuestLimit({
+    name: eventData.name,
+    current: typeof eventData.guestLimit === 'number' ? eventData.guestLimit : null,
+    activated,
+    guestCount: guestCount()
+  });
+  if (n === null) return;
+  const { doc, updateDoc, deleteField } = window._fsFns;
   try {
-    await updateDoc(doc(window._db, 'events', eventId), { paid: true });
-    eventData.paid = true;
-    renderPaymentGate();
-  } catch (e) { showErr(e); }
-}
-
-// For mistaken approvals or disputed transfers — puts the event back behind
-// the payment gate. The owner immediately loses the ability to add guests
-// or share the invite link again until re-activated.
-async function adminDeactivatePayment() {
-  if (!confirm('هل متأكد إنك تبي تلغي التفعيل؟ العميل بيرجع يُمنع من إضافة ضيوف أو مشاركة الرابط.')) return;
-  const { doc, updateDoc } = window._fsFns;
-  try {
-    await updateDoc(doc(window._db, 'events', eventId), { paid: false });
-    eventData.paid = false;
+    if (n === 0) {
+      await updateDoc(doc(window._db, 'events', eventId), { paid: false, guestLimit: deleteField() });
+      eventData.paid = false;
+      delete eventData.guestLimit;
+    } else {
+      await updateDoc(doc(window._db, 'events', eventId), { paid: true, guestLimit: n });
+      eventData.paid = true;
+      eventData.guestLimit = n;
+    }
     renderPaymentGate();
   } catch (e) { showErr(e); }
 }
@@ -688,12 +711,16 @@ function watchPaymentStatus() {
   onSnapshot(doc(window._db, 'events', eventId), (snap) => {
     if (!snap.exists()) return;
     const wasPaid = eventData.paid;
+    const wasCap = guestCapOf(eventData);
     eventData = { ...eventData, ...snap.data() };
     document.getElementById('ev-title').textContent = eventData.name;
     document.getElementById('ev-sub').textContent = [formatEventDate(eventData.date), eventData.venue].filter(Boolean).join(' · ');
     renderPaymentGate();
-    if (!wasPaid && eventData.paid) {
-      showToast('🎉 تم تفعيل الدفع! تقدر تضيف ضيوف وتشارك رابط الدعوة الحين');
+    if (!isAdmin(currentUser) && guestCapOf(eventData) > wasCap) {
+      const c = guestCapOf(eventData);
+      showToast(!wasPaid && eventData.paid && Number.isFinite(c)
+        ? '🎉 تم تفعيل مناسبتك! تقدر تضيف لين ' + c + ' ضيف'
+        : Number.isFinite(c) ? '🎉 تم تحديث حد الضيوف إلى ' + c : '🎉 تم تفعيل مناسبتك!');
     }
   });
 }
@@ -1363,10 +1390,11 @@ async function addGuest() {
       const snap = await tx.get(eventRef);
       const data = snap.data() || {};
       const count = data.guestCount || 0;
-      if (!data.paid && !isAdmin(currentUser) && count >= FREE_GUEST_LIMIT) throw new Error('GATE');
+      const cap = guestCapOf(data);
+      if (!isAdmin(currentUser) && count >= cap) throw new Error('GATE');
       tx.set(guestRef, { id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString() });
       tx.update(eventRef, { guestCount: count + 1 });
-      justHitCap = !data.paid && !isAdmin(currentUser) && count + 1 >= FREE_GUEST_LIMIT;
+      justHitCap = !isAdmin(currentUser) && count + 1 >= cap;
     });
     nameInput.value = '';
     nameInput.focus();
@@ -1403,6 +1431,7 @@ async function importGuestNames(names) {
   const eventRef = doc(window._db, 'events', eventId);
   let added = 0;
   let blockedByGate = 0;
+  let capForMsg = FREE_GUEST_LIMIT;
   const batchSize = 50;
   const total = toAdd.length;
   // A few hundred entries means several transaction round-trips in a row —
@@ -1416,8 +1445,9 @@ async function importGuestNames(names) {
       const snap = await tx.get(eventRef);
       const data = snap.data() || {};
       const count = data.guestCount || 0;
-      const unlimited = data.paid || isAdmin(currentUser);
-      const allowed = unlimited ? batch.length : Math.max(0, FREE_GUEST_LIMIT - count);
+      const cap = guestCapOf(data);
+      capForMsg = cap;
+      const allowed = isAdmin(currentUser) ? batch.length : Math.max(0, Math.min(batch.length, cap - count));
       const toWrite = batch.slice(0, allowed);
       toWrite.forEach(name => {
         const guestRef = doc(window._db, 'events', eventId, 'guests', randomDocId());
@@ -1432,7 +1462,7 @@ async function importGuestNames(names) {
   }
 
   let msg = 'تم استيراد ' + added + ' ضيف' + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' مكرر)' : '');
-  if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + FREE_GUEST_LIMIT + ' ضيوف المجانيين، ' + blockedByGate + ' اسم ما انضاف. فعّل الدفع عشان تكمل الاستيراد.';
+  if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + capForMsg + ' ضيف، ' + blockedByGate + ' اسم ما انضاف. تواصل معنا لزيادة العدد.';
   alert(msg);
   if (blockedByGate > 0) openPaymentWhatsapp();
 }
@@ -1525,7 +1555,7 @@ async function approveRequest(reqDocId) {
       const snap = await tx.get(eventRef);
       const data = snap.data() || {};
       const count = data.guestCount || 0;
-      if (!data.paid && !isAdmin(currentUser) && count >= FREE_GUEST_LIMIT) throw new Error('GATE');
+      if (!isAdmin(currentUser) && count >= guestCapOf(data)) throw new Error('GATE');
       tx.set(guestRef, { id: guestId, name: req.name, reqId: req.reqId, scanned: false, registeredAt: new Date().toISOString() });
       tx.update(eventRef, { guestCount: count + 1 });
       // The guest's invite page reads the barcode id from here — it can't
