@@ -57,3 +57,20 @@ test('the page says what it costs without inventing prices, and offers a live sa
   const text = await page.locator('body').innerText();
   expect(text).not.toMatch(/\d\s*(ريال|ر\.س|SAR|﷼)/);
 });
+
+// "بطاقة" is also what this product calls an invitation card, so "بدون بطاقة"
+// ("no card") can be read as "no invitation card". The reassurance means no
+// payment details are needed, and says so plainly.
+test('the free-tier reassurance says "no fees", never the ambiguous "no card", on every page and in the link preview', async ({ page }) => {
+  const fs = require('fs'), path = require('path');
+  for (const f of fs.readdirSync(path.join(__dirname, '..')).filter(n => n.endsWith('.html'))) {
+    const src = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+    expect(src, f + ' should not say "بدون بطاقة"').not.toContain('بدون بطاقة');
+  }
+  await page.goto('/index.html');
+  await expect(page.locator('.trial-note')).toContainText('بدون دفع رسوم، بدون التزام');
+  await expect(page.locator('.price-card')).toContainText('بدون دفع رسوم');
+  expect(await page.locator('meta[property="og:description"]').getAttribute('content')).toContain('بدون دفع رسوم');
+  await page.goto('/guide.html');
+  await expect(page.locator('#start .note')).toContainText('بدون دفع رسوم');
+});
