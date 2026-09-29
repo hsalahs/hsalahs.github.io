@@ -44,6 +44,29 @@ test('adding a guest confirms with a toast, clears and refocuses the field, and 
   await expect(page.locator('.guest-item')).toHaveCount(2);
 });
 
+test('a guest name containing a backslash and a quote does not break the delete button', async ({ page }) => {
+  // The onclick handlers embed the guest's name inside a single-quoted JS
+  // string literal within an HTML attribute — escapeHtml alone protects the
+  // attribute boundary but not that inner string literal. A name ending in
+  // a raw backslash used to silently swallow the closing quote, corrupting
+  // the whole onclick attribute and leaving the button non-functional.
+  await stubFirebase(page);
+  const trickyName = "O'Brien\\";
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([{ id: 'WD-1', name: trickyName, scanned: false }]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  let dialogMessage = '';
+  page.on('dialog', (d) => { dialogMessage = d.message(); d.accept(); });
+  await page.locator('.guest-item .del-btn').click();
+
+  expect(dialogMessage).toContain(trickyName);
+  await expect(page.locator('.guest-item')).toHaveCount(0);
+});
+
 test('two guests sharing a first name but not a full name are both allowed — the duplicate check compares the whole name', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {

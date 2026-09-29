@@ -322,7 +322,7 @@ function renderEvents(events, showOwner) {
       <div class="event-actions">
         ${showOwner && !ev.paid ? `<button class="btn small" style="margin:0; flex:1;" onclick="quickActivatePayment('${ev.id}')">✅ تفعيل</button>` : ''}
         <a class="btn ghost small" style="text-decoration:none; margin:0; flex:1; text-align:center;" href="event.html?id=${ev.id}">فتح</a>
-        <button class="btn ghost small" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteEvent('${ev.id}', '${escapeHtml(ev.name).replace(/'/g, "\\'")}', '${ev.ownerUid}')">🗑</button>
+        <button class="btn ghost small" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteEvent('${ev.id}', '${escapeForJsAttr(ev.name)}', '${ev.ownerUid}')">🗑</button>
       </div>
     </div>
   `).join('');
