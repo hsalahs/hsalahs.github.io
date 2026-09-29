@@ -209,3 +209,34 @@ test('the sample invitation does not need the database to load at all', async ({
   await page.goto('/invite.html?demo=1');
   await expect(page.locator('#g-name')).toBeVisible();
 });
+
+// The free email plan is for real activity — a customer creating an event —
+// not for people trying the sample. Nothing on the sample's path may send an
+// email, now or after a later change.
+test('trying the sample never sends an email to the owner', async ({ page }) => {
+  const requested = [];
+  page.on('request', (r) => requested.push(r.url()));
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: {} } });
+  // Stand in for the mail library itself: notifyAdmin() (utils.js) sends
+  // through window.emailjs, so any real send from this page is counted here.
+  await page.addInitScript(() => {
+    window.__emailCalls = 0;
+    window.emailjs = { init() {}, send() { window.__emailCalls++; return Promise.resolve(); } };
+  });
+  await page.goto('/invite.html?demo=1');
+  await page.locator('#g-name').fill('خالد');
+  await page.getByRole('button', { name: 'تأكيد الحضور' }).click();
+  await expect(page.locator('#card')).toContainText('تم تأكيد حضورك', { timeout: 5000 });
+
+  expect(await page.evaluate(() => window.__emailCalls)).toBe(0);
+  expect(requested.filter(u => /emailjs/i.test(u))).toEqual([]);   // and nothing was sent to the mail service
+});
+
+test('the landing page and the invitation page do not include the email library at all', async () => {
+  const fs = require('fs'), path = require('path');
+  for (const f of ['index.html', 'invite.html']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+    expect(src, f + ' should not load or call the email service').not.toMatch(/emailjs|notifyAdmin\(/i);
+  }
+});
