@@ -217,6 +217,7 @@ setTimeout(() => {
       <button class="icon-btn" onclick="window.location.href='app.html';" title="كل مناسباتي">📋</button>
       <div class="dropdown-menu" id="top-menu" style="display:none;">
         <button onclick="closeTopMenu(); openRequestsModal();" style="display:flex; align-items:center; justify-content:space-between;">📥 الطلبات<span class="badge-count" id="requests-badge" style="display:none;">0</span></button>
+        <button id="notif-toggle-btn" onclick="closeTopMenu(); toggleRequestNotifications();">🔔 تفعيل إشعارات الطلبات</button>
         <button onclick="closeTopMenu(); document.getElementById('csv-import').click();">📂 استيراد قائمة (CSV / أسماء)</button>
         <button onclick="closeTopMenu(); addSequentialNumbers();">🔢 إضافة أرقام متسلسلة (مثال: 1–200)</button>
         <button onclick="closeTopMenu(); downloadAllCards();">📦 تحميل كل الدعوات (ZIP)</button>
@@ -596,6 +597,7 @@ async function init() {
     document.getElementById('scan-pin-display').textContent = eventData.scanPin;
     applyTheme(eventData.theme || 'gold');
     renderPaymentGate();
+    updateNotifButtonLabel();
     startListeners();
     watchPaymentStatus();
   });
@@ -655,6 +657,12 @@ function refreshConnectionBanner() {
   if (b) b.style.display = (guestsListenerOK && requestsListenerOK) ? 'none' : 'block';
 }
 
+// Tracks which pending request IDs we've already seen, so a newly-added
+// one (someone actually just submitted a request) triggers a notification
+// but the initial page load — where every existing pending request looks
+// "new" to a fresh listener — doesn't spam one per request.
+let knownPendingRequestIds = null;
+
 function startListeners() {
   const { collection, onSnapshot } = window._fsFns;
   onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
@@ -674,6 +682,14 @@ function startListeners() {
     renderRequests();
     requestsListenerOK = true;
     refreshConnectionBanner();
+
+    const currentIds = new Set(requests.map(r => r.docId));
+    if (knownPendingRequestIds) {
+      requests.forEach(r => {
+        if (!knownPendingRequestIds.has(r.docId)) notifyNewRequest(r.name);
+      });
+    }
+    knownPendingRequestIds = currentIds;
   }, (error) => {
     console.error('requests onSnapshot error:', error);
     requestsListenerOK = false;
@@ -1173,6 +1189,42 @@ function updateRequestsBadge() {
   const topBadge = document.getElementById('top-menu-badge');
   topBadge.textContent = label;
   topBadge.style.display = count > 0 ? 'flex' : 'none';
+}
+
+// This is a real OS-level notification (the same kind any app uses), not
+// just an in-page badge — but it only fires while this tab/PWA is still
+// running, even in the background. It does NOT work once the screen is
+// locked or the browser is fully closed — that needs a real push service
+// (Web Push via a backend), which this project doesn't have. Still useful
+// for the case that actually came up: the owner on a different browser tab
+// or app, not looking at this page, but not locked/closed either.
+function notifyNewRequest(name) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try {
+    new Notification('📥 طلب انضمام جديد', { body: (name || 'ضيف') + ' يبي ينضم لقائمة ضيوفك', icon: 'icons/favicon-32.png' });
+  } catch (e) {}
+}
+
+function updateNotifButtonLabel() {
+  const btn = document.getElementById('notif-toggle-btn');
+  if (typeof Notification === 'undefined') { btn.textContent = '🔕 الإشعارات غير مدعومة بهذا المتصفح'; return; }
+  if (Notification.permission === 'granted') btn.textContent = '🔔 إشعارات الطلبات مفعّلة ✓';
+  else if (Notification.permission === 'denied') btn.textContent = '🔕 الإشعارات مرفوضة — فعّلها من إعدادات المتصفح';
+  else btn.textContent = '🔔 تفعيل إشعارات الطلبات';
+}
+
+async function toggleRequestNotifications() {
+  if (typeof Notification === 'undefined') { showToast('⚠️ متصفحك ما يدعم الإشعارات'); return; }
+  if (Notification.permission === 'granted') { showToast('🔔 الإشعارات مفعّلة بالفعل'); return; }
+  if (Notification.permission === 'denied') { showToast('⚠️ الإشعارات مرفوضة — فعّلها من إعدادات المتصفح'); return; }
+  const perm = await Notification.requestPermission();
+  updateNotifButtonLabel();
+  if (perm === 'granted') {
+    showToast('✅ تم تفعيل إشعارات الطلبات');
+    try { new Notification('🎉 تم التفعيل', { body: 'بتوصلك إشعارات لما يوصل طلب جديد، بس لازم الصفحة تكون مفتوحة بالخلفية' }); } catch (e) {}
+  } else {
+    showToast('⚠️ ما وافقت على الإشعارات');
+  }
 }
 
 function renderRequests() {
