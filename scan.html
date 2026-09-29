@@ -220,6 +220,7 @@ setTimeout(() => {
      screen) on a fetch to another CDN — nothing needs it until the script
      below runs. -->
 <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+<script src="utils.js"></script>
 <script>
 const params = new URLSearchParams(window.location.search);
 const eventId = params.get('event');
@@ -231,12 +232,11 @@ let lastScanned = null;
 let scanCooldown = false;
 let audioCtx = null;
 
-// Same admin allowlist as app.html/event.html. An admin who's already
-// signed in on this device (their session persists across all pages, same
-// origin) shouldn't have to ask the customer for the door code — they
-// already have full access everywhere else.
-const ADMIN_EMAILS = ['hsallah@outlook.sa'];
-function isAdmin(user) { return !!user && ADMIN_EMAILS.includes((user.email || '').toLowerCase()); }
+// ADMIN_EMAILS/isAdmin now live in utils.js (shared with app.html and
+// event.html). An admin who's already signed in on this device (their
+// session persists across all pages, same origin) shouldn't have to ask
+// the customer for the door code — they already have full access
+// everywhere else.
 
 // Firebase Auth restores a persisted session asynchronously, so the first
 // onAuthStateChanged callback is the earliest point we can reliably know
@@ -416,16 +416,10 @@ function renderOfflineList() {
   const filtered = query ? cache.guests.filter(g => g.name.includes(query)) : cache.guests;
   results.innerHTML = filtered.map(g => `
     <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 4px; border-bottom:1px solid rgba(224,188,122,0.15);">
-      <span>${escapeHtmlOffline(g.name)}</span>
+      <span>${escapeHtml(g.name)}</span>
       <span style="font-size:12px; color:${g.scanned ? '#4CAF50' : '#8a857a'};">${g.scanned ? '✓ دخل' : 'لسه'}</span>
     </div>
   `).join('') || '<div class="sub" style="text-align:center; padding:16px 0;">ما فيه نتائج</div>';
-}
-
-function escapeHtmlOffline(s) {
-  const d = document.createElement('div');
-  d.textContent = String(s);
-  return d.innerHTML;
 }
 
 function updateScanCounter() {
