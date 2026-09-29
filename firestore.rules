@@ -77,9 +77,15 @@ service cloud.firestore {
     match /accountLimits/{uid} {
       allow read: if request.auth != null && (isAdmin() || request.auth.uid == uid);
 
-      // A customer's very first event bootstraps this doc.
-      allow create: if request.auth != null && request.auth.uid == uid &&
-        request.resource.data.eventLimit == 1 && request.resource.data.eventCount == 1;
+      // A customer's very first event bootstraps this doc. The admin can
+      // also create one for a customer (approving an extra-event request
+      // for someone who has no doc yet writes eventLimit 2 / eventCount 0,
+      // which the customer-only branch below would reject).
+      allow create: if request.auth != null && (
+        isAdmin() ||
+        (request.auth.uid == uid &&
+         request.resource.data.eventLimit == 1 && request.resource.data.eventCount == 1)
+      );
 
       allow update: if request.auth != null && (
         isAdmin() ||

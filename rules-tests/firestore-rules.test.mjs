@@ -123,6 +123,13 @@ await check('anyone can submit an RSVP', () => assertSucceeds(unauth().collectio
 await check('the owner can approve it and copy the guestId onto it', () => assertSucceeds(owner().doc('events/e1/requests/r1').update({ status: 'approved', guestId: 'WD-1' })));
 await check('a stranger cannot approve it', () => assertFails(unauth().doc('events/e1/requests/r1').update({ status: 'approved' })));
 
+console.log('\naccount limits (one-event-per-customer bookkeeping):');
+await check('a customer can bootstrap their own doc on their first event', () => assertSucceeds(user('cust1', 'c1@example.com').doc('accountLimits/cust1').set({ eventLimit: 1, eventCount: 1 })));
+await check('a customer cannot bootstrap their own doc with a higher limit', () => assertFails(user('cust2', 'c2@example.com').doc('accountLimits/cust2').set({ eventLimit: 5, eventCount: 1 })));
+await check('a customer cannot create a doc for someone else', () => assertFails(user('cust3', 'c3@example.com').doc('accountLimits/cust4').set({ eventLimit: 1, eventCount: 1 })));
+await check('an unauthenticated visitor cannot create one', () => assertFails(unauth().doc('accountLimits/cust5').set({ eventLimit: 1, eventCount: 1 })));
+await check('the admin can create one for a customer with no doc yet (approving an extra-event request)', () => assertSucceeds(admin().doc('accountLimits/cust6').set({ eventLimit: 2, eventCount: 0 })));
+
 await testEnv.cleanup();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -42,7 +42,7 @@
   .sub { color:#B8B4AC; font-size:12px; text-align:center; margin-bottom:22px; }
   .card { background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.2); border-radius:14px; padding:20px; text-align:center; }
   input { width:100%; padding:14px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:20px; font-family:inherit; text-align:center; letter-spacing:6px; }
-  /* The default input above is tuned for the 4-digit PIN (big, spaced-out
+  /* The default input above is tuned for the door code (big, spaced-out
      digits) — wrong shape entirely for an email/password field. */
   input.text-input { font-size:15px; letter-spacing:normal; text-align:right; }
   .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
@@ -135,7 +135,7 @@ setTimeout(() => {
     <div class="sub">أدخل رقم الدخول اللي وصلك من المنظّم</div>
     <div class="card">
       <div class="err" id="pin-err">رقم غير صحيح</div>
-      <input type="tel" inputmode="numeric" maxlength="4" id="pin-input" placeholder="0000" onkeydown="if(event.key==='Enter') checkPin()">
+      <input type="tel" inputmode="numeric" maxlength="6" id="pin-input" placeholder="000000" onkeydown="if(event.key==='Enter') checkPin()">
       <button class="btn" onclick="checkPin()">دخول</button>
     </div>
 
