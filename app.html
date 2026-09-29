@@ -8,9 +8,15 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <script type="module" src="firebase-init.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- A <link> here (discovered by the browser's preloader while it's still
+     parsing <head>) starts the font fetch far earlier than an @import
+     buried inside <style> (which isn't seen until the CSS itself is being
+     parsed) — same fonts, just not stalling first paint on discovering
+     them. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh; }
   .wrap { max-width:480px; margin:0 auto; padding:32px 18px 60px; }
@@ -160,6 +166,9 @@ setTimeout(() => {
 
 </div>
 
+<!-- Moved out of <head> so it doesn't block first paint on a fetch to
+     another CDN — nothing needs it until the script below runs. -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="utils.js"></script>
 <script>
 const ADMIN_EMAILS = ['hsallah@outlook.sa'];
