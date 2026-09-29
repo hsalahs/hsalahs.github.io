@@ -1,8 +1,8 @@
 {
-  "name": "سكانر الدخول - دعوات",
-  "short_name": "سكانر",
-  "description": "سكانر التحقق من الضيوف عند بوابة المناسبة",
-  "start_url": "scan.html",
+  "name": "دعوات - لوحة المنظّم",
+  "short_name": "دعوات",
+  "description": "لوحة تحكم المنظّمين — أنشئ دعوات رقمية بباركود لمناسبتك",
+  "start_url": "app.html",
   "scope": ".",
   "display": "standalone",
   "orientation": "portrait",
