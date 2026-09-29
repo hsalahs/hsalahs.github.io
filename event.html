@@ -655,12 +655,31 @@ function refreshConnectionBanner() {
 // "new" to a fresh listener — doesn't spam one per request.
 let knownPendingRequestIds = null;
 
+// renderGuests() rebuilds the entire visible list's DOM from scratch — fine
+// for a single scan, but a burst of near-simultaneous Firestore updates
+// (a large CSV/sequential-numbers import writing in batches, several door
+// scanners checking guests in around the same moment) used to trigger one
+// full rebuild PER update, back to back. Coalescing into a single animation
+// frame collapses a whole burst into one render, without changing what
+// gets rendered — direct user actions (the filter buttons, typing a
+// search) still call renderGuests() straight away, since those are single
+// discrete actions, not bursts.
+let renderGuestsScheduled = false;
+function scheduleRenderGuests() {
+  if (renderGuestsScheduled) return;
+  renderGuestsScheduled = true;
+  requestAnimationFrame(() => {
+    renderGuestsScheduled = false;
+    renderGuests();
+  });
+}
+
 function startListeners() {
   const { collection, onSnapshot } = window._fsFns;
   onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     updateStats();
-    renderGuests();
+    scheduleRenderGuests();
     guestsListenerOK = true;
     refreshConnectionBanner();
   }, (error) => {
