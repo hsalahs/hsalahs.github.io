@@ -330,14 +330,59 @@ async function checkPin() {
     }
     return;
   }
+  usesSessionDoc = true;
   showScanner();
 }
+
+// True only for a device that got in by proving the code (a session doc
+// exists for it). The organizer and the admin get in on their own account
+// and have nothing to re-check.
+let usesSessionDoc = false;
+let sessionTimer = null;
+let verifyingSession = false;
+
+// Firestore doesn't re-check a listener that's already open when the code
+// changes, so a revoked device would keep showing (and receiving) the guest
+// list until its next reload. This asks again: once a minute, and right
+// when the page comes back to the foreground or the phone regains signal
+// (the moments a paused or offline page would otherwise still look valid).
+// A failed check for any reason other than "denied" is ignored — a dropped
+// connection must never throw door staff out mid-event.
+async function verifySession() {
+  if (!usesSessionDoc || verifyingSession) return;
+  const user = window._auth.currentUser;
+  if (!user) return;
+  verifyingSession = true;
+  try {
+    const { getDoc } = window._fsFns;
+    const snap = await getDoc(sessionRef(user.uid));
+    if (usesSessionDoc && !snap.exists()) sessionRevoked();
+  } catch (e) {
+    if (usesSessionDoc && e && e.code === 'permission-denied') sessionRevoked();
+  } finally {
+    verifyingSession = false;
+  }
+}
+
+function startSessionWatch() {
+  stopSessionWatch();
+  sessionTimer = setInterval(verifySession, 60000);
+}
+
+function stopSessionWatch() {
+  if (sessionTimer) { clearInterval(sessionTimer); sessionTimer = null; }
+}
+
+document.addEventListener('visibilitychange', () => { if (!document.hidden) verifySession(); });
+window.addEventListener('online', verifySession);
 
 // This device's session stopped being accepted mid-event — the organizer
 // generated a new code. Back to the code screen with a clear reason instead
 // of a misleading "connection lost" banner or a check-in that silently
 // never completes.
 function sessionRevoked() {
+  usesSessionDoc = false;
+  stopSessionWatch();
   if (guestsUnsub) { guestsUnsub(); guestsUnsub = null; }
   if (qrScanner) {
     try { qrScanner.stop(); } catch (_) {}
@@ -411,6 +456,7 @@ function showScanner() {
   // from the UI entirely.
   document.getElementById('lock-device-btn').style.display = 'block';
   startGuestsListener();
+  if (usesSessionDoc) startSessionWatch();
 }
 
 // Lets whoever is holding an unlocked device end their own session — e.g.
@@ -420,6 +466,8 @@ function showScanner() {
 // access this device could have: its proven-code session doc, and whatever
 // identity it's signed in with (anonymous, admin, or owner).
 async function lockDevice() {
+  usesSessionDoc = false;
+  stopSessionWatch();
   if (guestsUnsub) { guestsUnsub(); guestsUnsub = null; }
   const user = window._auth.currentUser;
   if (user) {
@@ -639,7 +687,7 @@ async function init() {
     const { getDoc } = window._fsFns;
     try {
       const sess = await getDoc(sessionRef(user.uid));
-      if (sess.exists()) { showScanner(); return; }
+      if (sess.exists()) { usesSessionDoc = true; showScanner(); return; }
     } catch (e) {}
   }
 
