@@ -118,10 +118,35 @@ await check('and then list guests and check in', async () => {
 });
 await check('a wrong legacy code is rejected', () => assertFails(anon('dev4').doc('events/e2/scanSessions/dev4').set({ pin: '0000', createdAt: 'x' })));
 
-console.log('\nrequests (RSVP flow):');
-await check('anyone can submit an RSVP', () => assertSucceeds(unauth().collection('events/e1/requests').add({ name: 'N', reqId: 'REQ-2', status: 'pending', createdAt: 'x' })));
-await check('the owner can approve it and copy the guestId onto it', () => assertSucceeds(owner().doc('events/e1/requests/r1').update({ status: 'approved', guestId: 'WD-1' })));
-await check('a stranger cannot approve it', () => assertFails(unauth().doc('events/e1/requests/r1').update({ status: 'approved' })));
+console.log('\nrequests (RSVP flow) — a guest opens their own request by its secret id; nobody lists them:');
+const REQ_A = 'REQ-' + 'A1B2C3D4E5F60718293A4B5C6D7E8F90'; // what invite.html generates: REQ- + 32 hex
+const REQ_B = 'REQ-' + '0F9E8D7C6B5A49382716051423324150';
+await check('anyone can register, when the document is named after the request id', () => assertSucceeds(unauth().doc('events/e1/requests/' + REQ_A).set({ name: 'A', reqId: REQ_A, status: 'pending', createdAt: 'x' })));
+await check('a second guest registers too', () => assertSucceeds(unauth().doc('events/e1/requests/' + REQ_B).set({ name: 'B', reqId: REQ_B, status: 'pending', createdAt: 'x' })));
+await check('registering under an auto-generated id (not the request id) is rejected', () => assertFails(unauth().collection('events/e1/requests').add({ name: 'N', reqId: 'REQ-2', status: 'pending', createdAt: 'x' })));
+await check('a document name that differs from the reqId inside it is rejected', () => assertFails(unauth().doc('events/e1/requests/' + REQ_A + 'X').set({ name: 'A', reqId: REQ_A, status: 'pending', createdAt: 'x' })));
+await check('a short, guessable id is rejected even when it matches', () => assertFails(unauth().doc('events/e1/requests/REQ-1234').set({ name: 'A', reqId: 'REQ-1234', status: 'pending', createdAt: 'x' })));
+await check('extra fields on a request are rejected', () => assertFails(unauth().doc('events/e1/requests/REQ-' + 'C'.repeat(32)).set({ name: 'A', reqId: 'REQ-' + 'C'.repeat(32), status: 'pending', createdAt: 'x', guestId: 'WD-FAKE' })));
+await check('a request that arrives already approved is rejected', () => assertFails(unauth().doc('events/e1/requests/REQ-' + 'D'.repeat(32)).set({ name: 'A', reqId: 'REQ-' + 'D'.repeat(32), status: 'approved', createdAt: 'x' })));
+await check('a guest can open their own request by its exact id (status, and the card once approved)', () => assertSucceeds(unauth().doc('events/e1/requests/' + REQ_A).get()));
+await check('a signed-in door device can open one by id as well (same rule for everyone)', () => assertSucceeds(anon('dev1').doc('events/e1/requests/' + REQ_A).get()));
+await check('unauthenticated: cannot list the requests (names of everyone who registered)', () => assertFails(unauth().collection('events/e1/requests').get()));
+await check('unauthenticated: cannot list them with a filter either', () => assertFails(unauth().collection('events/e1/requests').where('status', '==', 'approved').get()));
+await check('unauthenticated: cannot list them by asking for a reqId', () => assertFails(unauth().collection('events/e1/requests').where('reqId', '==', REQ_A).get()));
+await check('an anonymous device (with a valid door session) cannot list them', () => assertFails(anon('dev1').collection('events/e1/requests').get()));
+await check('a different signed-in customer cannot list them', () => assertFails(user('u9', 'other@example.com').collection('events/e1/requests').get()));
+await check('the owner can list them', () => assertSucceeds(owner().collection('events/e1/requests').get()));
+await check('the owner can list the approved ones (the guestId backfill query)', () => assertSucceeds(owner().collection('events/e1/requests').where('status', '==', 'approved').get()));
+await check('the admin can list them', () => assertSucceeds(admin().collection('events/e1/requests').get()));
+await check('the owner can approve one and copy the guestId onto it', () => assertSucceeds(owner().doc('events/e1/requests/' + REQ_A).update({ status: 'approved', guestId: 'WD-1' })));
+await check('an approved request shows its guestId to whoever holds the id', async () => {
+  const snap = await assertSucceeds(unauth().doc('events/e1/requests/' + REQ_A).get());
+  if (snap.data().guestId !== 'WD-1') throw new Error('guestId not visible to the id holder');
+});
+await check('the owner can still approve an older request that has an auto-generated id', () => assertSucceeds(owner().doc('events/e1/requests/r1').update({ status: 'approved', guestId: 'WD-OLD' })));
+await check('a stranger cannot approve one', () => assertFails(unauth().doc('events/e1/requests/' + REQ_B).update({ status: 'approved' })));
+await check('a stranger cannot delete one', () => assertFails(unauth().doc('events/e1/requests/' + REQ_B).delete()));
+await check('another registered guest cannot approve their own request', () => assertFails(unauth().doc('events/e1/requests/' + REQ_B).update({ status: 'approved', guestId: 'WD-FAKE' })));
 
 console.log('\naccount limits (one-event-per-customer bookkeeping):');
 await check('a customer can bootstrap their own doc on their first event', () => assertSucceeds(user('cust1', 'c1@example.com').doc('accountLimits/cust1').set({ eventLimit: 1, eventCount: 1 })));

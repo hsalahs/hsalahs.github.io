@@ -214,13 +214,23 @@ function renderForm(eventData) {
   startCountdown(eventData);
 }
 
+// 128 random bits from the browser's secure generator. It's the guest's only
+// key to their own request (and to the barcode card that appears on it), so
+// it has to be unguessable — Math.random() is not.
+function newReqId() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return 'REQ-' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
 async function submitRequest() {
   const name = document.getElementById('g-name').value.trim();
   if (!name) return;
-  const { collection, addDoc } = window._fsFns;
-  const reqId = 'REQ-' + Math.random().toString(36).substr(2, 8).toUpperCase() + Date.now().toString(36).toUpperCase().substr(-4);
+  const { doc, setDoc } = window._fsFns;
+  const reqId = newReqId();
   try {
-    await addDoc(collection(window._db, 'events', eventId, 'requests'), {
+    // The document's name IS the request id (the security rules require it).
+    await setDoc(doc(window._db, 'events', eventId, 'requests', reqId), {
       name, reqId, status: 'pending', createdAt: new Date().toISOString()
     });
   } catch (e) {
@@ -253,6 +263,7 @@ function renderRejected() {
 }
 
 function retryRequest() {
+  if (statusUnsub) { statusUnsub(); statusUnsub = null; }
   try { localStorage.removeItem('inv_reqid_' + eventId); } catch (e) {}
   myReqId = null;
   renderForm(currentEvent);
@@ -523,12 +534,28 @@ function renderPreparing() {
 }
 
 let renderedGuestId = null;
+let statusUnsub = null;
 
+// The request document is named after its own secret id, and this page opens
+// that one document directly. It can no longer ask "give me all requests
+// where reqId == mine" — that's a list query, and listing requests is now
+// limited to the organizer and the admin (it used to be open to anyone with
+// the invite link, which exposed every guest's name and, once approved,
+// their barcode id). One guest can't open another's request because
+// the id is 128 random bits they never see.
 function watchStatus() {
-  const { query, where, collection, onSnapshot } = window._fsFns;
-  onSnapshot(query(collection(window._db, 'events', eventId, 'requests'), where('reqId', '==', myReqId)), (snap) => {
-    if (snap.empty) return;
-    const req = snap.docs[0].data();
+  const { doc, onSnapshot } = window._fsFns;
+  if (statusUnsub) { statusUnsub(); statusUnsub = null; }
+  statusUnsub = onSnapshot(doc(window._db, 'events', eventId, 'requests', myReqId), (snap) => {
+    if (!snap.exists()) {
+      // Nothing under this id: a request made before requests were named
+      // after their id, or one the organizer deleted. Either way there's
+      // nothing to wait for — let the guest register again.
+      renderedGuestId = null;
+      retryRequest();
+      return;
+    }
+    const req = snap.data();
     if (req.status === 'pending') { renderedGuestId = null; renderPending(); }
     else if (req.status === 'rejected') { renderedGuestId = null; renderRejected(); }
     else if (req.status === 'approved') {

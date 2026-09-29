@@ -38,6 +38,7 @@ async function seedFakeFirebase(page, { user = null, store = {} } = {}) {
       // firestore stub. Tests set this in an addInitScript registered after
       // seedFakeFirebase (init scripts run in registration order).
       denyPaths: [],
+      denyLists: [],
     };
   }, { user, store });
 }

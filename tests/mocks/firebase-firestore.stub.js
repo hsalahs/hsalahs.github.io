@@ -19,6 +19,14 @@ function isDenied(path) {
   return (F().denyPaths || []).some(prefix => path.startsWith(prefix));
 }
 
+// Listing a collection (a collection ref or a query on it) denied while
+// opening a single document inside it stays allowed — the same split the
+// security rules make for guest requests (allow get / allow list). Exact
+// collection paths, unlike denyPaths' prefixes.
+function isListDenied(path) {
+  return (F().denyLists || []).includes(path);
+}
+
 function permissionDenied(path) {
   const e = new Error('Missing or insufficient permissions. (' + path + ')');
   e.code = 'permission-denied';
@@ -150,7 +158,7 @@ export function getDoc(ref) {
 }
 
 export function getDocs(refOrQuery) {
-  if (isDenied(refOrQuery.path)) return Promise.reject(permissionDenied(refOrQuery.path));
+  if (isDenied(refOrQuery.path) || isListDenied(refOrQuery.path)) return Promise.reject(permissionDenied(refOrQuery.path));
   if (refOrQuery.__type === 'query') {
     return Promise.resolve(buildQuerySnapshot(refOrQuery.path, refOrQuery.filters));
   }
@@ -178,7 +186,7 @@ export function deleteDoc(ref) {
 
 export function onSnapshot(refOrQuery, cb, errCb) {
   const path = refOrQuery.path;
-  if (isDenied(path)) {
+  if (isDenied(path) || (refOrQuery.__type !== 'doc' && isListDenied(path))) {
     // The real SDK reports a denied listener asynchronously through the
     // error callback, and never delivers data.
     Promise.resolve().then(() => errCb && errCb(permissionDenied(path)));
