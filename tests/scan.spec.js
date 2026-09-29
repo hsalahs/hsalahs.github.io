@@ -128,6 +128,100 @@ test('a code change while the scanner is open sends it back to the code screen w
   await expect(page.locator('#connection-banner')).toBeHidden();
 });
 
+test('an open scanner re-checks its session every minute and goes back to the code screen once it is revoked', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.clock.install();
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+
+  // The organizer changes the code: from now on this device's session read
+  // is denied, but the guest listener that's already open isn't told.
+  await page.evaluate(() => { window.__fakeFirebase.denyPaths = ['events/e1/scanSessions']; });
+  await page.clock.fastForward(30000);
+  await expect(page.locator('#scanner-view')).toBeVisible(); // not yet — the check runs once a minute
+  await page.clock.fastForward(31000);
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect(page.locator('#pin-err')).toContainText('تغيّر كود الدخول');
+  await expect(page.locator('#scanner-view')).toBeHidden();
+});
+
+test('coming back to the page re-checks the session right away, without waiting for the minute', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__fakeFirebase.denyPaths = ['events/e1/scanSessions'];
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect(page.locator('#pin-err')).toContainText('تغيّر كود الدخول');
+});
+
+test('a session document the organizer deleted also counts as revoked', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+
+  await page.evaluate(() => {
+    delete window.__fakeFirebase.store['events/e1/scanSessions']['anon-1'];
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(page.locator('#pin-gate')).toBeVisible();
+});
+
+test('a dropped connection during the re-check does not throw door staff out', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__failNextGetDoc = true; // the re-check's read fails with a plain network error
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForFunction(() => window.__failNextGetDoc === false);
+  await page.waitForTimeout(300);
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#pin-gate')).toBeHidden();
+});
+
+test('the organizer and the admin have no session to re-check, so they are never sent back to the code screen', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: EVENT }, 'events/e1/guests': {} },
+  });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__fakeFirebase.denyPaths = ['events/e1/scanSessions'];
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForTimeout(300);
+  await expect(page.locator('#scanner-view')).toBeVisible();
+});
+
+test('after "تسجيل خروج من هذا الجهاز" the re-check is off and nothing pops up on the code screen', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.locator('#lock-device-btn').click();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__fakeFirebase.denyPaths = ['events/e1/scanSessions'];
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForTimeout(300);
+  await expect(page.locator('#pin-err')).toBeHidden();
+});
+
 test('re-scanning an already-checked-in guest shows a clear red "already used" alert, not a soft warning', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
