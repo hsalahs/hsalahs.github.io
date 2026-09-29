@@ -39,7 +39,7 @@ test('re-scanning an already-checked-in guest shows a clear red "already used" a
       'events/e1/guests': { g1: { name: 'ضيف مكرر', id: 'WD-DUP123', scanned: true } },
     },
   });
-  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1'));
+  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1234'));
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
 
@@ -55,7 +55,7 @@ test('re-scanning an already-checked-in guest shows a clear red "already used" a
 test('"مسح جديد" tears the camera down and returns to the start-camera screen, instead of trusting it\'s still healthy', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
-  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1'));
+  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1234'));
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
 
@@ -115,7 +115,7 @@ test('the guest list is cached locally as it syncs, and can be searched read-onl
       },
     },
   });
-  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1'));
+  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1234'));
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
   await expect(page.locator('#offline-list-btn')).toBeVisible();
@@ -167,4 +167,60 @@ test('scan.html has no web app manifest, so "Add to Home Screen" uses the curren
   await expect(page.locator('#pin-event-name')).toHaveText('حفل تجريبي');
   await expect(page.locator('link[rel="manifest"]')).toHaveCount(0);
   await expect(page.locator('meta[name="apple-mobile-web-app-capable"]')).toHaveAttribute('content', 'yes');
+});
+
+test('an admin who is already signed in on this device skips the PIN gate entirely', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin1', email: 'hsallah@outlook.sa' },
+    store: { events: { e1: EVENT }, 'events/e1/guests': {} },
+  });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeHidden();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#scan-event-name')).toHaveText('حفل تجريبي');
+  // No self-logout offered — admin access comes back automatically from
+  // their own account regardless, so the button would do nothing useful.
+  await expect(page.locator('#lock-device-btn')).toBeHidden();
+});
+
+test('a signed-in customer who is not the admin still has to enter the door PIN', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: EVENT }, 'events/e1/guests': {} },
+  });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect(page.locator('#scanner-view')).toBeHidden();
+});
+
+test('"تسجيل خروج من هذا الجهاز" clears the saved unlock and returns to the PIN screen', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1234'));
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#lock-device-btn')).toBeVisible();
+
+  await page.locator('#lock-device-btn').click();
+  await expect(page.locator('#scanner-view')).toBeHidden();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  const remembered = await page.evaluate(() => localStorage.getItem('scan_unlocked_e1'));
+  expect(remembered).toBeNull();
+});
+
+test('regenerating the door code from the dashboard locks out a device that unlocked with the old one', async ({ page }) => {
+  // The unlock check compares against the LIVE scanPin, not just "was this
+  // device ever unlocked" — so a device that got in with an old code is
+  // kicked back to the PIN screen the next time it loads, even without the
+  // owner having physical access to it.
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    store: { events: { e1: { ...EVENT, scanPin: '9999' } }, 'events/e1/guests': {} },
+  });
+  await page.addInitScript(() => localStorage.setItem('scan_unlocked_e1', '1234'));
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect(page.locator('#scanner-view')).toBeHidden();
 });

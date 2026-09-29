@@ -349,6 +349,40 @@ test('a one-tap toolbar shortcut jumps back to "all my events" without opening t
   await expect(page).toHaveURL(/app\.html$/);
 });
 
+test('regenerating the scanner door code updates the display and the stored event, so old unlocked devices get locked out', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await expect(page.locator('#scan-pin-display')).toHaveText('1234');
+
+  page.on('dialog', d => d.accept());
+  await page.getByRole('button', { name: '🔄 كود جديد' }).click();
+  await expect(page.locator('#toast')).toContainText('تم توليد كود جديد');
+  await expect(page.locator('#scan-pin-display')).not.toHaveText('1234');
+
+  const storedPin = await page.evaluate(() => window.__fakeFirebase.store.events.e1.scanPin);
+  const displayedPin = await page.locator('#scan-pin-display').textContent();
+  expect(storedPin).toBe(displayedPin);
+});
+
+test('declining the "generate a new code" confirm leaves the old scanner code in place', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  page.on('dialog', d => d.dismiss());
+  await page.getByRole('button', { name: '🔄 كود جديد' }).click();
+  await expect(page.locator('#scan-pin-display')).toHaveText('1234');
+});
+
 test('a dropped connection while loading the dashboard shows a tappable retry instead of hanging on "جاري التحميل..." forever', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {

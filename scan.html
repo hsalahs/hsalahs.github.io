@@ -181,6 +181,13 @@ setTimeout(() => {
       <input type="text" id="offline-search" placeholder="🔍 ابحث بالاسم" oninput="renderOfflineList()" style="margin-top:8px;">
       <div id="offline-list-results" style="max-height:320px; overflow-y:auto; margin-top:8px;"></div>
     </div>
+
+    <!-- Once a device enters the PIN it stays unlocked indefinitely — there
+         was no way to hand a personal phone back "locked" at the end of a
+         shift. This lets whoever is holding the device end their own
+         session; it's not shown for an admin, since their access comes
+         back automatically from their own account either way. -->
+    <button class="btn ghost" id="lock-device-btn" style="margin-top:16px; display:none; opacity:0.7; font-size:12px;" onclick="lockDevice()">🔒 تسجيل خروج من هذا الجهاز</button>
   </div>
 </div>
 
@@ -194,6 +201,32 @@ let qrScanner = null;
 let lastScanned = null;
 let scanCooldown = false;
 let audioCtx = null;
+
+// Same admin allowlist as app.html/event.html. An admin who's already
+// signed in on this device (their session persists across all pages, same
+// origin) shouldn't have to ask the customer for the door code — they
+// already have full access everywhere else.
+const ADMIN_EMAILS = ['hsallah@outlook.sa'];
+function isAdmin(user) { return !!user && ADMIN_EMAILS.includes((user.email || '').toLowerCase()); }
+
+// Firebase Auth restores a persisted session asynchronously, so the first
+// onAuthStateChanged callback is the earliest point we can reliably know
+// whether this device is signed in — checking auth.currentUser directly
+// right after load would almost always read null even for an admin.
+// The unsubscribe is deferred to a microtask (not called from inside this
+// same synchronous callback) because Firebase Auth's real SDK — and this
+// project's test stub — can invoke the callback synchronously before
+// onAuthStateChanged() has even returned, which would mean calling `unsub`
+// before it's assigned.
+function waitForAuth() {
+  return new Promise((resolve) => {
+    const { onAuthStateChanged } = window._authFns;
+    const unsub = onAuthStateChanged(window._auth, (user) => {
+      resolve(user);
+      Promise.resolve().then(() => unsub && unsub());
+    });
+  });
+}
 
 // Audible feedback for busy door staff who can't watch the screen every
 // scan — a high sine for allowed, a low square for duplicate/denied.
@@ -222,17 +255,33 @@ async function checkPin() {
     return;
   }
   err.style.display = 'none';
-  try { localStorage.setItem(unlockKey(), '1'); } catch (e) {}
-  showScanner();
+  // The PIN itself is stored (not just a "1" flag) so a later PIN change
+  // from the dashboard invalidates this device automatically next load —
+  // the owner can revoke a device they don't have physical access to just
+  // by regenerating the code, without this page ever re-checking the
+  // network for it.
+  try { localStorage.setItem(unlockKey(), val); } catch (e) {}
+  showScanner(false);
 }
 
-function showScanner() {
+function showScanner(viaAdmin) {
   document.getElementById('pin-gate').style.display = 'none';
   document.getElementById('scanner-view').style.display = 'block';
   document.getElementById('scan-event-name').textContent = eventData.name;
   document.getElementById('new-scan-btn').style.display = 'block';
   document.getElementById('offline-list-btn').style.display = 'block';
+  document.getElementById('lock-device-btn').style.display = viaAdmin ? 'none' : 'block';
   startGuestsListener();
+}
+
+// Lets whoever is holding a PIN-unlocked device end their own session —
+// e.g. security staff handing a personal phone back at the end of their
+// shift — without needing the owner to change the door code for everyone.
+function lockDevice() {
+  try { localStorage.removeItem(unlockKey()); } catch (e) {}
+  document.getElementById('scanner-view').style.display = 'none';
+  document.getElementById('pin-input').value = '';
+  document.getElementById('pin-gate').style.display = 'block';
 }
 
 function offlineCacheKey() { return 'scan_offline_cache_' + eventId; }
@@ -417,13 +466,23 @@ async function init() {
     return;
   }
   eventData = snap.data();
+
+  const user = await waitForAuth();
   document.getElementById('loading-msg').style.display = 'none';
 
+  if (isAdmin(user)) {
+    showScanner(true);
+    return;
+  }
+
+  // Compares against the live PIN (not just "was this device ever
+  // unlocked") so regenerating the code from the dashboard revokes any
+  // device that already got in, next time it loads.
   let alreadyUnlocked = false;
-  try { alreadyUnlocked = localStorage.getItem(unlockKey()) === '1'; } catch (e) {}
+  try { alreadyUnlocked = localStorage.getItem(unlockKey()) === eventData.scanPin; } catch (e) {}
 
   if (alreadyUnlocked) {
-    showScanner();
+    showScanner(false);
   } else {
     document.getElementById('pin-gate').style.display = 'block';
     document.getElementById('pin-event-name').textContent = eventData.name;
