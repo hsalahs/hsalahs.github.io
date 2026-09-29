@@ -450,7 +450,16 @@ function copyScanLink() {
   navigator.clipboard?.writeText(input.value);
 }
 
-function generatePin() { return String(Math.floor(1000 + Math.random() * 9000)); }
+// Six digits (a million possibilities, not the ten thousand of four): the
+// code is checked by Firestore's rules, which can't count wrong attempts
+// without a backend, so length is the only defence against someone who has
+// the scanner link trying every code in turn. From the browser's secure
+// random source rather than Math.random(), which is predictable.
+function generatePin() {
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  return String(100000 + (buf[0] % 900000));
+}
 
 // 'private': the code lives in events/{id}/private/scan (owner/admin only).
 // 'legacy':  the new security rules aren't deployed yet, so it's still the

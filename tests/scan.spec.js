@@ -71,6 +71,37 @@ test('the page never receives the door code — unlocking submits it and lets th
   expect(state.session.pin).toBe('1234');
 });
 
+test('the code field takes six digits, and an older four-digit code still works', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    store: { events: { e1: EVENT }, 'events/e1/guests': {}, 'events/e1/private': { scan: { scanPin: '482913' } } },
+  });
+  await page.addInitScript(() => { window.__fakeFirebase.auth.nextAnonUid = 'anon-six'; });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+
+  // Typed key by key, so the field's own length limit applies: a seventh
+  // digit is dropped, all six are kept.
+  await page.locator('#pin-input').pressSequentially('4829139');
+  await expect(page.locator('#pin-input')).toHaveValue('482913');
+  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  expect(await page.evaluate(() => window.__fakeFirebase.store['events/e1/scanSessions']['anon-six'].pin)).toBe('482913');
+});
+
+test('an event that still has an older four-digit code can be unlocked with it', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    store: { events: { e1: EVENT }, 'events/e1/guests': {}, 'events/e1/private': { scan: { scanPin: '1234' } } },
+  });
+  await page.addInitScript(() => { window.__fakeFirebase.auth.nextAnonUid = 'anon-four'; });
+  await page.goto('/scan.html?event=e1');
+  await page.locator('#pin-input').pressSequentially('1234');
+  await expect(page.locator('#pin-input')).toHaveValue('1234');
+  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+});
+
 test('a code the server rule rejects shows "رقم غير صحيح" and keeps the scanner locked', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });

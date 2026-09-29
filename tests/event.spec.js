@@ -424,6 +424,23 @@ test('regenerating the scanner door code updates the display and the stored even
   const storedPin = await page.evaluate(() => window.__fakeFirebase.store['events/e1/private'].scan.scanPin);
   const displayedPin = await page.locator('#scan-pin-display').textContent();
   expect(storedPin).toBe(displayedPin);
+  // New codes are six digits (a million possibilities) — four was too easy
+  // to try in full when there's no way to count wrong attempts.
+  expect(storedPin).toMatch(/^[1-9]\d{5}$/);
+});
+
+test('generated door codes are always six digits and do not repeat', async ({ page }) => {
+  await page.goto('/index.html'); // any page will do; the function is pure — load event.html's script directly
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'event.html'), 'utf8');
+  const fn = src.match(/function generatePin\(\) \{[\s\S]*?\n\}/)[0];
+  const codes = await page.evaluate((code) => {
+    const generate = new Function(code + '; return generatePin;')();
+    return Array.from({ length: 2000 }, () => generate());
+  }, fn);
+  for (const c of codes) expect(c).toMatch(/^[1-9]\d{5}$/);
+  // 2000 draws from 900,000 possibilities: a handful of repeats is normal,
+  // but a constant or tiny-range generator would collapse far below this.
+  expect(new Set(codes).size).toBeGreaterThan(1900);
 });
 
 test('declining the "generate a new code" confirm leaves the old scanner code in place', async ({ page }) => {
@@ -561,10 +578,10 @@ test('a customer never sees the rules-not-deployed warning, and an event with no
   await page.addInitScript(() => { window.__fakeFirebase.denyPaths = ['events/e1/private']; });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
-  await expect(page.locator('#scan-pin-display')).toHaveText(/^\d{4}$/);
+  await expect(page.locator('#scan-pin-display')).toHaveText(/^\d{6}$/);
   await expect(page.locator('#rules-warning')).toBeHidden();
   const publicPin = await page.evaluate(() => window.__fakeFirebase.store.events.e1.scanPin);
-  expect(publicPin).toMatch(/^\d{4}$/);
+  expect(publicPin).toMatch(/^\d{6}$/);
 });
 
 test('approving a guest request copies the new barcode id onto the request, for the invite page to read', async ({ page }) => {
