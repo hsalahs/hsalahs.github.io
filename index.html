@@ -6,7 +6,17 @@
 <title>دعوات — دعوات رقمية بباركود لمناسبتك</title>
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="manifest" href="manifest.webmanifest">
+<!-- Deliberately no <link rel="manifest"> here (same reasoning as scan.html):
+     with one, "Add to Home Screen" saves the manifest's start_url — the
+     organizer panel, app.html — instead of the page you're actually on, so a
+     visitor who saves this landing page gets a login form when they open the
+     icon. Without it iOS saves this page's own address; these meta tags are
+     enough for the full-screen app look and the name under the icon. The
+     organizer panel (app.html) keeps the manifest, so saving THAT page still
+     opens the panel. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="دعوات">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <!-- A <link> here (discovered by the browser's preloader while it's still
      parsing <head>) starts the font fetch far earlier than an @import
      buried inside <style> (which isn't seen until the CSS itself is being
