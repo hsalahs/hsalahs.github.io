@@ -2,8 +2,43 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // token.get() rather than token.email: anonymous identities (the door
+    // devices) carry no email claim at all, and this is the first thing
+    // evaluated on most of the rules below.
     function isAdmin() {
-      return request.auth != null && request.auth.token.email == 'hsallah@outlook.sa';
+      return request.auth != null && request.auth.token.get('email', '') == 'hsallah@outlook.sa';
+    }
+
+    function isOwner(eventId) {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/events/$(eventId)).data.ownerUid == request.auth.uid;
+    }
+
+    // Where the door code lives. It used to be a plain field on the event doc
+    // — which has to stay world-readable, since invite.html and scan.html
+    // show the event's name/date without a sign-in — so anyone holding an
+    // invite link could read the door code straight out of the database.
+    // It now lives in events/{id}/private/scan, readable only by the owner
+    // and the admin. Older events still carry it on the event doc until the
+    // owner next opens the dashboard (event.html moves it over); this falls
+    // back to that field so those events keep working meanwhile.
+    function currentScanPin(eventId) {
+      return exists(/databases/$(database)/documents/events/$(eventId)/private/scan)
+        ? get(/databases/$(database)/documents/events/$(eventId)/private/scan).data.scanPin
+        : get(/databases/$(database)/documents/events/$(eventId)).data.scanPin;
+    }
+
+    // How a door device (scan.html — no account, anonymous sign-in only)
+    // proves it knows the code: it creates its own session doc, keyed by its
+    // anonymous uid, containing the code it was given. The create rule below
+    // does the comparison, so the real code never reaches the device — all
+    // it learns is accepted/denied. A session only stays valid while the
+    // code stored in it is still the live one, which is what makes
+    // "generate a new code" on the dashboard revoke every device at once.
+    function hasScanSession(eventId) {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/events/$(eventId)/scanSessions/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/events/$(eventId)/scanSessions/$(request.auth.uid)).data.pin == currentScanPin(eventId);
     }
 
     // Free tier + payment gate: an event's owner can add up to
@@ -12,7 +47,7 @@ service cloud.firestore {
     // bank transfer). getAfter (not get) on guestCount so the check sees the
     // post-transaction count — the client must bump it in the same
     // transaction as the guest write, it can't just be read as a stale
-    // value. Keep the 5 in sync with FREE_GUEST_LIMIT in event.html.
+    // value. Keep the 5 in sync with FREE_GUEST_LIMIT in utils.js.
     function eventCanAcceptGuest(eventId, uid) {
       let ev = get(/databases/$(database)/documents/events/$(eventId)).data;
       let evAfter = getAfter(/databases/$(database)/documents/events/$(eventId)).data;
@@ -72,6 +107,9 @@ service cloud.firestore {
     }
 
     match /events/{eventId} {
+      // Public on purpose: invite.html (guests) and scan.html (door staff)
+      // need the name/date/venue/theme without signing in. Nothing secret
+      // may live on this doc — see currentScanPin() above.
       allow get: if true;
       allow list: if request.auth != null &&
         (isAdmin() || resource.data.ownerUid == request.auth.uid);
@@ -105,8 +143,32 @@ service cloud.firestore {
       allow delete: if request.auth != null &&
         (isAdmin() || resource.data.ownerUid == request.auth.uid);
 
+      // Owner/admin-only secrets for this event (the door code).
+      match /private/{docId} {
+        allow read, write: if isAdmin() || isOwner(eventId);
+      }
+
+      // One doc per door device that has proven it knows the code. Only the
+      // device's own anonymous identity can create its doc, and only with
+      // the correct code (the comparison happens here, server-side).
+      match /scanSessions/{sessionId} {
+        allow create, update: if request.auth != null && sessionId == request.auth.uid &&
+          request.resource.data.keys().hasOnly(['pin', 'createdAt']) &&
+          request.resource.data.pin is string &&
+          request.resource.data.pin == currentScanPin(eventId);
+        // Reading your own session back succeeds only while it's still valid
+        // — after the owner changes the code, this read is denied, which is
+        // how a device learns it needs the new code.
+        allow get: if request.auth != null && sessionId == request.auth.uid && hasScanSession(eventId);
+        allow list: if isAdmin() || isOwner(eventId);
+        allow delete: if request.auth != null &&
+          (sessionId == request.auth.uid || isAdmin() || isOwner(eventId));
+      }
+
       match /guests/{guestId} {
-        allow read: if true;
+        // Names and barcode ids used to be world-readable. Now: the owner,
+        // the admin, or a door device holding a valid session.
+        allow read: if isAdmin() || isOwner(eventId) || hasScanSession(eventId);
 
         // Adding a guest — manually, via CSV import, or by approving a
         // self-registration request — is the action gated on the free tier
@@ -115,16 +177,20 @@ service cloud.firestore {
           (isAdmin() || eventCanAcceptGuest(eventId, request.auth.uid));
 
         // Editing/removing existing guests (attendance, deletes) is not
-        // part of the payment gate — unchanged from before.
-        allow update, delete: if request.auth != null &&
-          (isAdmin() ||
-           get(/databases/$(database)/documents/events/$(eventId)).data.ownerUid == request.auth.uid);
+        // part of the payment gate.
+        allow update, delete: if isAdmin() || isOwner(eventId);
 
-        // Public door-scanner flip (scan.html has no login) — untouched.
-        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scanned', 'scannedAt'])
-                      && resource.data.scanned == false
-                      && request.resource.data.scanned == true;
+        // The door-scanner check-in flip: only from a device holding a valid
+        // session, and only ever false -> true on exactly these two fields.
+        // This used to be allowed with no login and no code check at all —
+        // anyone holding an invite link could mark any guest as already
+        // checked in.
+        allow update: if hasScanSession(eventId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scanned', 'scannedAt']) &&
+          resource.data.scanned == false &&
+          request.resource.data.scanned == true;
       }
+
       match /requests/{requestId} {
         // Guest RSVP submissions — public and unauthenticated by design, so
         // this is the one place a stranger can write without being the
@@ -137,9 +203,7 @@ service cloud.firestore {
           request.resource.data.name.size() > 0 &&
           request.resource.data.name.size() <= 100;
         allow read: if true;
-        allow update, delete: if request.auth != null &&
-          (isAdmin() ||
-           get(/databases/$(database)/documents/events/$(eventId)).data.ownerUid == request.auth.uid);
+        allow update, delete: if isAdmin() || isOwner(eventId);
       }
     }
   }

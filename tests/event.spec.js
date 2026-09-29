@@ -1,9 +1,11 @@
 const { test, expect } = require('@playwright/test');
 const { stubFirebase, seedFakeFirebase } = require('./helpers');
 
+// No door code on the event doc itself — it lives in the owner-only
+// events/e1/private/scan sub-document.
 const EVENT = {
   name: 'حفل تجريبي', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض',
-  scanPin: '1234', theme: 'gold', createdAt: { seconds: 1 },
+  theme: 'gold', createdAt: { seconds: 1 },
 };
 
 function baseStore(guests) {
@@ -13,6 +15,7 @@ function baseStore(guests) {
     events: { e1: EVENT },
     'events/e1/guests': g,
     'events/e1/requests': {},
+    'events/e1/private': { scan: { scanPin: '1234' } },
   };
 }
 
@@ -418,7 +421,7 @@ test('regenerating the scanner door code updates the display and the stored even
   await expect(page.locator('#toast')).toContainText('تم توليد كود جديد');
   await expect(page.locator('#scan-pin-display')).not.toHaveText('1234');
 
-  const storedPin = await page.evaluate(() => window.__fakeFirebase.store.events.e1.scanPin);
+  const storedPin = await page.evaluate(() => window.__fakeFirebase.store['events/e1/private'].scan.scanPin);
   const displayedPin = await page.locator('#scan-pin-display').textContent();
   expect(storedPin).toBe(displayedPin);
 });
@@ -512,4 +515,97 @@ test('a new guest request triggers a real notification once enabled, but not req
   const notifs = await page.evaluate(() => window.__notifications);
   expect(notifs.length).toBe(1);
   expect(notifs[0].opts.body).toContain('ضيف جديد');
+});
+
+test('an older event still carrying its door code on the (public) event doc gets it moved into the private doc on open', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: { ...EVENT, scanPin: '4321' } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await expect(page.locator('#scan-pin-display')).toHaveText('4321');
+  const after = await page.evaluate(() => ({
+    privatePin: window.__fakeFirebase.store['events/e1/private'].scan.scanPin,
+    publicPin: window.__fakeFirebase.store.events.e1.scanPin,
+  }));
+  expect(after.privatePin).toBe('4321');
+  expect(after.publicPin).toBeUndefined();
+  await expect(page.locator('#rules-warning')).toBeHidden();
+});
+
+test('until the new security rules are deployed, the dashboard keeps the old behavior and warns only the admin', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: { events: { e1: { ...EVENT, scanPin: '4321' } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  // Old rules have no /private path at all — reading it is denied.
+  await page.addInitScript(() => { window.__fakeFirebase.denyPaths = ['events/e1/private']; });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await expect(page.locator('#scan-pin-display')).toHaveText('4321');
+  await expect(page.locator('#rules-warning')).toBeVisible();
+  const store = await page.evaluate(() => window.__fakeFirebase.store);
+  expect(store['events/e1/private']).toBeUndefined();
+  expect(store.events.e1.scanPin).toBe('4321');
+});
+
+test('a customer never sees the rules-not-deployed warning, and an event with no code at all still gets one', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: EVENT }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.addInitScript(() => { window.__fakeFirebase.denyPaths = ['events/e1/private']; });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await expect(page.locator('#scan-pin-display')).toHaveText(/^\d{4}$/);
+  await expect(page.locator('#rules-warning')).toBeHidden();
+  const publicPin = await page.evaluate(() => window.__fakeFirebase.store.events.e1.scanPin);
+  expect(publicPin).toMatch(/^\d{4}$/);
+});
+
+test('approving a guest request copies the new barcode id onto the request, for the invite page to read', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: {
+      events: { e1: { ...EVENT, paid: true } },
+      'events/e1/guests': {},
+      'events/e1/private': { scan: { scanPin: '1234' } },
+      'events/e1/requests': { r1: { name: 'ضيف طالب', reqId: 'REQ-1', status: 'pending', createdAt: 'x' } },
+    },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: /📥 الطلبات/ }).click();
+  await page.locator('.approve-btn').click();
+  await expect(page.locator('#toast')).toContainText('تمت الموافقة');
+  const state = await page.evaluate(() => {
+    const s = window.__fakeFirebase.store;
+    const guest = Object.values(s['events/e1/guests'])[0];
+    return { request: s['events/e1/requests'].r1, guestId: guest && guest.id };
+  });
+  expect(state.request.status).toBe('approved');
+  expect(state.guestId).toMatch(/^WD-/);
+  expect(state.request.guestId).toBe(state.guestId);
+});
+
+test('guests approved before the invite page stopped reading the guests collection get their barcode id backfilled onto their request', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: {
+      events: { e1: EVENT },
+      'events/e1/guests': { g1: { id: 'WD-OLD1', name: 'ضيف قديم', reqId: 'REQ-OLD', scanned: false } },
+      'events/e1/private': { scan: { scanPin: '1234' } },
+      'events/e1/requests': { r1: { name: 'ضيف قديم', reqId: 'REQ-OLD', status: 'approved', createdAt: 'x' } },
+    },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store['events/e1/requests'].r1.guestId)).toBe('WD-OLD1');
 });

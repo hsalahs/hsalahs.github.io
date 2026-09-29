@@ -278,6 +278,7 @@ setTimeout(() => {
       <button class="btn danger" style="width:100%; margin-top:12px;" onclick="deleteThisEvent()">🗑 حذف المناسبة نهائيًا</button>
     </div>
 
+    <div id="rules-warning" style="display:none; background:rgba(229,72,77,0.10); border:1px solid rgba(229,72,77,0.35); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:12.5px; color:#ffb3b3; line-height:1.7;">⚠️ (للأدمن فقط) قواعد أمان Firestore الجديدة غير منشورة بعد — كود دخول السكانر لسا مكشوف لأي شخص معه رابط الدعوة. انشر ملف firestore.rules من Firebase.</div>
     <div id="payment-gate">
       <div class="pg-title">🔒 وصلت لحد الضيوف المجانيين</div>
       <div class="pg-sub">أضفت أول 5 ضيوف مجانًا — عشان تضيف أكثر أو تشارك رابط الدعوة لعدد غير محدود، لازم تفعّل الدفع.</div>
@@ -448,21 +449,106 @@ function copyScanLink() {
   navigator.clipboard?.writeText(input.value);
 }
 
-// A device that entered the old PIN stays unlocked indefinitely — there was
-// no way to revoke one the owner doesn't have physical access to (a security
-// company's own phone, kept long after the event). scan.html re-checks the
-// stored unlock against the live PIN on every load, so generating a new one
-// here locks every already-unlocked device out next time they open the page.
-async function regenerateScanPin() {
-  if (!confirm('توليد كود دخول جديد؟ أي جهاز دخل بالكود القديم بيحتاج الكود الجديد.')) return;
-  const { doc, updateDoc } = window._fsFns;
-  const newPin = String(Math.floor(1000 + Math.random() * 9000));
+function generatePin() { return String(Math.floor(1000 + Math.random() * 9000)); }
+
+// 'private': the code lives in events/{id}/private/scan (owner/admin only).
+// 'legacy':  the new security rules aren't deployed yet, so it's still the
+//            old field on the (publicly readable) event doc.
+let scanPinMode = 'legacy';
+let currentScanPin = null;
+// Resolves once loadScanPin() has settled which mode we're in. It runs in
+// the background so its read doesn't delay the dashboard's first paint;
+// anything that writes the code must wait on it first.
+let pinReady = null;
+
+// Where the door code lives, and the one-time move for older events.
+//
+// It used to be a plain field on the event doc — which has to stay readable
+// by anyone, since invite.html and scan.html show the event's name/date
+// without a sign-in. So anyone holding an invite link could read the door
+// code straight out of the database. It now lives in events/{id}/private/
+// scan, which only the owner and the admin can read; the door device never
+// sees it at all (scan.html + firestore.rules: a device proves it knows the
+// code by submitting it, and the rule does the comparison server-side).
+//
+// Until the new rules are deployed, reading the private doc is denied — in
+// that case this keeps the old behavior so nothing breaks, and tells the
+// admin (only) that the rules still need deploying.
+async function loadScanPin() {
+  const { doc, getDoc, setDoc, updateDoc, deleteField } = window._fsFns;
+  const eventRef = doc(window._db, 'events', eventId);
+  const privateRef = doc(window._db, 'events', eventId, 'private', 'scan');
   try {
-    await updateDoc(doc(window._db, 'events', eventId), { scanPin: newPin });
-    eventData.scanPin = newPin;
+    const snap = await getDoc(privateRef);
+    scanPinMode = 'private';
+    if (snap.exists() && snap.data().scanPin) {
+      currentScanPin = String(snap.data().scanPin);
+    } else {
+      currentScanPin = eventData.scanPin ? String(eventData.scanPin) : generatePin();
+      await setDoc(privateRef, { scanPin: currentScanPin });
+    }
+    if (eventData.scanPin !== undefined) {
+      await updateDoc(eventRef, { scanPin: deleteField() });
+      delete eventData.scanPin;
+    }
+  } catch (e) {
+    if (e && e.code === 'permission-denied') {
+      scanPinMode = 'legacy';
+      let pin = eventData.scanPin ? String(eventData.scanPin) : null;
+      if (!pin) {
+        pin = generatePin();
+        eventData.scanPin = pin;
+        try { await updateDoc(eventRef, { scanPin: pin }); } catch (e2) { console.error(e2); }
+      }
+      currentScanPin = pin;
+      if (isAdmin(currentUser)) document.getElementById('rules-warning').style.display = 'block';
+    } else {
+      console.error('loadScanPin failed:', e);
+      currentScanPin = eventData.scanPin ? String(eventData.scanPin) : null;
+    }
+  }
+}
+
+// Every door device that unlocked with the old code is cut off the moment
+// this saves: their session docs no longer match, so the rules deny their
+// next read or check-in and scan.html sends them back to the code screen.
+async function regenerateScanPin() {
+  if (pinReady) await pinReady;
+  if (!confirm('توليد كود دخول جديد؟ أي جهاز دخل بالكود القديم بيحتاج الكود الجديد.')) return;
+  const { doc, setDoc, updateDoc } = window._fsFns;
+  const newPin = generatePin();
+  try {
+    if (scanPinMode === 'private') {
+      await setDoc(doc(window._db, 'events', eventId, 'private', 'scan'), { scanPin: newPin });
+    } else {
+      await updateDoc(doc(window._db, 'events', eventId), { scanPin: newPin });
+      eventData.scanPin = newPin;
+    }
+    currentScanPin = newPin;
     document.getElementById('scan-pin-display').textContent = newPin;
     showToast('✅ تم توليد كود جديد');
   } catch (e) { showErr(e); }
+}
+
+// invite.html can no longer read the guests collection (it isn't
+// world-readable anymore), so an approved guest's barcode id is copied onto
+// their request doc at approval time. Guests approved before that change
+// have no guestId on their request yet — fill it in once, so their invite
+// page can still show their card. No-op for events with nothing to fix.
+async function backfillRequestGuestIds() {
+  const { collection, query, where, getDocs, doc, updateDoc } = window._fsFns;
+  try {
+    const approved = await getDocs(query(collection(window._db, 'events', eventId, 'requests'), where('status', '==', 'approved')));
+    const missing = approved.docs.filter(d => !d.data().guestId && d.data().reqId);
+    if (missing.length === 0) return;
+    const guestsSnap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
+    const byReq = new Map();
+    guestsSnap.docs.forEach(g => { const data = g.data(); if (data.reqId) byReq.set(data.reqId, data.id); });
+    for (const d of missing) {
+      const guestId = byReq.get(d.data().reqId);
+      if (guestId) await updateDoc(doc(window._db, 'events', eventId, 'requests', d.id), { guestId });
+    }
+  } catch (e) { console.error('backfill of request guestIds failed:', e); }
 }
 
 function toggleEditEvent() {
@@ -544,7 +630,10 @@ async function init() {
   }
   const { onAuthStateChanged } = window._authFns;
   onAuthStateChanged(window._auth, async (user) => {
-    if (!user) {
+    // An anonymous identity is what scan.html signs a door device in with;
+    // on the same browser it would otherwise look like "someone is logged
+    // in" here.
+    if (!user || user.isAnonymous) {
       document.getElementById('loading-msg').style.display = 'none';
       document.getElementById('denied-msg').style.display = 'block';
       document.getElementById('denied-msg').innerHTML = 'لازم تسجّل دخول الأول — <a href="app.html" style="color:#E0BC7A">اضغط هنا</a>';
@@ -573,12 +662,9 @@ async function init() {
     }
     eventData = snap.data();
 
-    // Events created before the scan-PIN feature existed don't have one yet
-    if (!eventData.scanPin) {
-      const { updateDoc } = window._fsFns;
-      eventData.scanPin = String(Math.floor(1000 + Math.random() * 9000));
-      try { await updateDoc(doc(window._db, 'events', eventId), { scanPin: eventData.scanPin }); } catch (e) { console.error(e); }
-    }
+    pinReady = loadScanPin().then(() => {
+      document.getElementById('scan-pin-display').textContent = currentScanPin || '—';
+    });
 
     document.getElementById('loading-msg').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
@@ -586,12 +672,13 @@ async function init() {
     document.getElementById('ev-sub').textContent = [eventData.date, eventData.venue].filter(Boolean).join(' · ');
     document.getElementById('invite-link').value = window.location.origin + window.location.pathname.replace('event.html', 'invite.html') + '?event=' + eventId;
     document.getElementById('scan-link').value = window.location.origin + window.location.pathname.replace('event.html', 'scan.html') + '?event=' + eventId;
-    document.getElementById('scan-pin-display').textContent = eventData.scanPin;
+    document.getElementById('scan-pin-display').textContent = '…';
     applyTheme(eventData.theme || 'gold');
     renderPaymentGate();
     updateNotifButtonLabel();
     startListeners();
     watchPaymentStatus();
+    backfillRequestGuestIds();
   });
 }
 
@@ -1430,19 +1517,23 @@ async function approveRequest(reqDocId) {
   if (paymentGateActive()) { openPaymentWhatsapp(); return; }
   const req = requests.find(r => r.docId === reqDocId);
   if (!req) return;
-  const { doc, updateDoc, runTransaction } = window._fsFns;
+  const { doc, runTransaction } = window._fsFns;
   const eventRef = doc(window._db, 'events', eventId);
   const guestRef = doc(window._db, 'events', eventId, 'guests', randomDocId());
+  const reqRef = doc(window._db, 'events', eventId, 'requests', reqDocId);
+  const guestId = newGuestId();
   try {
     await runTransaction(window._db, async (tx) => {
       const snap = await tx.get(eventRef);
       const data = snap.data() || {};
       const count = data.guestCount || 0;
       if (!data.paid && !isAdmin(currentUser) && count >= FREE_GUEST_LIMIT) throw new Error('GATE');
-      tx.set(guestRef, { id: newGuestId(), name: req.name, reqId: req.reqId, scanned: false, registeredAt: new Date().toISOString() });
+      tx.set(guestRef, { id: guestId, name: req.name, reqId: req.reqId, scanned: false, registeredAt: new Date().toISOString() });
       tx.update(eventRef, { guestCount: count + 1 });
+      // The guest's invite page reads the barcode id from here — it can't
+      // read the guests collection itself (that's no longer world-readable).
+      tx.update(reqRef, { status: 'approved', guestId });
     });
-    await updateDoc(doc(window._db, 'events', eventId, 'requests', reqDocId), { status: 'approved' });
     showToast('✅ تمت الموافقة — ' + req.name);
   } catch (e) {
     if (e.message === 'GATE') { openPaymentWhatsapp(); return; }

@@ -50,3 +50,42 @@ test('a dropped connection while loading the event shows a tappable retry instea
   await retry.click();
   await expect(page.locator('#card')).toContainText('حفل تجريبي');
 });
+
+test('an approved guest gets their card from the request itself — the invite page no longer reads the guests collection', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    store: {
+      events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } },
+      'events/e1/requests': { r1: { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABC', createdAt: 'x' } },
+    },
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem('inv_reqid_e1', 'REQ-1');
+    // The guests collection is no longer world-readable — prove this page
+    // doesn't need it.
+    window.__fakeFirebase.denyPaths = ['events/e1/guests'];
+  });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card')).toContainText('تم تأكيد حضورك');
+});
+
+test('an approval that predates the barcode-id-on-request change shows "preparing your card", then the card once it is filled in', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    store: {
+      events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } },
+      'events/e1/requests': { r1: { name: 'سارة', reqId: 'REQ-1', status: 'approved', createdAt: 'x' } },
+    },
+  });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-1'); });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card')).toContainText('جاري تجهيز بطاقتك');
+
+  // The organizer opening their dashboard backfills the id; the same
+  // listener picks it up.
+  await page.evaluate(() => {
+    const { doc, updateDoc } = window._fsFns;
+    return updateDoc(doc(window._db, 'events', 'e1', 'requests', 'r1'), { guestId: 'WD-LATE' });
+  });
+  await expect(page.locator('#card')).toContainText('تم تأكيد حضورك');
+});

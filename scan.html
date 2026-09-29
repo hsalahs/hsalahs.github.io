@@ -231,6 +231,7 @@ let qrScanner = null;
 let lastScanned = null;
 let scanCooldown = false;
 let audioCtx = null;
+let guestsUnsub = null;
 
 // ADMIN_EMAILS/isAdmin now live in utils.js (shared with app.html and
 // event.html). An admin who's already signed in on this device (their
@@ -274,23 +275,89 @@ function playBeep(success) {
   } catch (e) {}
 }
 
-function unlockKey() { return 'scan_unlocked_' + eventId; }
+// The door code is never sent to this page. Unlocking means creating this
+// device's own session document (under an anonymous Firebase identity —
+// door staff have no account) containing the code they were given; the
+// Firestore security rule compares it against the real code server-side and
+// only lets the write through on a match. All this page ever learns is
+// accepted or denied. Every guest read and every check-in write is then
+// gated on that session doc still being valid, so "generate a new code" on
+// the dashboard cuts every device off at once.
+async function ensureIdentity() {
+  const current = window._auth.currentUser;
+  if (current) return current;
+  const { signInAnonymously } = window._authFns;
+  const cred = await signInAnonymously(window._auth);
+  return cred.user;
+}
+
+function sessionRef(uid) {
+  const { doc } = window._fsFns;
+  return doc(window._db, 'events', eventId, 'scanSessions', uid);
+}
+
+function showPinError(msg) {
+  const err = document.getElementById('pin-err');
+  err.textContent = msg;
+  err.style.display = 'block';
+}
 
 async function checkPin() {
   const val = document.getElementById('pin-input').value.trim();
-  const err = document.getElementById('pin-err');
-  if (val !== eventData.scanPin) {
-    err.style.display = 'block';
+  document.getElementById('pin-err').style.display = 'none';
+  if (!val) return;
+
+  let user;
+  try {
+    user = await ensureIdentity();
+  } catch (e) {
+    console.error('anonymous sign-in failed:', e);
+    showPinError(e.code === 'auth/admin-restricted-operation' || e.code === 'auth/operation-not-allowed'
+      ? '⚠️ تسجيل الدخول المجهول غير مفعّل بإعدادات Firebase (Authentication ← Sign-in method ← Anonymous)'
+      : '⚠️ تعذّر الاتصال — تأكد من الإنترنت وحاول مرة ثانية');
     return;
   }
-  err.style.display = 'none';
-  // The PIN itself is stored (not just a "1" flag) so a later PIN change
-  // from the dashboard invalidates this device automatically next load —
-  // the owner can revoke a device they don't have physical access to just
-  // by regenerating the code, without this page ever re-checking the
-  // network for it.
-  try { localStorage.setItem(unlockKey(), val); } catch (e) {}
+
+  const { setDoc } = window._fsFns;
+  try {
+    await setDoc(sessionRef(user.uid), { pin: val, createdAt: new Date().toISOString() });
+  } catch (e) {
+    if (e.code === 'permission-denied') {
+      // TRANSITIONAL — remove once the new firestore.rules are deployed.
+      // Before they are, the rules know nothing about sessions (so the
+      // write above is always denied) and the code is still a readable
+      // field on the event doc, so fall back to comparing it here rather
+      // than leaving the door dead in the window between the site deploy
+      // and the rules deploy. Once an event has been migrated the field is
+      // gone and this branch can't unlock anything.
+      if (eventData.scanPin !== undefined && val === eventData.scanPin) { showScanner(); return; }
+      showPinError('رقم غير صحيح');
+    } else {
+      console.error(e);
+      showPinError('⚠️ تعذّر الاتصال — تأكد من الإنترنت وحاول مرة ثانية');
+    }
+    return;
+  }
   showScanner();
+}
+
+// This device's session stopped being accepted mid-event — the organizer
+// generated a new code. Back to the code screen with a clear reason instead
+// of a misleading "connection lost" banner or a check-in that silently
+// never completes.
+function sessionRevoked() {
+  if (guestsUnsub) { guestsUnsub(); guestsUnsub = null; }
+  if (qrScanner) {
+    try { qrScanner.stop(); } catch (_) {}
+    try { qrScanner.destroy(); } catch (_) {}
+    qrScanner = null;
+  }
+  scanCooldown = false; lastScanned = null;
+  document.getElementById('scanner-view').style.display = 'none';
+  document.getElementById('pin-input').value = '';
+  document.getElementById('pin-gate').style.display = 'block';
+  document.getElementById('pin-event-name').textContent = eventData ? eventData.name : '';
+  showPinError('🔒 تغيّر كود الدخول — أدخل الكود الجديد');
 }
 
 function showAdminLogin() {
@@ -337,6 +404,7 @@ async function submitAdminLogin() {
 
 function showScanner() {
   document.getElementById('pin-gate').style.display = 'none';
+  document.getElementById('pin-err').style.display = 'none';
   document.getElementById('scanner-view').style.display = 'block';
   document.getElementById('scan-event-name').textContent = eventData.name;
   document.getElementById('new-scan-btn').style.display = 'block';
@@ -356,14 +424,20 @@ function showScanner() {
 // Lets whoever is holding an unlocked device end their own session — e.g.
 // security staff handing a personal phone back at the end of their shift,
 // or an admin done checking in on a borrowed device — without needing the
-// owner to change the door code for everyone. Clears both possible sources
-// of access: the saved PIN, and a signed-in admin session, since either one
-// could be why this device is currently unlocked.
-function lockDevice() {
-  try { localStorage.removeItem(unlockKey()); } catch (e) {}
-  try { window._authFns.signOut(window._auth); } catch (e) {}
+// owner to change the door code for everyone. Clears every source of
+// access this device could have: its proven-code session doc, and whatever
+// identity it's signed in with (anonymous, admin, or owner).
+async function lockDevice() {
+  if (guestsUnsub) { guestsUnsub(); guestsUnsub = null; }
+  const user = window._auth.currentUser;
+  if (user) {
+    const { deleteDoc } = window._fsFns;
+    try { await deleteDoc(sessionRef(user.uid)); } catch (e) {}
+  }
+  try { await window._authFns.signOut(window._auth); } catch (e) {}
   document.getElementById('scanner-view').style.display = 'none';
   document.getElementById('pin-input').value = '';
+  document.getElementById('pin-err').style.display = 'none';
   document.getElementById('pin-gate').style.display = 'block';
   hideAdminLogin();
 }
@@ -438,13 +512,15 @@ function refreshConnectionBanner(ok) {
 
 function startGuestsListener() {
   const { collection, onSnapshot } = window._fsFns;
-  onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
+  if (guestsUnsub) guestsUnsub();
+  guestsUnsub = onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     updateScanCounter();
     refreshConnectionBanner(true);
     cacheGuestsOffline();
   }, (error) => {
     console.error('guests onSnapshot error:', error);
+    if (error && error.code === 'permission-denied') { sessionRevoked(); return; }
     refreshConnectionBanner(false);
   });
 }
@@ -553,18 +629,30 @@ async function init() {
     return;
   }
 
-  // Compares against the live PIN (not just "was this device ever
-  // unlocked") so regenerating the code from the dashboard revokes any
-  // device that already got in, next time it loads.
-  let alreadyUnlocked = false;
-  try { alreadyUnlocked = localStorage.getItem(unlockKey()) === eventData.scanPin; } catch (e) {}
-
-  if (alreadyUnlocked) {
+  // The event's own organizer opening their scan link — already proven by
+  // their real sign-in, no need to type their own code.
+  if (user && !user.isAnonymous && user.uid === eventData.ownerUid) {
     showScanner();
-  } else {
-    document.getElementById('pin-gate').style.display = 'block';
-    document.getElementById('pin-event-name').textContent = eventData.name;
+    return;
   }
+
+  // A device that unlocked before holds an identity that Firebase restores
+  // across reloads — the anonymous one this page signs it in with, or a
+  // customer's real account if they were already signed in when they typed
+  // the code. Its session doc can only be read back while the code it was
+  // created with is still the live one — a denied read here means the
+  // organizer changed the code (or the rules aren't deployed yet), and
+  // either way the answer is the same: ask for the code.
+  if (user) {
+    const { getDoc } = window._fsFns;
+    try {
+      const sess = await getDoc(sessionRef(user.uid));
+      if (sess.exists()) { showScanner(); return; }
+    } catch (e) {}
+  }
+
+  document.getElementById('pin-gate').style.display = 'block';
+  document.getElementById('pin-event-name').textContent = eventData.name;
 }
 
 function hideResultCards() {
@@ -647,13 +735,26 @@ async function handleScan(raw) {
   } else {
     const { doc, runTransaction } = window._fsFns;
     const gRef = doc(window._db, 'events', eventId, 'guests', found.docId);
-    const outcome = await runTransaction(window._db, async (tx) => {
-      const snap = await tx.get(gRef);
-      if (!snap.exists()) return 'missing';
-      if (snap.data().scanned) return 'dup';
-      tx.update(gRef, { scanned: true, scannedAt: new Date().toISOString() });
-      return 'ok';
-    });
+    let outcome;
+    try {
+      outcome = await runTransaction(window._db, async (tx) => {
+        const snap = await tx.get(gRef);
+        if (!snap.exists()) return 'missing';
+        if (snap.data().scanned) return 'dup';
+        tx.update(gRef, { scanned: true, scannedAt: new Date().toISOString() });
+        return 'ok';
+      });
+    } catch (e) {
+      // A failed write used to escape this function entirely, which left
+      // scanCooldown stuck on true — the scanner silently ignored every
+      // barcode after one network hiccup until "مسح جديد" was pressed.
+      console.error('check-in failed:', e);
+      if (e && e.code === 'permission-denied') { sessionRevoked(); return; }
+      status.textContent = '⚠️ تعذّر تسجيل الدخول — تأكد من الإنترنت وحاول مرة ثانية';
+      playBeep(false);
+      scanCooldown = false; lastScanned = null;
+      return;
+    }
     if (outcome === 'ok') {
       document.getElementById('result-name-ok').textContent = found.name;
       document.getElementById('result-allowed').style.display = 'block';

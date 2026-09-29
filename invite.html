@@ -515,18 +515,32 @@ async function renderApproved(eventData, guest) {
 
 let currentEvent = null;
 
+function renderPreparing() {
+  card.innerHTML = `
+    <div class="status-icon">🎉</div>
+    <div class="status-msg">تمت الموافقة على حضورك! جاري تجهيز بطاقتك — بتظهر هنا خلال لحظات</div>
+  `;
+}
+
+let renderedGuestId = null;
+
 function watchStatus() {
   const { query, where, collection, onSnapshot } = window._fsFns;
   onSnapshot(query(collection(window._db, 'events', eventId, 'requests'), where('reqId', '==', myReqId)), (snap) => {
     if (snap.empty) return;
     const req = snap.docs[0].data();
-    if (req.status === 'pending') renderPending();
-    else if (req.status === 'rejected') renderRejected();
+    if (req.status === 'pending') { renderedGuestId = null; renderPending(); }
+    else if (req.status === 'rejected') { renderedGuestId = null; renderRejected(); }
     else if (req.status === 'approved') {
-      onSnapshot(query(collection(window._db, 'events', eventId, 'guests'), where('reqId', '==', myReqId)), (gsnap) => {
-        if (!gsnap.empty) renderApproved(currentEvent, gsnap.docs[0].data());
-        else renderPending();
-      });
+      // The barcode id is copied onto the request when the organizer
+      // approves it — this page can't read the guests collection (it's no
+      // longer world-readable). An approval that predates that gets its id
+      // filled in the next time the organizer opens their dashboard, and
+      // this same listener picks it up.
+      if (!req.guestId) { renderedGuestId = null; renderPreparing(); return; }
+      if (renderedGuestId === req.guestId) return;
+      renderedGuestId = req.guestId;
+      renderApproved(currentEvent, { name: req.name, id: req.guestId });
     }
   });
 }
