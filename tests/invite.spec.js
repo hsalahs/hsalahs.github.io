@@ -184,7 +184,7 @@ test('the sample invitation (?demo=1) walks through registration and approval wi
   await seedFakeFirebase(page, { store: { events: {} } });
   // Any read or write against these would fail loudly — the demo must not need them.
   await page.addInitScript(() => { window.__fakeFirebase.denyPaths = ['events', 'accountLimits']; });
-  await page.goto('/invite.html?demo=1');
+  await page.goto('/invite.html?demo=1&type=wedding');
 
   await expect(page.locator('#demo-banner')).toContainText('نموذج تجريبي');
   await expect(page.locator('#card')).toContainText('حفل زفاف أحمد وسارة');
@@ -206,7 +206,7 @@ test('the sample invitation does not need the database to load at all', async ({
   await stubFirebase(page);
   await seedFakeFirebase(page, { store: {} });
   await page.addInitScript(() => { window.__failNextGetDoc = true; window.__fakeFirebase.denyPaths = ['events']; });
-  await page.goto('/invite.html?demo=1');
+  await page.goto('/invite.html?demo=1&type=wedding');
   await expect(page.locator('#g-name')).toBeVisible();
 });
 
@@ -224,7 +224,7 @@ test('trying the sample never sends an email to the owner', async ({ page }) => 
     window.__emailCalls = 0;
     window.emailjs = { init() {}, send() { window.__emailCalls++; return Promise.resolve(); } };
   });
-  await page.goto('/invite.html?demo=1');
+  await page.goto('/invite.html?demo=1&type=wedding');
   await page.locator('#g-name').fill('خالد');
   await page.getByRole('button', { name: 'تأكيد الحضور' }).click();
   await expect(page.locator('#card')).toContainText('تم تأكيد حضورك', { timeout: 5000 });
@@ -239,4 +239,89 @@ test('the landing page and the invitation page do not include the email library 
     const src = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
     expect(src, f + ' should not load or call the email service').not.toMatch(/emailjs|notifyAdmin\(/i);
   }
+});
+
+test('opening the sample with no kind chosen asks which kind of event — and shows nothing wedding-specific yet', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: {} } });
+  await page.goto('/invite.html?demo=1');
+  await expect(page.locator('#card')).toContainText('اختر نوع مناسبتك');
+  const links = await page.locator('.kind-btn').evaluateAll(as => as.map(a => [a.textContent.trim(), a.getAttribute('href'), a.querySelector('img').getAttribute('src')]));
+  expect(links).toEqual([
+    ['زفاف', '?demo=1&type=wedding', 'icons/kind-wedding.svg'],
+    ['تخرج', '?demo=1&type=graduation', 'icons/kind-graduation.svg'],
+    ['فعالية', '?demo=1&type=event', 'icons/kind-event.svg'],
+  ]);
+  // Neutral opening screen: the product, not a wedding.
+  await expect(page.locator('#splash .splash-title')).toHaveText('دعوات');
+  await expect(page.locator('#splash .splash-subtitle')).toHaveText('Digital Invitations');
+  await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/logo.svg');
+});
+
+for (const [type, expected] of Object.entries({
+  wedding:    { name: 'حفل زفاف أحمد وسارة',      venue: 'قاعة الأفراح — الرياض',        theme: 'gold',     splash: 'دعوة زفاف',      sub: 'Wedding Invitation',   art: 'kind-wedding.svg' },
+  graduation: { name: 'حفل تخرج دفعة 2026',       venue: 'مدرسة الأمل الأهلية — الدمام', theme: 'sapphire', splash: 'دعوة حفل تخرج', sub: 'Graduation Invitation', art: 'kind-graduation.svg' },
+  event:      { name: 'ملتقى ريادة الأعمال 2026', venue: 'مركز المؤتمرات — الرياض',      theme: 'emerald',  splash: 'دعوة فعالية',    sub: 'Event Invitation',      art: 'kind-event.svg' },
+})) {
+  test(`the ${type} sample is its own invitation: name, place, colours, opening screen and a friendly date`, async ({ page }) => {
+    await stubFirebase(page);
+    await seedFakeFirebase(page, { store: { events: {} } });
+    await page.addInitScript(() => { window.__fakeFirebase.denyPaths = ['events', 'accountLimits']; });
+    await page.goto('/invite.html?demo=1&type=' + type);
+
+    await expect(page.locator('#card h1')).toHaveText(expected.name);
+    await expect(page.locator('#card .sub')).toContainText(expected.venue);
+    await expect(page.locator('body')).toHaveAttribute('data-theme', expected.theme);
+    await expect(page.locator('#demo-banner')).toContainText('نموذج تجريبي لدعوة');
+    await expect(page.locator('#splash .splash-title')).toHaveText(expected.splash);
+    await expect(page.locator('#splash .splash-subtitle')).toHaveText(expected.sub);
+
+    // The date reads as words with Western digits, not "2026-…".
+    const sub = await page.locator('#card .sub').textContent();
+    expect(sub).toMatch(/(الأحد|الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت) \d{1,2} \S+ \d{4}/);
+    expect(sub).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    expect(sub).not.toMatch(/[\u0660-\u0669]/);
+
+    // The opening screen's picture is that kind's own artwork — and the file really loads.
+    const img = page.locator('#splash .splash-rings img');
+    await expect(img).toHaveAttribute('src', 'icons/' + expected.art);
+    await expect.poll(() => img.evaluate(i => i.complete && i.naturalWidth > 0)).toBe(true);
+
+    // "Change kind" leads back to the choice, and the whole walk-through still works.
+    await expect(page.locator('#demo-banner a[href="?demo=1"]')).toBeVisible();
+    await page.locator('#g-name').fill('خالد');
+    await page.getByRole('button', { name: 'تأكيد الحضور' }).click();
+    await expect(page.locator('#card')).toContainText('تم تأكيد حضورك', { timeout: 5000 });
+  });
+}
+
+test('a made-up ?type= (or an inherited property name) falls back to the choice screen instead of breaking', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: {} } });
+  for (const t of ['nonsense', 'constructor', '__proto__', 'toString']) {
+    await page.goto('/invite.html?demo=1&type=' + t);
+    await expect(page.locator('#card')).toContainText('اختر نوع مناسبتك');
+    await expect(page.locator('.kind-btn')).toHaveCount(3);
+    // ...and the opening screen falls back to the product's, not to garbage.
+    await expect(page.locator('#splash .splash-title')).toHaveText('دعوات');
+    await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/logo.svg');
+  }
+});
+
+test('a real invitation still opens with the wedding splash, and its date reads as words with Western digits', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    store: { events: { e1: { name: 'حفل تجريبي', date: '2026-10-29', venue: 'الرياض', theme: 'gold' } } },
+  });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card .sub')).toContainText('الخميس 29 أكتوبر 2026');
+  await expect(page.locator('#splash .splash-title')).toHaveText('دعوة زفاف');
+  await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/kind-wedding.svg');
+});
+
+test('a date an organizer typed as free text is shown as typed, never dropped', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: { name: 'حفل', date: 'قريبًا', venue: 'الرياض', theme: 'gold' } } } });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card .sub')).toContainText('قريبًا');
 });
