@@ -35,8 +35,13 @@
   .sub { color:#B8B4AC; font-size:12px; text-align:center; margin-bottom:22px; }
   .card { background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.2); border-radius:14px; padding:20px; text-align:center; }
   input { width:100%; padding:14px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:20px; font-family:inherit; text-align:center; letter-spacing:6px; }
+  /* The default input above is tuned for the 4-digit PIN (big, spaced-out
+     digits) — wrong shape entirely for an email/password field. */
+  input.text-input { font-size:15px; letter-spacing:normal; text-align:right; }
   .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
   .btn.ghost { width:100%; background:transparent; border:1px solid rgba(224,188,122,0.3); color:#E0BC7A; }
+  .toggle-row { text-align:center; font-size:13px; color:#B8B4AC; margin-top:14px; }
+  .toggle-row a { color:#E0BC7A; cursor:pointer; text-decoration:underline; }
   .counter { text-align:center; color:#E0BC7A; font-size:15px; font-weight:700; margin-bottom:14px; }
   .manual-divider { display:flex; align-items:center; gap:10px; color:#6f6a62; font-size:12px; margin:16px 0 12px; }
   .manual-divider::before, .manual-divider::after { content:''; flex:1; height:1px; background:rgba(224,188,122,0.2); }
@@ -125,6 +130,19 @@ setTimeout(() => {
       <div class="err" id="pin-err">رقم غير صحيح</div>
       <input type="tel" inputmode="numeric" maxlength="4" id="pin-input" placeholder="0000" onkeydown="if(event.key==='Enter') checkPin()">
       <button class="btn" onclick="checkPin()">دخول</button>
+    </div>
+
+    <!-- For an admin checking in on a device they don't normally use (a
+         security company's own phone, say) — a real sign-in with their
+         actual account, not a shared code, so nothing worth leaking ever
+         sits in this page's public source. -->
+    <div class="toggle-row" id="admin-login-toggle"><a onclick="showAdminLogin()">🔑 تسجيل دخول كأدمن</a></div>
+    <div class="card" id="admin-login-card" style="display:none; margin-top:12px;">
+      <div class="err" id="admin-login-err"></div>
+      <input type="email" class="text-input" id="admin-email" placeholder="البريد الإلكتروني" onkeydown="if(event.key==='Enter') document.getElementById('admin-pass').focus()">
+      <input type="password" class="text-input" id="admin-pass" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter') submitAdminLogin()">
+      <button class="btn" onclick="submitAdminLogin()">دخول</button>
+      <div class="toggle-row"><a onclick="hideAdminLogin()">رجوع لكود الدخول</a></div>
     </div>
   </div>
 
@@ -264,6 +282,48 @@ async function checkPin() {
   showScanner(false);
 }
 
+function showAdminLogin() {
+  document.getElementById('admin-login-toggle').style.display = 'none';
+  document.getElementById('admin-login-card').style.display = 'block';
+  document.getElementById('admin-email').focus();
+}
+
+function hideAdminLogin() {
+  document.getElementById('admin-login-card').style.display = 'none';
+  document.getElementById('admin-login-toggle').style.display = 'block';
+  document.getElementById('admin-login-err').style.display = 'none';
+}
+
+// A real sign-in with the admin's own account, rather than a shared code —
+// this page's source is public (static hosting, no backend), so anything
+// written into it as a literal string is effectively public too. A real
+// password, checked by Firebase's own servers, isn't.
+async function submitAdminLogin() {
+  const email = document.getElementById('admin-email').value.trim();
+  const pass = document.getElementById('admin-pass').value;
+  const err = document.getElementById('admin-login-err');
+  const showErr = (msg) => { err.textContent = msg; err.style.display = 'block'; };
+  err.style.display = 'none';
+  if (!email || !pass) { showErr('عبّي البريد وكلمة المرور'); return; }
+
+  const { signInWithEmailAndPassword, signOut } = window._authFns;
+  try {
+    const cred = await signInWithEmailAndPassword(window._auth, email, pass);
+    if (!isAdmin(cred.user)) {
+      await signOut(window._auth);
+      showErr('هذا الحساب ليس حساب الأدمن');
+      return;
+    }
+    showScanner(false);
+  } catch (e) {
+    const map = {
+      'auth/invalid-credential': 'البريد أو كلمة المرور غلط',
+      'auth/invalid-email': 'صيغة البريد غير صحيحة',
+    };
+    showErr(map[e.code] || ('خطأ: ' + e.message));
+  }
+}
+
 function showScanner(viaAdmin) {
   document.getElementById('pin-gate').style.display = 'none';
   document.getElementById('scanner-view').style.display = 'block';
@@ -274,14 +334,19 @@ function showScanner(viaAdmin) {
   startGuestsListener();
 }
 
-// Lets whoever is holding a PIN-unlocked device end their own session —
-// e.g. security staff handing a personal phone back at the end of their
-// shift — without needing the owner to change the door code for everyone.
+// Lets whoever is holding an unlocked device end their own session — e.g.
+// security staff handing a personal phone back at the end of their shift,
+// or an admin done checking in on a borrowed device — without needing the
+// owner to change the door code for everyone. Clears both possible sources
+// of access: the saved PIN, and a signed-in admin session, since either one
+// could be why this device is currently unlocked.
 function lockDevice() {
   try { localStorage.removeItem(unlockKey()); } catch (e) {}
+  try { window._authFns.signOut(window._auth); } catch (e) {}
   document.getElementById('scanner-view').style.display = 'none';
   document.getElementById('pin-input').value = '';
   document.getElementById('pin-gate').style.display = 'block';
+  hideAdminLogin();
 }
 
 function offlineCacheKey() { return 'scan_offline_cache_' + eventId; }

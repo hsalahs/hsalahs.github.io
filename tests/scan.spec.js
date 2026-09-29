@@ -210,6 +210,59 @@ test('"تسجيل خروج من هذا الجهاز" clears the saved unlock and
   expect(remembered).toBeNull();
 });
 
+test('an admin can sign in with their real account on a borrowed device, instead of typing the door PIN', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+
+  await page.locator('#admin-login-toggle a').click();
+  await page.locator('#admin-email').fill('hsallah@outlook.sa');
+  await page.locator('#admin-pass').fill('correct-password');
+  await page.getByRole('button', { name: 'دخول' }).nth(1).click();
+
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  // Unlike the auto-detected admin session, this one came from a manual
+  // sign-in on a device that isn't theirs — they need a way to end it
+  // before handing the phone back.
+  await expect(page.locator('#lock-device-btn')).toBeVisible();
+
+  await page.locator('#lock-device-btn').click();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect(page.locator('#scanner-view')).toBeHidden();
+});
+
+test('signing in with a non-admin account on the admin-login form is rejected and signed back out', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+
+  await page.locator('#admin-login-toggle a').click();
+  await page.locator('#admin-email').fill('customer@example.com');
+  await page.locator('#admin-pass').fill('whatever');
+  await page.getByRole('button', { name: 'دخول' }).nth(1).click();
+
+  await expect(page.locator('#admin-login-err')).toContainText('ليس حساب الأدمن');
+  await expect(page.locator('#scanner-view')).toBeHidden();
+  const signedIn = await page.evaluate(() => !!window.__fakeFirebase.auth.user);
+  expect(signedIn).toBe(false);
+});
+
+test('a wrong password on the admin-login form shows an error instead of a generic failure', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+  await page.evaluate(() => { window.__fakeFirebase.auth.nextSignInError = { code: 'auth/invalid-credential' }; });
+
+  await page.locator('#admin-login-toggle a').click();
+  await page.locator('#admin-email').fill('hsallah@outlook.sa');
+  await page.locator('#admin-pass').fill('wrong');
+  await page.getByRole('button', { name: 'دخول' }).nth(1).click();
+
+  await expect(page.locator('#admin-login-err')).toContainText('البريد أو كلمة المرور غلط');
+  await expect(page.locator('#scanner-view')).toBeHidden();
+});
+
 test('regenerating the door code from the dashboard locks out a device that unlocked with the old one', async ({ page }) => {
   // The unlock check compares against the LIVE scanPin, not just "was this
   // device ever unlocked" — so a device that got in with an old code is
