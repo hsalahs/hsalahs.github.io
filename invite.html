@@ -83,7 +83,8 @@
   input { width:100%; padding:13px; margin-bottom:14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(var(--accent-rgb),0.25); color:var(--text-main); font-size:15px; font-family:inherit; text-align:center; }
   input:focus { outline:none; border-color:var(--gold); }
   .btn { width:100%; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
-  .kind-btn { display:block; text-align:center; text-decoration:none; margin-top:10px; font-size:17px; }
+  .btn.kind-btn { display:flex; align-items:center; justify-content:center; gap:14px; text-decoration:none; margin-top:12px; padding:12px 16px; font-size:19px; background:rgba(255,255,255,0.04); border:1px solid var(--gold); color:var(--gold); }
+  .kind-ico { height:46px; width:auto; }
   .status-icon { font-size:44px; margin-bottom:10px; }
   .status-msg { font-size:15px; line-height:1.9; }
   #qr-box { margin-top:18px; padding:16px; background:#fff; border-radius:12px; display:inline-block; }
@@ -106,20 +107,7 @@
 <body>
   <div id="splash">
     <div class="splash-inner">
-      <div class="splash-rings">
-        <svg viewBox="0 0 140 90" width="110" height="70" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="ringGold" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stop-color="#F3E0BC"/>
-              <stop offset="0.5" stop-color="#E0BC7A"/>
-              <stop offset="1" stop-color="#C99B4A"/>
-            </linearGradient>
-          </defs>
-          <circle cx="52" cy="50" r="30" stroke="url(#ringGold)" stroke-width="5"/>
-          <circle cx="88" cy="50" r="30" stroke="url(#ringGold)" stroke-width="5"/>
-          <path d="M70 22 L74 31 L83 32 L76 39 L78 48 L70 43 L62 48 L64 39 L57 32 L66 31 Z" fill="url(#ringGold)"/>
-        </svg>
-      </div>
+      <div class="splash-rings"><img src="icons/kind-wedding.svg" alt="" style="display:block; margin:0 auto; height:96px; width:auto;"></div>
       <div class="splash-title">دعوة زفاف</div>
       <div class="splash-subtitle">Wedding Invitation</div>
       <div class="splash-line"></div>
@@ -127,28 +115,28 @@
   </div>
   <script>
   // The sample invitation (?demo=1) opens with a splash that matches the
-  // kind of event picked (?type=…); with no pick yet it is the neutral product
-  // splash. Real invitations keep the wedding splash. This has to run before
+  // kind of event picked (?type=…): its own picture and title. With no pick
+  // yet it is the neutral product splash (the logo). Real invitations keep the
+  // wedding splash that is already in the markup. This has to run before
   // first paint and depend on nothing else, so it's inline, guarded, and tiny.
   (function () {
     try {
       const p = new URLSearchParams(location.search);
       if (p.get('demo') !== '1') return;
-      const GRAD = '<path d="M70 16 L130 42 L70 68 L10 42 Z" fill="url(#ringGold)"/><path d="M36 56 V72 C36 82 104 82 104 72 V56 L70 70 Z" stroke="url(#ringGold)" stroke-width="5" stroke-linejoin="round"/><rect x="121.5" y="44" width="5" height="32" rx="2.5" fill="url(#ringGold)"/><circle cx="124" cy="79" r="5.5" fill="url(#ringGold)"/>';
-      const STAR = '<path d="M70 10 L81 38 L110 41 L88 60 L95 86 L70 72 L45 86 L52 60 L30 41 L59 38 Z" fill="url(#ringGold)"/>';
       const KINDS = {
-        wedding:    ['دعوة زفاف', 'Wedding Invitation', null],
-        graduation: ['دعوة حفل تخرج', 'Graduation Invitation', GRAD],
-        event:      ['دعوة فعالية', 'Event Invitation', STAR],
+        wedding:    ['دعوة زفاف', 'Wedding Invitation', 'kind-wedding.svg'],
+        graduation: ['دعوة حفل تخرج', 'Graduation Invitation', 'kind-graduation.svg'],
+        event:      ['دعوة فعالية', 'Event Invitation', 'kind-event.svg'],
       };
-      const k = KINDS[p.get('type')] || ['دعوات', 'Digital Invitations', null];
+      // hasOwnProperty, so ?type=constructor and the like can't pick up inherited keys.
+      const t = p.get('type');
+      const k = Object.prototype.hasOwnProperty.call(KINDS, t) ? KINDS[t] : ['دعوات', 'Digital Invitations', 'logo.svg'];
       document.querySelector('#splash .splash-title').textContent = k[0];
       document.querySelector('#splash .splash-subtitle').textContent = k[1];
-      if (k[2]) {
-        const svg = document.querySelector('#splash .splash-rings svg');
-        svg.querySelectorAll('circle, path').forEach(n => n.remove());
-        svg.insertAdjacentHTML('beforeend', k[2]);
-      }
+      const img = document.querySelector('#splash .splash-rings img');
+      img.src = 'icons/' + k[2];
+      img.style.height = k[2] === 'logo.svg' ? '104px' : '96px';
+      img.style.width = k[2] === 'logo.svg' ? '104px' : 'auto';
     } catch (e) {}
   })();
   </script>
@@ -189,9 +177,9 @@ const card = document.getElementById('card');
 // one. ?type= can also be linked to directly (e.g. sent to a school).
 const isDemo = params.get('demo') === '1';
 const DEMO_KINDS = {
-  wedding:    { label: 'زفاف',   emoji: '💍', name: 'حفل زفاف أحمد وسارة',      venue: 'قاعة الأفراح — الرياض',        theme: 'gold' },
-  graduation: { label: 'تخرج',   emoji: '🎓', name: 'حفل تخرج دفعة 2026',       venue: 'مدرسة الأمل الأهلية — الدمام', theme: 'sapphire' },
-  event:      { label: 'فعالية', emoji: '🎉', name: 'ملتقى ريادة الأعمال 2026', venue: 'مركز المؤتمرات — الرياض',      theme: 'emerald' },
+  wedding:    { label: 'زفاف',   name: 'حفل زفاف أحمد وسارة',      venue: 'قاعة الأفراح — الرياض',        theme: 'gold' },
+  graduation: { label: 'تخرج',   name: 'حفل تخرج دفعة 2026',       venue: 'مدرسة الأمل الأهلية — الدمام', theme: 'sapphire' },
+  event:      { label: 'فعالية', name: 'ملتقى ريادة الأعمال 2026', venue: 'مركز المؤتمرات — الرياض',      theme: 'emerald' },
 };
 // hasOwnProperty, so ?type=constructor and the like can't pick up inherited keys.
 const demoKind = Object.prototype.hasOwnProperty.call(DEMO_KINDS, params.get('type')) ? params.get('type') : null;
@@ -281,7 +269,7 @@ function renderDemoChooser() {
     <h1>جرّب دعوتك</h1>
     <div class="sub">اختر نوع مناسبتك لتشوف كيف تطلع دعوتها</div>
     <div class="gold-line"></div>
-    ${Object.entries(DEMO_KINDS).map(([k, v]) => `<a class="btn kind-btn" href="?demo=1&type=${k}">${v.emoji} ${v.label}</a>`).join('')}
+    ${Object.entries(DEMO_KINDS).map(([k, v]) => `<a class="btn kind-btn" href="?demo=1&type=${k}"><img class="kind-ico" src="icons/kind-${k}.svg" alt="">${v.label}</a>`).join('')}
   `;
 }
 

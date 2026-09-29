@@ -246,21 +246,22 @@ test('opening the sample with no kind chosen asks which kind of event — and sh
   await seedFakeFirebase(page, { store: { events: {} } });
   await page.goto('/invite.html?demo=1');
   await expect(page.locator('#card')).toContainText('اختر نوع مناسبتك');
-  const links = await page.locator('.kind-btn').evaluateAll(as => as.map(a => [a.textContent.trim(), a.getAttribute('href')]));
+  const links = await page.locator('.kind-btn').evaluateAll(as => as.map(a => [a.textContent.trim(), a.getAttribute('href'), a.querySelector('img').getAttribute('src')]));
   expect(links).toEqual([
-    ['💍 زفاف', '?demo=1&type=wedding'],
-    ['🎓 تخرج', '?demo=1&type=graduation'],
-    ['🎉 فعالية', '?demo=1&type=event'],
+    ['زفاف', '?demo=1&type=wedding', 'icons/kind-wedding.svg'],
+    ['تخرج', '?demo=1&type=graduation', 'icons/kind-graduation.svg'],
+    ['فعالية', '?demo=1&type=event', 'icons/kind-event.svg'],
   ]);
   // Neutral opening screen: the product, not a wedding.
   await expect(page.locator('#splash .splash-title')).toHaveText('دعوات');
   await expect(page.locator('#splash .splash-subtitle')).toHaveText('Digital Invitations');
+  await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/logo.svg');
 });
 
 for (const [type, expected] of Object.entries({
-  wedding:    { name: 'حفل زفاف أحمد وسارة',      venue: 'قاعة الأفراح — الرياض',        theme: 'gold',     splash: 'دعوة زفاف',      sub: 'Wedding Invitation',   glyph: 'circle' },
-  graduation: { name: 'حفل تخرج دفعة 2026',       venue: 'مدرسة الأمل الأهلية — الدمام', theme: 'sapphire', splash: 'دعوة حفل تخرج', sub: 'Graduation Invitation', glyph: 'cap' },
-  event:      { name: 'ملتقى ريادة الأعمال 2026', venue: 'مركز المؤتمرات — الرياض',      theme: 'emerald',  splash: 'دعوة فعالية',    sub: 'Event Invitation',      glyph: 'star' },
+  wedding:    { name: 'حفل زفاف أحمد وسارة',      venue: 'قاعة الأفراح — الرياض',        theme: 'gold',     splash: 'دعوة زفاف',      sub: 'Wedding Invitation',   art: 'kind-wedding.svg' },
+  graduation: { name: 'حفل تخرج دفعة 2026',       venue: 'مدرسة الأمل الأهلية — الدمام', theme: 'sapphire', splash: 'دعوة حفل تخرج', sub: 'Graduation Invitation', art: 'kind-graduation.svg' },
+  event:      { name: 'ملتقى ريادة الأعمال 2026', venue: 'مركز المؤتمرات — الرياض',      theme: 'emerald',  splash: 'دعوة فعالية',    sub: 'Event Invitation',      art: 'kind-event.svg' },
 })) {
   test(`the ${type} sample is its own invitation: name, place, colours, opening screen and a friendly date`, async ({ page }) => {
     await stubFirebase(page);
@@ -281,14 +282,10 @@ for (const [type, expected] of Object.entries({
     expect(sub).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     expect(sub).not.toMatch(/[\u0660-\u0669]/);
 
-    // The opening screen's picture matches the kind: rings for a wedding, a cap, a star.
-    const shapes = await page.locator('#splash .splash-rings svg').evaluate(svg => ({
-      circles: svg.querySelectorAll('circle').length,
-      paths: svg.querySelectorAll('path').length,
-    }));
-    if (expected.glyph === 'circle') expect(shapes.circles).toBe(2);
-    if (expected.glyph === 'cap') { expect(shapes.paths).toBe(2); expect(shapes.circles).toBe(1); }
-    if (expected.glyph === 'star') { expect(shapes.paths).toBe(1); expect(shapes.circles).toBe(0); }
+    // The opening screen's picture is that kind's own artwork — and the file really loads.
+    const img = page.locator('#splash .splash-rings img');
+    await expect(img).toHaveAttribute('src', 'icons/' + expected.art);
+    await expect.poll(() => img.evaluate(i => i.complete && i.naturalWidth > 0)).toBe(true);
 
     // "Change kind" leads back to the choice, and the whole walk-through still works.
     await expect(page.locator('#demo-banner a[href="?demo=1"]')).toBeVisible();
@@ -305,6 +302,9 @@ test('a made-up ?type= (or an inherited property name) falls back to the choice 
     await page.goto('/invite.html?demo=1&type=' + t);
     await expect(page.locator('#card')).toContainText('اختر نوع مناسبتك');
     await expect(page.locator('.kind-btn')).toHaveCount(3);
+    // ...and the opening screen falls back to the product's, not to garbage.
+    await expect(page.locator('#splash .splash-title')).toHaveText('دعوات');
+    await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/logo.svg');
   }
 });
 
@@ -316,6 +316,7 @@ test('a real invitation still opens with the wedding splash, and its date reads 
   await page.goto('/invite.html?event=e1');
   await expect(page.locator('#card .sub')).toContainText('الخميس 29 أكتوبر 2026');
   await expect(page.locator('#splash .splash-title')).toHaveText('دعوة زفاف');
+  await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/kind-wedding.svg');
 });
 
 test('a date an organizer typed as free text is shown as typed, never dropped', async ({ page }) => {

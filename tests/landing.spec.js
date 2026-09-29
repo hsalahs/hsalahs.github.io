@@ -79,6 +79,8 @@ test('the landing page opens with the product splash, not a wedding one', async 
   await page.goto('/index.html');
   await expect(page.locator('#splash .splash-title')).toHaveText('دعوات');
   await expect(page.locator('#splash .splash-subtitle')).toHaveText('Digital Invitations');
+  await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/logo.svg');
+  await expect(page.locator('nav .logo img')).toHaveAttribute('src', 'icons/logo.svg');
 });
 
 test('the sample card starts as a wedding, then shows a graduation and an event, and comes back around', async ({ page }) => {
