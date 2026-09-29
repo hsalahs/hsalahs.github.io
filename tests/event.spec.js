@@ -397,3 +397,65 @@ test('a dropped connection while loading the dashboard shows a tappable retry in
   await msg.click();
   await expect(page.locator('#dashboard')).toBeVisible();
 });
+
+function stubNotificationApi(page, { initialPermission = 'default' } = {}) {
+  return page.addInitScript((initialPermission) => {
+    window.__notifications = [];
+    class FakeNotification {
+      constructor(title, opts) { window.__notifications.push({ title, opts }); }
+    }
+    FakeNotification.permission = initialPermission;
+    FakeNotification.requestPermission = () => { FakeNotification.permission = 'granted'; return Promise.resolve('granted'); };
+    window.Notification = FakeNotification;
+  }, initialPermission);
+}
+
+test('the owner can enable request notifications from the menu', async ({ page }) => {
+  await stubFirebase(page);
+  await stubNotificationApi(page, { initialPermission: 'default' });
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: '🔔 تفعيل إشعارات الطلبات' }).click();
+  await expect(page.locator('#toast')).toContainText('تم تفعيل إشعارات الطلبات');
+
+  await page.getByRole('button', { name: '☰' }).click();
+  await expect(page.getByRole('button', { name: /إشعارات الطلبات مفعّلة/ })).toBeVisible();
+});
+
+test('a new guest request triggers a real notification once enabled, but not requests already pending on load', async ({ page }) => {
+  await stubFirebase(page);
+  await stubNotificationApi(page, { initialPermission: 'granted' });
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: {
+      events: { e1: EVENT },
+      'events/e1/guests': {},
+      'events/e1/requests': { r1: { name: 'طلب قديم', status: 'pending', reqId: 'WD-OLD', createdAt: { seconds: 1 } } },
+    },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await expect(page.locator('#requests-badge')).toHaveText('1');
+
+  // A request that was already pending when the page loaded must not fire
+  // a notification — only ones that arrive while this device is watching.
+  expect(await page.evaluate(() => window.__notifications.length)).toBe(0);
+
+  await page.evaluate(() => {
+    const { collection, addDoc } = window._fsFns;
+    return addDoc(collection(window._db, 'events', 'e1', 'requests'), {
+      name: 'ضيف جديد', status: 'pending', reqId: 'WD-NEW', createdAt: { seconds: 2 },
+    });
+  });
+
+  await expect(page.locator('#requests-badge')).toHaveText('2');
+  const notifs = await page.evaluate(() => window.__notifications);
+  expect(notifs.length).toBe(1);
+  expect(notifs[0].opts.body).toContain('ضيف جديد');
+});
