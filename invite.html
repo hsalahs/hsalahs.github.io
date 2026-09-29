@@ -149,7 +149,14 @@
 const params = new URLSearchParams(window.location.search);
 const eventId = params.get('event');
 const card = document.getElementById('card');
-let myReqId = localStorage.getItem('inv_reqid_' + eventId) || null;
+// localStorage can throw (Safari private browsing, or a browser policy
+// blocking storage entirely) — this runs as the very first thing in this
+// script, so an uncaught throw here would silently kill everything below
+// it, including init() itself never getting defined or called. The guest
+// would be stuck on the loading placeholder forever with no way out — the
+// exact "trapped" failure class already fixed elsewhere on this page.
+let myReqId = null;
+try { myReqId = localStorage.getItem('inv_reqid_' + eventId) || null; } catch (e) {}
 
 // Maps link + live countdown to the event date, shown above the RSVP form
 // and again once the guest is approved. Time defaults to 8pm Riyadh time —
@@ -221,7 +228,11 @@ async function submitRequest() {
     console.error(e);
     return;
   }
-  localStorage.setItem('inv_reqid_' + eventId, reqId);
+  // The request was already written to Firestore above — an unguarded
+  // throw here would leave the guest stuck without their pending-status
+  // screen even though their RSVP went through, likely making them think
+  // it failed and re-submit.
+  try { localStorage.setItem('inv_reqid_' + eventId, reqId); } catch (e) {}
   myReqId = reqId;
   watchStatus();
 }

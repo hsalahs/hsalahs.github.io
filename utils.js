@@ -3,6 +3,19 @@ function escapeHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Takes a RAW (unescaped) string and returns it safe to embed inside a
+// single-quoted JS string literal within an onclick="..." attribute, e.g.
+// onclick="deleteGuest('${escapeForJsAttr(name)}')". Does both layers:
+// escaping & < > " (escapeHtml) so the value can't break out of the
+// double-quoted onclick="..." attribute itself, and escaping \ and ' so it
+// can't break out of the single-quoted JS string inside that attribute.
+// Backslashes must be escaped before quotes, or double-escaping corrupts
+// it; escapeHtml doesn't touch either character, so the two escaping
+// passes don't interfere and can run in either order.
+function escapeForJsAttr(str) {
+  return escapeHtml(String(str)).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 // Single admin allowlist — was previously copy-pasted separately into
 // app.html, event.html, and scan.html, an easy way for admin access to
 // quietly break in just one of them if this email ever changes and someone

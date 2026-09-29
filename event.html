@@ -766,10 +766,10 @@ function renderGuests() {
       </div>
       <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ حضر' : 'لسه'}</span>
       ${g.scanned
-        ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">↩️ تراجع</button>`
-        : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">✓ حضر</button>`}
+        ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">↩️ تراجع</button>`
+        : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">✓ حضر</button>`}
       <button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">💾 حفظ</button>
-      <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeHtml(g.name).replace(/'/g, "\\'")}')">🗑</button>
+      <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeForJsAttr(g.name)}')">🗑</button>
     </div>
   `).join('');
 }
