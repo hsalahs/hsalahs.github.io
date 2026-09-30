@@ -115,3 +115,68 @@ test('the steps are numbered 1, 2, 3 in Western digits', async ({ page }) => {
   await page.goto('/index.html');
   expect(await page.locator('.step-num').allTextContents()).toEqual(['1', '2', '3']);
 });
+
+// "ليش دعوات؟" — six cards; one column on phones, a 3x2 grid on large screens.
+const FEATURES = [
+  ['⚡', 'خدمة ذاتية وفورية'],
+  ['📱', 'بدون تطبيقات أو تحميل'],
+  ['🎁', 'تجربة مجانية بالكامل'],
+  ['🎟️', 'بطاقة مصممة لكل ضيف'],
+  ['📊', 'تحديث وإحصائيات لحظية'],
+  ['🔒', 'بياناتك خاصة وآمنة'],
+];
+
+test('"why Dawaat" has the six cards, each with its own icon and title, in order', async ({ page }) => {
+  await page.goto('/index.html');
+  const cards = page.locator('.features .feature');
+  await expect(cards).toHaveCount(6);
+  for (let i = 0; i < FEATURES.length; i++) {
+    await expect(cards.nth(i).locator('.f-icon')).toHaveText(FEATURES[i][0]);
+    await expect(cards.nth(i).locator('h4')).toHaveText(FEATURES[i][1]);
+    expect((await cards.nth(i).locator('p').innerText()).length).toBeGreaterThan(30);
+  }
+  // No two cards share an icon.
+  expect(new Set(FEATURES.map(f => f[0])).size).toBe(6);
+});
+
+test('the cards say only what the product does: no invented attendance percentage, and the privacy claim names who else can see the list', async ({ page }) => {
+  await page.goto('/index.html');
+  const text = await page.locator('.features').innerText();
+  // The dashboard shows counts (came / not yet), not a percentage.
+  expect(text).not.toContain('نسبة');
+  // Door staff holding the code can open the list, so it is not "only you".
+  expect(text).toContain('إلا أنت ومن تعطيه رمز الباب');
+  expect(text).not.toContain('غيرك');
+  expect(text).toContain('حتى 5 ضيوف مجانًا');
+});
+
+test('on a phone the cards stack in a single column and the page does not scroll sideways', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto('/index.html');
+  const lefts = await page.locator('.features .feature').evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().left)));
+  expect(new Set(lefts).size).toBe(1);
+  const cols = await page.locator('.features').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length);
+  expect(cols).toBe(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('on a large screen the cards form a 3x2 grid, centred, inside the viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/index.html');
+  const boxes = await page.locator('.features .feature').evaluateAll(els => els.map(e => { const r = e.getBoundingClientRect(); return { l: Math.round(r.left), r: Math.round(r.right), t: Math.round(r.top) }; }));
+  expect(new Set(boxes.map(b => b.t)).size).toBe(2);           // two rows
+  expect(new Set(boxes.map(b => b.l)).size).toBe(3);           // three columns
+  const left = Math.min(...boxes.map(b => b.l));
+  const right = Math.max(...boxes.map(b => b.r));
+  expect(left).toBeGreaterThanOrEqual(0);
+  expect(right).toBeLessThanOrEqual(1280);
+  expect(Math.abs(left - (1280 - right))).toBeLessThanOrEqual(2);  // centred
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('in the in-between tablet width the cards stay in one readable column', async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 900 });
+  await page.goto('/index.html');
+  const lefts = await page.locator('.features .feature').evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().left)));
+  expect(new Set(lefts).size).toBe(1);
+});
