@@ -1416,15 +1416,16 @@ function renderRequests() {
   `).join('');
 }
 
+// The guest's barcode text ("WD-...") IS the Firestore document ID — not a
+// separate field next to an unrelated auto/random doc ID. That used to be
+// two independent random strings per guest for no real reason, and it meant
+// the scanner could only find a guest by loading every guest and searching
+// in memory. With the code as the doc ID, the scanner looks a guest up with
+// one direct getDoc(), no collection read at all.
+// Picked client-side (not addDoc's auto-ID) so it's ready before
+// runTransaction runs — transactions need the ref up front.
 function newGuestId() {
   return 'WD-' + Math.random().toString(36).substr(2, 9).toUpperCase() + Date.now().toString(36).toUpperCase().substr(-4);
-}
-
-// A Firestore doc ID picked client-side (not addDoc's auto-ID) so it can be
-// written inside a runTransaction alongside the events/{id}.guestCount bump
-// that enforces the free-tier cap — transactions need the ref up front.
-function randomDocId() {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
 function showErr(e) {
@@ -1443,7 +1444,8 @@ async function addGuest() {
   if (guests.some(g => g.name === name)) { showToast('⚠️ الاسم موجود بالقائمة'); return; }
   const { doc, runTransaction } = window._fsFns;
   const eventRef = doc(window._db, 'events', eventId);
-  const guestRef = doc(window._db, 'events', eventId, 'guests', randomDocId());
+  const guestId = newGuestId();
+  const guestRef = doc(window._db, 'events', eventId, 'guests', guestId);
   let justHitCap = false;
   try {
     await runTransaction(window._db, async (tx) => {
@@ -1452,7 +1454,7 @@ async function addGuest() {
       const count = data.guestCount || 0;
       const cap = guestCapOf(data);
       if (!isAdmin(currentUser) && count >= cap) throw new Error('GATE');
-      tx.set(guestRef, { id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString() });
+      tx.set(guestRef, { id: guestId, name, scanned: false, registeredAt: new Date().toISOString() });
       tx.update(eventRef, { guestCount: count + 1 });
       justHitCap = !isAdmin(currentUser) && count + 1 >= cap;
     });
@@ -1510,8 +1512,9 @@ async function importGuestNames(names) {
       const allowed = isAdmin(currentUser) ? batch.length : Math.max(0, Math.min(batch.length, cap - count));
       const toWrite = batch.slice(0, allowed);
       toWrite.forEach(name => {
-        const guestRef = doc(window._db, 'events', eventId, 'guests', randomDocId());
-        tx.set(guestRef, { id: newGuestId(), name, scanned: false, registeredAt: new Date().toISOString() });
+        const guestId = newGuestId();
+        const guestRef = doc(window._db, 'events', eventId, 'guests', guestId);
+        tx.set(guestRef, { id: guestId, name, scanned: false, registeredAt: new Date().toISOString() });
       });
       if (toWrite.length > 0) tx.update(eventRef, { guestCount: count + toWrite.length });
       return toWrite.length;
@@ -1617,9 +1620,9 @@ async function approveRequest(reqDocId) {
   if (!req) return;
   const { doc, runTransaction } = window._fsFns;
   const eventRef = doc(window._db, 'events', eventId);
-  const guestRef = doc(window._db, 'events', eventId, 'guests', randomDocId());
-  const reqRef = doc(window._db, 'events', eventId, 'requests', reqDocId);
   const guestId = newGuestId();
+  const guestRef = doc(window._db, 'events', eventId, 'guests', guestId);
+  const reqRef = doc(window._db, 'events', eventId, 'requests', reqDocId);
   try {
     await runTransaction(window._db, async (tx) => {
       const snap = await tx.get(eventRef);
