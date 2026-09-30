@@ -839,3 +839,14 @@ test('the dashboard shows the event date as words with Western digits', async ({
   await expect(page.locator('#dashboard')).toBeVisible();
   await expect(page.locator('#ev-sub')).toContainText('الخميس 29 أكتوبر 2026');
 });
+
+test('the menu has a refresh button that forces a real reload — no address bar to pull down on, installed as a PWA', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([]) });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await page.getByRole('button', { name: '☰' }).click();
+  await page.evaluate(() => { window.__beforeReload = true; });
+  await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: '🔄 تحديث الصفحة' }).click()]);
+  expect(await page.evaluate(() => window.__beforeReload)).toBeUndefined();
+});

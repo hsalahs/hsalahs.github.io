@@ -43,15 +43,11 @@ A non-technical founder on a tight budget who **writes Arabic** (answer in Arabi
 - **Deferred:** event-type field, time / organizer / notes fields, party-size cards and open registration, App Check (no budget), GitHub main-branch protection (the user may do it), landing "install hint", pricing section.
 - **Domain:** the user will register a `.com` (name still undecided; ideas were haflatna.com, 3azeema.com, farhatk.com, da3wt.com). Needs: a `CNAME` file, GitHub Pages custom domain, the new domain added to Firebase Auth authorized domains, and the absolute URLs in `index.html` (canonical, og:url, og:image). Old github.io links redirect. Browser storage and sessions reset on the new origin. Do it away from event days.
 
-## Open problem: Firebase read quota (next task)
+## Open problem: Firebase read quota
 - **Blaze (paid) is not available to the user**: billing addresses in Saudi Arabia must go through the reseller CNTXT and need a commercial registration. Stay on Spark (about 50k reads/day for the whole project; when it runs out everything stops until the daily reset).
 - The user already hit the limit once with ~700 guests and many refreshes.
-- Cause: `scan.html` and `event.html` listen to the **whole** `guests` collection with `onSnapshot`, and `firebase-init.js` uses plain `getFirestore` with no local cache, so every open or refresh re-reads every guest.
-- Agreed plan, in order:
-  1. Persistent local cache in `firebase-init.js` (changes-only reads on reload). Smallest, biggest win.
-  2. Scanner verifies one guest by code (single read); load the names list only when "عرض الأسماء" is tapped.
-  3. The attendance counter now comes from the full list; needs an alternative that touches the rules. Discuss with the user before building.
-  4. Measure real read counts at 1000 and 5000 guests before promising anything to a customer.
+- **Done:** (1) persistent local cache in `firebase-init.js`. (2) the guest's barcode code is now its own Firestore document id (event.html's three guest-creation paths), so scan.html checks a guest in with one direct `doc()`/transaction, no collection read, no live listener on `guests` at all. (3) the scanner's "تم الدخول: X / Y" counter reads `events/{id}.guestCount` / `.scannedCount` via one cheap document listener (`startEventCounterWatch` in scan.html); `scannedCount` is bumped in the same transaction as the guest's `scanned` flip, and `firestore.rules` has a matching `hasScanSession`-only, +1-only rule for it.
+- **Remaining:** measure real read counts at 1000 and 5000 guests before promising anything to a customer.
 - Known residual risks already told to the user: rules cannot count documents, so a crafted batch could exceed the cap; the 6-digit door code has no rate limit; saved or sent cards keep their old colours after a theme change; real invitations have no stored event type.
 
 ## Conventions

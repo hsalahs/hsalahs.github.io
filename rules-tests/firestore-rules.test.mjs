@@ -82,6 +82,17 @@ await check('with a session: cannot delete a guest', () => assertFails(anon('dev
 await check('with a session: cannot add a guest', () => assertFails(anon('dev1').doc('events/e1/guests/g9').set({ id: 'WD-9', name: 'Z', scanned: false })));
 await check('with a session: still cannot read the private door code', () => assertFails(anon('dev1').doc('events/e1/private/scan').get()));
 
+console.log('\nthe scanner\'s live door counter (events/{id}.scannedCount):');
+await check('unauthenticated: cannot bump the counter', () => assertFails(unauth().doc('events/e1').update({ scannedCount: 1 })));
+await check('anonymous device without a session: cannot bump the counter', () => assertFails(anon('nosession').doc('events/e1').update({ scannedCount: 1 })));
+await check('with a session: can bump the counter from unset to 1', () => assertSucceeds(anon('dev1').doc('events/e1').update({ scannedCount: 1 })));
+await check('with a session: can bump it again, by exactly 1', () => assertSucceeds(anon('dev1').doc('events/e1').update({ scannedCount: 2 })));
+await check('with a session: cannot jump by more than 1', () => assertFails(anon('dev1').doc('events/e1').update({ scannedCount: 10 })));
+await check('with a session: cannot leave it unchanged', () => assertFails(anon('dev1').doc('events/e1').update({ scannedCount: 2 })));
+await check('with a session: cannot decrease it', () => assertFails(anon('dev1').doc('events/e1').update({ scannedCount: 1 })));
+await check('with a session: cannot bump the counter together with any other field', () => assertFails(anon('dev1').doc('events/e1').update({ scannedCount: 3, name: 'hacked' })));
+await check('with a session: cannot use this path to touch guestCount instead', () => assertFails(anon('dev1').doc('events/e1').update({ guestCount: 99 })));
+
 console.log('\nrevocation:');
 await check('the owner can change the code', () => assertSucceeds(owner().doc('events/e1/private/scan').set({ scanPin: '5678' })));
 await check('after the change: the old session can no longer be read back', () => assertFails(anon('dev1').doc('events/e1/scanSessions/dev1').get()));

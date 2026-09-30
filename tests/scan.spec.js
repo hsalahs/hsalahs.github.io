@@ -721,11 +721,20 @@ test('the barcode text is the guest\'s Firestore document id — a code nobody r
   await expect(page.locator('#camera-status')).toContainText('باركود غير مسجّل');
 });
 
-test('a successful scan updates the counter and the offline cache right away, on a list that was only loaded once', async ({ page }) => {
+// The counter reads events/{id}.guestCount / .scannedCount — real fixtures
+// carry those fields already (the event.html transactions that create
+// guests keep guestCount in step; this is the counter's other half).
+function counterStore(guests, scannedCount) {
+  const s = unlockedStore(guests);
+  s.events.e1 = { ...s.events.e1, guestCount: Object.keys(guests).length, scannedCount };
+  return s;
+}
+
+test('a successful scan updates the counter and the offline cache right away', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: DEVICE,
-    store: unlockedStore({ 'WD-A': { name: 'أ', id: 'WD-A', scanned: false }, 'WD-B': { name: 'ب', id: 'WD-B', scanned: false } }),
+    store: counterStore({ 'WD-A': { name: 'أ', id: 'WD-A', scanned: false }, 'WD-B': { name: 'ب', id: 'WD-B', scanned: false } }, 0),
   });
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
@@ -735,20 +744,45 @@ test('a successful scan updates the counter and the offline cache right away, on
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
   await expect(page.locator('#result-allowed')).toBeVisible();
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 / 2');
+  const ev = await page.evaluate(() => window.__fakeFirebase.store.events.e1);
+  expect(ev.scannedCount).toBe(1);
 
   await page.getByRole('button', { name: /عرض الأسماء/ }).click();
   await expect(page.locator('#offline-list-results')).toContainText('✓ دخل');
 });
 
-test('the guest list is read once, on open — a guest another device adds afterward does not change this device\'s total until it reopens', async ({ page }) => {
+test('the counter is a live document listener: a check-in from another device, or a guest the organizer just added, updates it here too', async ({ page }) => {
   await stubFirebase(page);
-  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore({ 'WD-A': { name: 'أ', id: 'WD-A', scanned: false } }) });
+  await seedFakeFirebase(page, { user: DEVICE, store: counterStore({ 'WD-A': { name: 'أ', id: 'WD-A', scanned: false } }, 0) });
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 1');
 
-  await page.evaluate(() => {
-    window.__fakeFirebase.store['events/e1/guests']['WD-C'] = { name: 'ج', id: 'WD-C', scanned: false };
+  // Another supervisor's device checks WD-A in — same shape as handleScan's
+  // own transaction, bumping both fields together.
+  await page.evaluate(async () => {
+    const { doc, updateDoc } = window._fsFns;
+    window.__fakeFirebase.store['events/e1/guests']['WD-A'].scanned = true;
+    await updateDoc(doc(window._db, 'events', 'e1'), { scannedCount: 1 });
   });
-  await page.waitForTimeout(300);
-  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 1');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 / 1');
+
+  // The organizer adds a second guest from the dashboard — bumps guestCount only.
+  await page.evaluate(async () => {
+    const { doc, updateDoc } = window._fsFns;
+    window.__fakeFirebase.store['events/e1/guests']['WD-C'] = { name: 'ج', id: 'WD-C', scanned: false };
+    await updateDoc(doc(window._db, 'events', 'e1'), { guestCount: 2 });
+  });
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 / 2');
+});
+
+test('a refresh button is pinned on screen at all times — loading, the code screen, and the scanner — for a PWA with no address bar', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  const btn = page.locator('#refresh-btn');
+  await expect(btn).toBeVisible();
+  await page.evaluate(() => { window.__beforeReload = true; });
+  await Promise.all([page.waitForEvent('load'), btn.click()]);
+  expect(await page.evaluate(() => window.__beforeReload)).toBeUndefined();
 });
