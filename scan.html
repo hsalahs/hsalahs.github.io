@@ -230,6 +230,7 @@ function applyEventTheme(name) {
   else document.body.removeAttribute('data-theme');
 }
 let guests = [];
+let eventUnsub = null;
 let qrScanner = null;
 let lastScanned = null;
 let scanCooldown = false;
@@ -399,6 +400,7 @@ function sessionRevoked() {
   const why = whyAccessLost();
   usesSessionDoc = false;
   stopSessionWatch();
+  if (eventUnsub) { eventUnsub(); eventUnsub = null; }
   if (qrScanner) {
     try { qrScanner.stop(); } catch (_) {}
     try { qrScanner.destroy(); } catch (_) {}
@@ -487,6 +489,7 @@ function showScanner() {
   // from the UI entirely.
   document.getElementById('lock-device-btn').style.display = 'block';
   loadGuestsOnce();
+  startEventCounterWatch();
   if (usesSessionDoc) startSessionWatch();
 }
 
@@ -500,6 +503,7 @@ async function lockDevice() {
   lockingDevice = true;
   usesSessionDoc = false;
   stopSessionWatch();
+  if (eventUnsub) { eventUnsub(); eventUnsub = null; }
   const user = window._auth.currentUser;
   if (user) {
     const { deleteDoc } = window._fsFns;
@@ -568,10 +572,31 @@ function renderOfflineList() {
   `).join('') || '<div class="sub" style="text-align:center; padding:16px 0;">ما فيه نتائج</div>';
 }
 
+// Driven by eventData (events/{id}.guestCount / .scannedCount, kept live by
+// startEventCounterWatch below) rather than the once-loaded `guests` array —
+// this is what makes the counter reflect every device's scans, and guests
+// the organizer adds after this scanner opened, without reading every guest.
 function updateScanCounter() {
-  const total = guests.length;
-  const scanned = guests.filter(g => g.scanned).length;
+  const total = eventData ? (eventData.guestCount || 0) : 0;
+  const scanned = eventData ? (eventData.scannedCount || 0) : 0;
   document.getElementById('scan-counter').textContent = 'تم الدخول: ' + scanned + ' / ' + total;
+}
+
+// One cheap document listener instead of reading every guest to compute the
+// count. Only the two counter fields are applied from it — the theme and
+// other event fields intentionally still only load once, when the page opens.
+function startEventCounterWatch() {
+  const { doc, onSnapshot } = window._fsFns;
+  if (eventUnsub) eventUnsub();
+  eventUnsub = onSnapshot(doc(window._db, 'events', eventId), (snap) => {
+    if (!snap.exists()) return;
+    const data = snap.data();
+    eventData.guestCount = data.guestCount;
+    eventData.scannedCount = data.scannedCount;
+    updateScanCounter();
+  }, (error) => {
+    console.error('event counter watch error:', error);
+  });
 }
 
 // Without this, a dropped connection looks identical to an empty/stale
@@ -817,6 +842,7 @@ async function handleScan(raw) {
   // so two devices scanning the same guest at once can't both win.
   const { doc, runTransaction } = window._fsFns;
   const gRef = doc(window._db, 'events', eventId, 'guests', val);
+  const eventRef = doc(window._db, 'events', eventId);
   let outcome, guestName;
   try {
     outcome = await runTransaction(window._db, async (tx) => {
@@ -824,7 +850,12 @@ async function handleScan(raw) {
       if (!snap.exists()) return 'missing';
       guestName = snap.data().name;
       if (snap.data().scanned) return 'dup';
+      // The live door counter (events/{id}.scannedCount) is bumped in this
+      // same transaction, so it can never drift from the guest flip it
+      // represents — see the matching rule in firestore.rules.
+      const evSnap = await tx.get(eventRef);
       tx.update(gRef, { scanned: true, scannedAt: new Date().toISOString() });
+      tx.update(eventRef, { scannedCount: (evSnap.data().scannedCount || 0) + 1 });
       return 'ok';
     });
   } catch (e) {
@@ -844,12 +875,12 @@ async function handleScan(raw) {
     status.textContent = '✅ مسموح بالدخول';
     playBeep(true);
     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    // The full list was only read once, at open — keep the counter and the
-    // offline name list in step with scans this device does afterward.
+    // The counter itself updates from startEventCounterWatch(), moments
+    // after this transaction commits. The name list was only read once, at
+    // open — keep its offline copy in step with scans this device does.
     const cached = guests.find(g => g.id === val);
     if (cached) cached.scanned = true;
     else guests.push({ docId: val, id: val, name: guestName, scanned: true });
-    updateScanCounter();
     cacheGuestsOffline();
   } else if (outcome === 'dup') {
     document.getElementById('result-name-dup').textContent = guestName;

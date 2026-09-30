@@ -164,6 +164,17 @@ service cloud.firestore {
           guestCountNotDecreased()
         )
       );
+
+      // The scanner's live door count: only from a device holding a valid
+      // session, only this one field, and only ever +1 — the same shape as
+      // the guests.scanned flip below. Written in the same transaction as
+      // that flip, so the two can never drift apart. This is what lets
+      // scan.html show a real-time count from a single cheap document
+      // listener instead of reading every guest to compute it.
+      allow update: if hasScanSession(eventId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scannedCount']) &&
+        request.resource.data.scannedCount == resource.data.get('scannedCount', 0) + 1;
+
       allow delete: if request.auth != null &&
         (isAdmin() || resource.data.ownerUid == request.auth.uid);
 
