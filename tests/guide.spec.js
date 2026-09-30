@@ -82,3 +82,16 @@ test('the event menu links to the guide', async ({ page }) => {
   await page.locator('.toolbar .icon-btn', { hasText: '☰' }).click();
   await expect(page.getByRole('button', { name: '📖 دليل الاستخدام' })).toBeVisible();
 });
+
+// The service is self-service: the person at the door is whoever the organizer
+// picks (a relative, a friend, someone from their team) — not "staff" on a shift.
+test('the door-day section talks about a door supervisor the organizer chooses, not employees or shifts', () => {
+  const src = read('guide.html');
+  for (const word of ['الموظف', 'الموظفين', 'موظف', 'دوام', 'فريق الأمن']) {
+    expect(src, 'the guide should not say "' + word + '"').not.toContain(word);
+  }
+  expect(src).toContain('مشرف الباب يفتح الرابط ويكتب الرقم اللي أعطيته له');
+  expect(src).toContain('قريب أو صديق أو أي أحد من فريقك');
+  // The safety note covers handing the phone to someone else, not only a shift ending.
+  expect(src).toContain('أو سلّمت جهازك لشخص ثاني');
+});
