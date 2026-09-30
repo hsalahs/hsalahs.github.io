@@ -237,3 +237,13 @@ test('cancelling an untouched form just closes it, and creating an event still w
   // A created event opens its own dashboard.
   await expect(page).toHaveURL(/event\.html\?id=/);
 });
+
+test('a refresh button forces a real reload — no address bar to pull down on, installed as a PWA', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: {} } });
+  await page.goto('/app.html');
+  await expect(page.locator('#app-view')).toBeVisible();
+  await page.evaluate(() => { window.__beforeReload = true; });
+  await Promise.all([page.waitForEvent('load'), page.getByTitle('تحديث الصفحة').click()]);
+  expect(await page.evaluate(() => window.__beforeReload)).toBeUndefined();
+});

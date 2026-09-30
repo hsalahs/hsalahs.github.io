@@ -774,3 +774,15 @@ test('the counter is a live document listener: a check-in from another device, o
   });
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 / 2');
 });
+
+test('a refresh button is pinned on screen at all times — loading, the code screen, and the scanner — for a PWA with no address bar', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  const btn = page.locator('#refresh-btn');
+  await expect(btn).toBeVisible();
+  await page.evaluate(() => { window.__beforeReload = true; });
+  await Promise.all([page.waitForEvent('load'), btn.click()]);
+  expect(await page.evaluate(() => window.__beforeReload)).toBeUndefined();
+});
