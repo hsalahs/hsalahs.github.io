@@ -363,11 +363,25 @@ function stopSessionWatch() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) verifySession(); });
 window.addEventListener('online', verifySession);
 
-// This device's session stopped being accepted mid-event — the organizer
-// generated a new code. Back to the code screen with a clear reason instead
-// of a misleading "connection lost" banner or a check-in that silently
-// never completes.
+// Why did this device just lose access? Two very different causes used to
+// show the same "the code changed" message:
+//  - 'signedout': the account this device was signed in with is gone. Sign-in
+//    is shared by every tab of ONE browser (never between two phones), so the
+//    organizer pressing "خروج" on the dashboard in another tab of the same
+//    browser signs this scanner tab out too;
+//  - 'code': the identity is still here but its session is refused — the
+//    organizer generated a new door code;
+//  - 'access': signed in as the organizer/admin, yet not allowed.
+function whyAccessLost() {
+  if (!window._auth.currentUser) return 'signedout';
+  return usesSessionDoc ? 'code' : 'access';
+}
+
+// This device stopped being accepted mid-event. Back to the code screen with
+// the real reason instead of a misleading "connection lost" banner, a
+// check-in that silently never completes, or a wrong "code changed" message.
 function sessionRevoked() {
+  const why = whyAccessLost();
   usesSessionDoc = false;
   stopSessionWatch();
   if (guestsUnsub) { guestsUnsub(); guestsUnsub = null; }
@@ -381,7 +395,23 @@ function sessionRevoked() {
   document.getElementById('pin-input').value = '';
   document.getElementById('pin-gate').style.display = 'block';
   document.getElementById('pin-event-name').textContent = eventData ? eventData.name : '';
-  showPinError('🔒 تغيّر كود الدخول — أدخل الكود الجديد');
+  showPinError(why === 'code' ? '🔒 تغيّر كود الدخول — أدخل الكود الجديد'
+    : why === 'signedout' ? '🔓 تم تسجيل الخروج من الحساب على هذا الجهاز — أدخل رقم الدخول للمتابعة'
+    : '🔒 ما عاد عندك صلاحية على هذا الجهاز — أدخل رقم الدخول للمتابعة');
+}
+
+// Notices the sign-out itself, the moment it happens in another tab of this
+// browser, instead of waiting for Firestore to start refusing reads.
+// (lockDevice() signs out on purpose and shows the code screen itself.)
+let lockingDevice = false;
+function watchSignOut(initialUser) {
+  let hadUser = !!initialUser;
+  window._authFns.onAuthStateChanged(window._auth, (user) => {
+    if (user) { hadUser = true; return; }
+    const scannerShowing = document.getElementById('scanner-view').style.display === 'block';
+    if (hadUser && !lockingDevice && scannerShowing) sessionRevoked();
+    hadUser = false;
+  });
 }
 
 function showAdminLogin() {
@@ -453,6 +483,7 @@ function showScanner() {
 // access this device could have: its proven-code session doc, and whatever
 // identity it's signed in with (anonymous, admin, or owner).
 async function lockDevice() {
+  lockingDevice = true;
   usesSessionDoc = false;
   stopSessionWatch();
   if (guestsUnsub) { guestsUnsub(); guestsUnsub = null; }
@@ -467,6 +498,7 @@ async function lockDevice() {
   document.getElementById('pin-err').style.display = 'none';
   document.getElementById('pin-gate').style.display = 'block';
   hideAdminLogin();
+  lockingDevice = false;
 }
 
 function offlineCacheKey() { return 'scan_offline_cache_' + eventId; }
@@ -650,6 +682,7 @@ async function init() {
 
   const user = await waitForAuth();
   document.getElementById('loading-msg').style.display = 'none';
+  watchSignOut(user);
 
   if (isAdmin(user)) {
     showScanner();
