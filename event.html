@@ -211,7 +211,7 @@ setTimeout(() => {
       <div class="dropdown-menu" id="top-menu" style="display:none;">
         <button onclick="closeTopMenu(); openRequestsModal();" style="display:flex; align-items:center; justify-content:space-between;">📥 الطلبات<span class="badge-count" id="requests-badge" style="display:none;">0</span></button>
         <button id="notif-toggle-btn" onclick="closeTopMenu(); toggleRequestNotifications();">🔔 تفعيل إشعارات الطلبات</button>
-        <button onclick="closeTopMenu(); document.getElementById('csv-import').click();">📂 استيراد قائمة (CSV / أسماء)</button>
+        <button onclick="closeTopMenu(); document.getElementById('csv-import').click();">📂 استيراد قائمة (Excel / CSV / أسماء)</button>
         <button onclick="closeTopMenu(); addSequentialNumbers();">🔢 إضافة أرقام متسلسلة (مثال: 1–200)</button>
         <button onclick="closeTopMenu(); downloadAllCards();">📦 تحميل كل الدعوات (ZIP)</button>
         <button onclick="closeTopMenu(); askRangeDownload();">📥 تحميل نطاق معيّن (مثال: 1–100)</button>
@@ -299,7 +299,7 @@ setTimeout(() => {
           <input type="text" id="new-guest-name" placeholder="اسم ضيف جديد">
           <button class="btn" style="width:auto; margin:0; padding:13px 22px;" onclick="addGuest()">إضافة</button>
         </div>
-        <input type="file" id="csv-import" accept=".csv,.txt" style="display:none" onchange="importCSV(event)">
+        <input type="file" id="csv-import" accept=".xlsx,.csv,.txt" style="display:none" onchange="importCSV(event)">
       </div>
       <div class="card">
         <input type="text" id="guest-search" placeholder="🔍 بحث بالاسم" oninput="searchGuests()" style="margin:0;">
@@ -327,6 +327,7 @@ setTimeout(() => {
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="utils.js"></script>
 <script src="format.js"></script>
+<script src="xlsx-names.js"></script>
 <script>
 // ADMIN_EMAILS/isAdmin, FREE_GUEST_LIMIT, EMAILJS_*/notifyAdmin, and
 // showToast now live in utils.js (shared with app.html and scan.html) —
@@ -1458,7 +1459,8 @@ async function importGuestNames(names) {
     });
     added += addedThisBatch;
     if (total > batchSize) showToast('⏳ جاري الإضافة... ' + Math.min(added, total) + ' / ' + total);
-    if (addedThisBatch < batch.length) { blockedByGate += (batch.length - addedThisBatch); break; }
+    // Everything not yet written is left out — this batch's remainder AND every later batch.
+    if (addedThisBatch < batch.length) { blockedByGate = total - added; break; }
   }
 
   let msg = 'تم استيراد ' + added + ' ضيف' + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' مكرر)' : '');
@@ -1471,6 +1473,14 @@ async function importCSV(evt) {
   if (paymentGateActive()) { openPaymentWhatsapp(); evt.target.value = ''; return; }
   const file = evt.target.files[0];
   if (!file) return;
+
+  // Excel workbook: read the names out of its first sheet.
+  if (/\.xlsx$/i.test(file.name)) { await importXlsx(file); return; }
+  if (/\.xls$/i.test(file.name)) {
+    alert('ملفات Excel القديمة (.xls) غير مدعومة. افتح الملف واحفظه باسم جديد بصيغة .xlsx (Excel ← حفظ باسم) أو CSV، وارفعه مرة ثانية.');
+    evt.target.value = '';
+    return;
+  }
 
   const reader = new FileReader();
   reader.onload = async (e) => {
@@ -1504,6 +1514,22 @@ async function importCSV(evt) {
     }
   };
   reader.readAsText(file);
+}
+
+async function importXlsx(file) {
+  const input = document.getElementById('csv-import');
+  try {
+    const names = await readXlsxNames(await file.arrayBuffer());
+    if (names.length === 0) { alert('ما لقينا أي أسماء صالحة بالملف'); return; }
+    await importGuestNames(names);
+  } catch (e) {
+    if (e.message === 'NO_ZIP') alert('تعذّر تحميل أداة قراءة Excel. تأكد من الاتصال بالإنترنت وحدّث الصفحة، أو استخدم ملف CSV.');
+    else if (e.message === 'TOO_BIG') alert('ملف Excel كبير جدًا (الحد 5 ميجا). قسّمه على أكثر من ملف.');
+    else if (e.message === 'BAD_XLSX') alert('ما قدرنا نقرأ ملف Excel هذا. احفظه من جديد بصيغة .xlsx أو CSV وجرّب مرة ثانية.');
+    else showErr(e);
+  } finally {
+    input.value = '';
+  }
 }
 
 // For events that don't need named invitations — just N numbered entries
