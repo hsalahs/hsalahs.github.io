@@ -192,3 +192,48 @@ test('the events list shows each event date as words with Western digits', async
   await page.goto('/app.html');
   await expect(page.locator('.event-date').first()).toContainText('الخميس 29 أكتوبر 2026');
 });
+
+test('the new-event form has a cancel button that closes it and clears what was typed, without creating anything', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: {} } });
+  let dialogs = 0;
+  page.on('dialog', (d) => { dialogs++; d.accept(); });
+  await page.goto('/app.html');
+  await page.locator('#create-toggle-btn').click();
+  await expect(page.locator('#create-form')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'إنشاء', exact: true })).toBeVisible();
+  await expect(page.locator('#create-cancel-btn')).toHaveText('إلغاء');
+
+  await page.locator('#ev-name').fill('عرس تجريبي');
+  await page.locator('#ev-date').fill('2026-12-01');
+  await page.locator('#ev-venue').fill('الرياض');
+  await page.locator('#ev-maps').fill('https://maps.example.com/x');
+  await page.locator('#create-cancel-btn').click();
+
+  await expect(page.locator('#create-form')).toBeHidden();
+  await expect(page.locator('#create-toggle-btn')).toBeVisible();
+  expect(dialogs).toBe(0);                       // cancelling is silent: no "write the name" alert
+  const store = await page.evaluate(() => window.__fakeFirebase.store);
+  expect(Object.keys(store.events || {})).toHaveLength(0);
+  expect(store.accountLimits).toBeUndefined();  // nothing was counted against the customer's limit
+
+  // Reopening shows an empty form.
+  await page.locator('#create-toggle-btn').click();
+  for (const id of ['ev-name', 'ev-date', 'ev-venue', 'ev-maps']) await expect(page.locator('#' + id)).toHaveValue('');
+});
+
+test('cancelling an untouched form just closes it, and creating an event still works afterwards', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: {} } });
+  page.on('dialog', (d) => d.accept());
+  await page.goto('/app.html');
+  await page.locator('#create-toggle-btn').click();
+  await page.locator('#create-cancel-btn').click();
+  await expect(page.locator('#create-form')).toBeHidden();
+
+  await page.locator('#create-toggle-btn').click();
+  await page.locator('#ev-name').fill('عرس حقيقي');
+  await page.getByRole('button', { name: 'إنشاء', exact: true }).click();
+  // A created event opens its own dashboard.
+  await expect(page).toHaveURL(/event\.html\?id=/);
+});
