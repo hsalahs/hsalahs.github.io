@@ -624,3 +624,82 @@ test('a scanner tab that was never signed in is not disturbed by other tabs sign
   await expect(page.locator('#pin-gate')).toBeVisible();
   await expect(page.locator('#pin-err')).toBeHidden();
 });
+
+// ---- the scanner follows the event's colour theme (accents only) ----
+
+const fs = require('fs');
+const path = require('path');
+const rgb = (hex) => { const n = parseInt(hex.slice(1), 16); return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`; };
+
+async function openScanner(page, theme, { unlocked = false } = {}) {
+  await stubFirebase(page);
+  const store = unlocked ? unlockedStore() : { events: { e1: { ...EVENT, theme } }, 'events/e1/guests': {} };
+  if (unlocked) store.events.e1 = { ...EVENT, theme };
+  await seedFakeFirebase(page, unlocked ? { user: DEVICE, store } : { store });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator(unlocked ? '#scanner-view' : '#pin-gate')).toBeVisible();
+}
+const look = (page) => page.evaluate(() => ({
+  bg: getComputedStyle(document.body).backgroundColor,
+  title: getComputedStyle(document.querySelector('h1')).color,
+  attr: document.body.getAttribute('data-theme'),
+}));
+
+const SCAN_LOOKS = {
+  rose:     { title: '#E8B4B8', bg: '#14090C' },
+  emerald:  { title: '#D4AF7F', bg: '#07120E' },
+  sapphire: { title: '#B8C6E0', bg: '#080C16' },
+  gold:     { title: '#E0BC7A', bg: '#0A0A0A' },
+  ivory:    { title: '#E0BC7A', bg: '#0A0A0A' },   // the light theme stays dark and gold here
+};
+for (const [theme, want] of Object.entries(SCAN_LOOKS)) {
+  test(`the code screen follows the "${theme}" theme`, async ({ page }) => {
+    await openScanner(page, theme);
+    const got = await look(page);
+    expect(got.title).toBe(rgb(want.title));
+    expect(got.bg).toBe(rgb(want.bg));
+  });
+}
+
+test('an unlocked scanner follows the theme too: buttons and frame take the accent', async ({ page }) => {
+  await openScanner(page, 'rose', { unlocked: true });
+  const btn = await page.evaluate(() => getComputedStyle(document.querySelector('.btn')).backgroundImage);
+  expect(btn).toContain(rgb('#C9879A'));
+  expect(btn).toContain(rgb('#E8B4B8'));
+  expect(btn).not.toContain(rgb('#E0BC7A'));
+});
+
+test('an unknown or missing theme falls back to the default gold, never to a broken page', async ({ page }) => {
+  for (const theme of [undefined, 'neon', '"><x', '']) {
+    await openScanner(page, theme);
+    const got = await look(page);
+    expect(got.attr).toBeNull();
+    expect(got.title).toBe(rgb('#E0BC7A'));
+  }
+});
+
+test('whatever the theme, the scanner page is dark and the result colours stay green and red', async ({ page }) => {
+  for (const theme of Object.keys(SCAN_LOOKS)) {
+    await openScanner(page, theme);
+    const c = await page.evaluate(() => {
+      const [r, g, b] = getComputedStyle(document.body).backgroundColor.match(/\d+/g).map(Number);
+      const css = (sel) => { const el = document.querySelector(sel); return el ? getComputedStyle(el).borderColor : null; };
+      return { lum: (r + g + b) / 3, allowed: css('#result-allowed'), dup: css('#result-duplicate') };
+    });
+    expect(c.lum).toBeLessThan(30);
+    expect(c.allowed).toBe('rgba(76, 175, 80, 0.3)');
+    expect(c.dup).toBe('rgba(244, 67, 54, 0.3)');
+  }
+});
+
+test('the scanner uses the very same accent colours as the dashboard for each theme', async () => {
+  const ev = fs.readFileSync(path.join(__dirname, '..', 'event.html'), 'utf8');
+  const sc = fs.readFileSync(path.join(__dirname, '..', 'scan.html'), 'utf8');
+  for (const t of ['rose', 'emerald', 'sapphire']) {
+    const grab = (src) => {
+      const m = new RegExp('\\[data-theme="' + t + '"\\]\\s*\\{([^}]*)\\}').exec(src)[1];
+      return ['--gold', '--gold-deep', '--accent-rgb', '--bg-base'].map(k => new RegExp(k + ':([^;]+);').exec(m)[1].trim());
+    };
+    expect(grab(sc)).toEqual(grab(ev));
+  }
+});
