@@ -123,7 +123,13 @@
   .step-text h3 { font-size:14.5px; margin-bottom:3px; color:#FAF8F4; }
   .step-text p { font-size:12.5px; color:#8a857a; line-height:1.7; }
 
-  .features { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; }
+  /* One column on phones and tablets; three columns (3x2) on large screens, where
+     the grid steps out of the 520px page column to give each card room. The
+     equal negative side margins centre it in both text directions. */
+  .features { display:grid; grid-template-columns:1fr; gap:12px; margin-top:10px; }
+  @media (min-width:900px) {
+    .features { grid-template-columns:repeat(3, 1fr); width:880px; margin-inline:calc((100% - 880px) / 2); }
+  }
   .feature { background:rgba(255,255,255,0.03); border:1px solid rgba(224,188,122,0.15); border-radius:14px; padding:18px 14px; text-align:center; }
   .feature .f-icon { font-size:26px; margin-bottom:8px; }
   .feature h4 { font-size:13px; margin-bottom:4px; color:#FAF8F4; }
@@ -219,24 +225,34 @@ setTimeout(() => {
   <div class="section-sub">كل اللي تحتاجه، بدون تطبيق أو طباعة</div>
   <div class="features">
     <div class="feature">
-      <div class="f-icon">🎟️</div>
-      <h4>بطاقة مصممة</h4>
-      <p>بطاقة دعوة أنيقة لكل ضيف، جاهزة للحفظ أو المشاركة</p>
+      <div class="f-icon">⚡</div>
+      <h4>خدمة ذاتية وفورية</h4>
+      <p>أنشئ مناسبتك، خصّص بطاقتك، وخذ رابط الدعوة خلال دقيقتين بدون انتظار رد خدمة العملاء.</p>
     </div>
     <div class="feature">
       <div class="f-icon">📱</div>
-      <h4>سكانر من جوالك</h4>
-      <p>ما تحتاج جهاز خاص — الكاميرا العادية تكفي</p>
+      <h4>بدون تطبيقات أو تحميل</h4>
+      <p>المسح يتم عبر كاميرا الجوال مباشرة من المتصفح، لا تحتاج أنت أو ضيوفك لتنزيل أي تطبيق.</p>
     </div>
     <div class="feature">
-      <div class="f-icon">⚡</div>
-      <h4>تحديث لحظي</h4>
-      <p>تشوف الحضور يتحدّث أمامك أول بأول</p>
+      <div class="f-icon">🎁</div>
+      <h4>تجربة مجانية بالكامل</h4>
+      <p>جرّب النظام بجميع مميزاته حتى 5 ضيوف مجانًا، واختبر المسح بنفسك قبل دفع أي ريال.</p>
+    </div>
+    <div class="feature">
+      <div class="f-icon">🎟️</div>
+      <h4>بطاقة مصممة لكل ضيف</h4>
+      <p>بطاقة دعوة أنيقة ومخصصة مع باركود فردي، قابلة للحفظ والمشاركة.</p>
+    </div>
+    <div class="feature">
+      <div class="f-icon">📊</div>
+      <h4>تحديث وإحصائيات لحظية</h4>
+      <p>تتابع عدد من حضر ومن لم يحضر لحظة بلحظة، ويُمنع الدخول المكرر تلقائيًا.</p>
     </div>
     <div class="feature">
       <div class="f-icon">🔒</div>
-      <h4>بياناتك خاصة</h4>
-      <p>كل مناسبة معزولة تمامًا، ماحد يشوف بياناتك غيرك</p>
+      <h4>بياناتك خاصة وآمنة</h4>
+      <p>كل مناسبة معزولة تمامًا، ولا يطّلع على قائمة ضيوفك إلا أنت ومن تعطيه رمز الباب.</p>
     </div>
   </div>
 
