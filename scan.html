@@ -584,23 +584,29 @@ function renderOfflineList() {
 // startEventCounterWatch below) rather than the once-loaded `guests` array —
 // this is what makes the counter reflect every device's scans, and guests
 // the organizer adds after this scanner opened, without reading every guest.
+// Total comes from the once-loaded guests array, NOT events/{id}.guestCount:
+// guestCount is a cap-usage counter (bumped on add, deliberately never
+// decreased — deleteGuest() in event.html doesn't touch it, so it drifts
+// upward of the real guest count as soon as anyone deletes a guest — an
+// event that had 8 added and 5 deleted shows guestCount:8 forever, while
+// the dashboard's own "كل الضيوف" already correctly reads guests.length for
+// exactly this reason). scannedCount has no such history: it's a new field
+// this scanner itself is the only writer of, so it's safe to trust live.
 function updateScanCounter() {
-  const total = eventData ? (eventData.guestCount || 0) : 0;
+  const total = guests.length;
   const scanned = eventData ? (eventData.scannedCount || 0) : 0;
   document.getElementById('scan-counter').textContent = 'تم الدخول: ' + scanned + ' / ' + total;
 }
 
 // One cheap document listener instead of reading every guest to compute the
-// count. Only the two counter fields are applied from it — the theme and
-// other event fields intentionally still only load once, when the page opens.
+// scanned count. Only that field is applied from it — the theme and other
+// event fields intentionally still only load once, when the page opens.
 function startEventCounterWatch() {
   const { doc, onSnapshot } = window._fsFns;
   if (eventUnsub) eventUnsub();
   eventUnsub = onSnapshot(doc(window._db, 'events', eventId), (snap) => {
     if (!snap.exists()) return;
-    const data = snap.data();
-    eventData.guestCount = data.guestCount;
-    eventData.scannedCount = data.scannedCount;
+    eventData.scannedCount = snap.data().scannedCount;
     updateScanCounter();
   }, (error) => {
     console.error('event counter watch error:', error);
