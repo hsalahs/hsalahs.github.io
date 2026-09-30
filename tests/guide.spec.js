@@ -112,3 +112,20 @@ test('no page, script or manifest says "فريق الأمن" or "لوحة تحك
   expect(read('scan.html')).toContain('<div class="sub">سكانر الدخول</div>');
   expect(read('app.html')).toContain('لوحة تحكم المنظّم — أنشئ دعوة رقمية لمناسبتك');
 });
+
+// The guide says what a colour change touches. Tie each claim to the code: the
+// card's accents follow the event's colour, the barcode itself never does.
+test('the guide explains what changing the colour changes, and the code really behaves that way', () => {
+  const guide = read('guide.html');
+  expect(guide).toContain('ماذا يتغيّر مع اللون؟');
+  expect(guide).toContain('الباركود نفسه</b> فيبقى دايمًا أسود على خلفية فاتحة');
+  expect(guide).toContain('البطاقات اللي حفظتها أو أرسلتها قبل تغيير اللون تبقى بلونها القديم');
+  for (const f of ['event.html', 'invite.html']) {
+    const src = read(f);
+    // The card's accents come from the event's theme…
+    expect(src, f).toMatch(/THEME_COLORS\[eventData\.theme \|\| 'gold'\]/);
+    // …but the barcode is always dark ink on a light ground, whatever the theme.
+    expect(src, f).toContain("colorDark: '#0A0A0A'");
+    expect(src, f).toContain("colorLight: '#FAFAF8'");
+  }
+});
