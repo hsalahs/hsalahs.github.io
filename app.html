@@ -146,7 +146,10 @@ setTimeout(() => {
       <input type="date" id="ev-date" placeholder="التاريخ">
       <input type="text" id="ev-venue" placeholder="مكان الحفل">
       <input type="text" id="ev-maps" placeholder="رابط الموقع على الخريطة (اختياري)">
-      <button class="btn" onclick="createNewEvent()">إنشاء</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn" style="flex:2" onclick="createNewEvent()">إنشاء</button>
+        <button class="btn ghost" id="create-cancel-btn" style="flex:1" onclick="cancelCreateForm()">إلغاء</button>
+      </div>
     </div>
 
     <div id="events-list"></div>
@@ -229,6 +232,13 @@ function doLogout() {
 function showCreateForm() {
   const f = document.getElementById('create-form');
   f.style.display = f.style.display === 'block' ? 'none' : 'block';
+}
+
+// Changed your mind: close the form and forget what was typed, so it opens
+// empty next time. Nothing is created.
+function cancelCreateForm() {
+  ['ev-name', 'ev-date', 'ev-venue', 'ev-maps'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('create-form').style.display = 'none';
 }
 
 function newEventId() {
