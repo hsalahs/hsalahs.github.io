@@ -301,7 +301,7 @@ function renderEvents(events, showOwner) {
     <div class="card event-card">
       <div class="event-card-top">
         <div>
-          <div class="event-name">${escapeHtml(ev.name)} ${ev.paid ? '<span style="color:#4CAF50; font-size:11px;">✅ مفعّلة</span>' : '<span style="color:#E5484D; font-size:11px;">🔒 غير مفعّلة</span>'}</div>
+          <div class="event-name">${escapeHtml(ev.name)} ${ev.paid ? '<span style="color:#4CAF50; font-size:11px;">✅ مفعّلة' + (typeof ev.guestLimit === 'number' ? ' (' + ev.guestLimit + ' ضيف)' : '') + '</span>' : '<span style="color:#E5484D; font-size:11px;">🔒 غير مفعّلة</span>'}</div>
           <div class="event-date">${formatEventDate(ev.date)}${ev.venue ? ' · ' + escapeHtml(ev.venue) : ''}</div>
           ${showOwner ? `<div class="event-date">👤 ${escapeHtml(ev.ownerEmail || ev.ownerUid || '')}</div>` : ''}
         </div>
@@ -469,6 +469,7 @@ async function selfIncreaseLimit() {
 // dashboard, and only toast for ones that cross the line while they're
 // actually watching.
 let knownCappedEventIds = null;
+let allEvents = [];
 
 function watchEvents(user) {
   const { query, where, onSnapshot } = window._fsFns;
@@ -477,6 +478,7 @@ function watchEvents(user) {
   const q = admin ? window._eventsCol : query(window._eventsCol, where('ownerUid', '==', user.uid));
   eventsUnsub = onSnapshot(q, (snap) => {
     const events = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    allEvents = events;
     events.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
     myEventsCount = admin ? events.filter(ev => ev.ownerUid === user.uid).length : events.length;
     updateCreateGate(admin);
@@ -488,15 +490,16 @@ function watchEvents(user) {
   });
 }
 
-// Live, in-page alert the moment ANY customer's event crosses the free
-// -guest cap while the admin happens to have this dashboard open — on top
-// of the email notification, for whenever they're already looking at it.
+// Live, in-page alert the moment ANY customer's event reaches its guest
+// limit (the free 5, or the number the admin set) while the admin happens to
+// have this dashboard open — on top of the email notification, for whenever
+// they're already looking at it.
 function checkNewlyCappedEvents(events) {
-  const capped = new Set(events.filter(ev => !ev.paid && (ev.guestCount || 0) >= FREE_GUEST_LIMIT).map(ev => ev.id));
+  const capped = new Set(events.filter(ev => (ev.guestCount || 0) >= guestCapOf(ev)).map(ev => ev.id));
   if (knownCappedEventIds) {
     events.forEach(ev => {
       if (capped.has(ev.id) && !knownCappedEventIds.has(ev.id)) {
-        showToast('💰 مناسبة "' + ev.name + '" وصلت لحد الضيوف المجانيين — جاهزة للدفع');
+        showToast('🔔 مناسبة "' + ev.name + '" وصلت لحد الضيوف (' + guestCapOf(ev) + ') — بانتظار التواصل');
       }
     });
   } else if (capped.size > 0) {
@@ -505,7 +508,7 @@ function checkNewlyCappedEvents(events) {
     // for), but a fresh page load with pending, ready-to-pay events is worth
     // one quiet nudge too — otherwise an admin who opens the dashboard AFTER
     // the cap was hit gets no live signal at all, only the earlier email.
-    showToast('🔔 يوجد ' + capped.size + ' مناسبة غير مدفوعة وصلت لحد الضيوف المجانيين — جاهزة للدفع');
+    showToast('🔔 يوجد ' + capped.size + ' مناسبة وصلت لحد الضيوف — بانتظار التواصل');
   }
   knownCappedEventIds = capped;
 }
@@ -523,11 +526,15 @@ function renderUnpaidEvents(events) {
   document.getElementById('admin-unpaid-badge').textContent = unpaid.length > 99 ? '99+' : String(unpaid.length);
 }
 
+// Activating means typing the number of guests the customer is allowed
+// (agreed with them off-platform) — there is no activation without a number.
 async function quickActivatePayment(eventId) {
-  if (!confirm('هل تأكدت إن العميل حوّل المبلغ فعليًا؟')) return;
+  const ev = allEvents.find(e => e.id === eventId);
+  const n = askGuestLimit({ name: ev ? ev.name : '', current: null, activated: false, guestCount: ev ? (ev.guestCount || 0) : 0 });
+  if (n === null) return;
   const { doc, updateDoc } = window._fsFns;
   try {
-    await updateDoc(doc(window._db, 'events', eventId), { paid: true });
+    await updateDoc(doc(window._db, 'events', eventId), { paid: true, guestLimit: n });
   } catch (e) {
     alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
     console.error(e);
