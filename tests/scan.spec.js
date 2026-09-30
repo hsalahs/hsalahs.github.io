@@ -751,7 +751,7 @@ test('a successful scan updates the counter and the offline cache right away', a
   await expect(page.locator('#offline-list-results')).toContainText('✓ دخل');
 });
 
-test('the counter is a live document listener: a check-in from another device, or a guest the organizer just added, updates it here too', async ({ page }) => {
+test('the scanned count is a live document listener: a check-in from another device updates it here too', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { user: DEVICE, store: counterStore({ 'WD-A': { name: 'أ', id: 'WD-A', scanned: false } }, 0) });
   await page.goto('/scan.html?event=e1');
@@ -765,14 +765,35 @@ test('the counter is a live document listener: a check-in from another device, o
     await updateDoc(doc(window._db, 'events', 'e1'), { scannedCount: 1 });
   });
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 / 1');
+});
 
-  // The organizer adds a second guest from the dashboard — bumps guestCount only.
-  await page.evaluate(async () => {
-    const { doc, updateDoc } = window._fsFns;
-    window.__fakeFirebase.store['events/e1/guests']['WD-C'] = { name: 'ج', id: 'WD-C', scanned: false };
-    await updateDoc(doc(window._db, 'events', 'e1'), { guestCount: 2 });
+test('the total ignores events/{id}.guestCount — that field only ever goes up (it survives guest deletes) and would overstate a real event\'s guest count', async ({ page }) => {
+  await stubFirebase(page);
+  // A real-world shape: 3 guests exist, but guestCount was never decreased
+  // by earlier deletes (deleteGuest() in event.html doesn't touch it), so
+  // it sits stuck at a stale, higher number — exactly what surfaced this.
+  const store = unlockedStore({
+    'WD-A': { name: 'أ', id: 'WD-A', scanned: false },
+    'WD-B': { name: 'ب', id: 'WD-B', scanned: false },
+    'WD-C': { name: 'ج', id: 'WD-C', scanned: false },
   });
-  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 / 2');
+  store.events.e1.guestCount = 8;
+  await seedFakeFirebase(page, { user: DEVICE, store });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 3');
+});
+
+test('the total is read once, on open — a guest the organizer adds afterward does not change it until this scanner reopens', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: counterStore({ 'WD-A': { name: 'أ', id: 'WD-A', scanned: false } }, 0) });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 1');
+
+  await page.evaluate(() => {
+    window.__fakeFirebase.store['events/e1/guests']['WD-C'] = { name: 'ج', id: 'WD-C', scanned: false };
+  });
+  await page.waitForTimeout(300);
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 1');
 });
 
 test('a refresh button is pinned on screen at all times — loading, the code screen, and the scanner — for a PWA with no address bar', async ({ page }) => {
@@ -785,4 +806,24 @@ test('a refresh button is pinned on screen at all times — loading, the code sc
   await page.evaluate(() => { window.__beforeReload = true; });
   await Promise.all([page.waitForEvent('load'), btn.click()]);
   expect(await page.evaluate(() => window.__beforeReload)).toBeUndefined();
+});
+
+test('the offline name list is sorted (numbers by value, then Arabic alphabetically) — not by arrival order or scanned status', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: DEVICE,
+    store: unlockedStore({
+      'WD-4': { name: '4', id: 'WD-4', scanned: false },
+      'WD-5': { name: '5', id: 'WD-5', scanned: false },
+      'WD-2': { name: '2', id: 'WD-2', scanned: false },
+      'WD-1': { name: '1', id: 'WD-1', scanned: true },
+      'WD-3': { name: '3', id: 'WD-3', scanned: false },
+    }),
+  });
+  await page.goto('/scan.html?event=e1');
+  await page.locator('#offline-list-btn').click();
+  const names = await page.locator('#offline-list-results span').evaluateAll(
+    spans => spans.filter((_, i) => i % 2 === 0).map(s => s.textContent)
+  );
+  expect(names).toEqual(['1', '2', '3', '4', '5']);
 });

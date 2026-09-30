@@ -836,16 +836,7 @@ function visibleGuests() {
     list = list.filter(g => g.name.toLowerCase().includes(q));
   }
 
-  // Numeric names (like "1", "2", "150") sort by value first, in order;
-  // then everyone else sorts alphabetically after them.
-  return [...list].sort((a, b) => {
-    const aNum = /^\d+$/.test(a.name.trim());
-    const bNum = /^\d+$/.test(b.name.trim());
-    if (aNum && bNum) return parseInt(a.name, 10) - parseInt(b.name, 10);
-    if (aNum) return -1;
-    if (bNum) return 1;
-    return a.name.localeCompare(b.name, 'ar');
-  });
+  return sortGuestsByName(list);
 }
 
 function updateStats() {
