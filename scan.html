@@ -35,32 +35,40 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh; }
+  /* The event's colour theme, followed by the accents only. The page stays
+     dark whatever the theme (ivory included): this is the screen door staff
+     hold in a dim hall, and a white one would dazzle. The green/red result
+     colours never change. Same accent values as event.html's palettes. */
+  :root { --gold:#E0BC7A; --gold-deep:#C99B4A; --accent-rgb:224,188,122; --bg-base:#0A0A0A; }
+  [data-theme="rose"] { --gold:#E8B4B8; --gold-deep:#C9879A; --accent-rgb:232,180,184; --bg-base:#14090C; }
+  [data-theme="emerald"] { --gold:#D4AF7F; --gold-deep:#B08D57; --accent-rgb:212,175,127; --bg-base:#07120E; }
+  [data-theme="sapphire"] { --gold:#B8C6E0; --gold-deep:#8A9DC9; --accent-rgb:184,198,224; --bg-base:#080C16; }
+  body { font-family:'Tajawal',sans-serif; background:var(--bg-base); color:#FAF8F4; min-height:100vh; }
   .wrap { max-width:420px; margin:0 auto; padding:24px 18px 60px; }
   .msg { text-align:center; padding:60px 20px; color:#B8B4AC; }
-  h1 { font-family:'Playfair Display',serif; color:#E0BC7A; font-size:20px; text-align:center; margin-bottom:4px; }
+  h1 { font-family:'Playfair Display',serif; color:var(--gold); font-size:20px; text-align:center; margin-bottom:4px; }
   .sub { color:#B8B4AC; font-size:12px; text-align:center; margin-bottom:22px; }
-  .card { background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.2); border-radius:14px; padding:20px; text-align:center; }
-  input { width:100%; padding:14px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:20px; font-family:inherit; text-align:center; letter-spacing:6px; }
+  .card { background:rgba(255,255,255,0.04); border:1px solid rgba(var(--accent-rgb),0.2); border-radius:14px; padding:20px; text-align:center; }
+  input { width:100%; padding:14px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(var(--accent-rgb),0.25); color:#FAF8F4; font-size:20px; font-family:inherit; text-align:center; letter-spacing:6px; }
   /* The default input above is tuned for the door code (big, spaced-out
      digits) — wrong shape entirely for an email/password field. */
   input.text-input { font-size:15px; letter-spacing:normal; text-align:right; }
-  .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
-  .btn.ghost { width:100%; background:transparent; border:1px solid rgba(224,188,122,0.3); color:#E0BC7A; }
+  .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
+  .btn.ghost { width:100%; background:transparent; border:1px solid rgba(var(--accent-rgb),0.3); color:var(--gold); }
   .toggle-row { text-align:center; font-size:13px; color:#B8B4AC; margin-top:14px; }
-  .toggle-row a { color:#E0BC7A; cursor:pointer; text-decoration:underline; }
-  .counter { text-align:center; color:#E0BC7A; font-size:15px; font-weight:700; margin-bottom:14px; }
+  .toggle-row a { color:var(--gold); cursor:pointer; text-decoration:underline; }
+  .counter { text-align:center; color:var(--gold); font-size:15px; font-weight:700; margin-bottom:14px; }
   .manual-divider { display:flex; align-items:center; gap:10px; color:#6f6a62; font-size:12px; margin:16px 0 12px; }
-  .manual-divider::before, .manual-divider::after { content:''; flex:1; height:1px; background:rgba(224,188,122,0.2); }
+  .manual-divider::before, .manual-divider::after { content:''; flex:1; height:1px; background:rgba(var(--accent-rgb),0.2); }
   .manual-row { display:flex; gap:8px; align-items:stretch; }
   .manual-row input { flex:1; }
   .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; display:none; }
   .camera-status { font-size:13px; color:#B8B4AC; margin-bottom:14px; text-align:center; }
-  #camera-wrapper { position:relative; width:100%; max-width:320px; margin:0 auto; aspect-ratio:1; border-radius:16px; overflow:hidden; border:2px solid #E0BC7A; background:#000; }
+  #camera-wrapper { position:relative; width:100%; max-width:320px; margin:0 auto; aspect-ratio:1; border-radius:16px; overflow:hidden; border:2px solid var(--gold); background:#000; }
   #camera-video { width:100%; height:100%; object-fit:cover; display:block; }
   .scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-  .scan-frame { width:65%; height:65%; border:2px solid #E0BC7A; border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,0.45); }
-  .scan-line { position:absolute; width:65%; height:2px; background:linear-gradient(90deg,transparent,#E0BC7A,transparent); animation:scanLine 2s linear infinite; }
+  .scan-frame { width:65%; height:65%; border:2px solid var(--gold); border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,0.45); }
+  .scan-line { position:absolute; width:65%; height:2px; background:linear-gradient(90deg,transparent,var(--gold),transparent); animation:scanLine 2s linear infinite; }
   @keyframes scanLine { 0% { top:17.5%; } 100% { top:82.5%; } }
   .result-card { display:none; padding:24px; border-radius:16px; margin-top:16px; text-align:center; animation:slideUp 0.4s ease-out; }
   @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
@@ -68,7 +76,7 @@
   .result-card.duplicate { background:linear-gradient(135deg,rgba(244,67,54,0.12),rgba(244,67,54,0.04)); border:1px solid rgba(244,67,54,0.3); }
   .result-card.denied { background:linear-gradient(135deg,rgba(244,67,54,0.12),rgba(244,67,54,0.04)); border:1px solid rgba(244,67,54,0.3); }
   .result-icon { font-size:48px; margin-bottom:12px; }
-  .result-name { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:#E0BC7A; margin-bottom:8px; }
+  .result-name { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:var(--gold); margin-bottom:8px; }
   .result-status { font-size:14px; color:#B8B4AC; }
   .result-status.ok { color:#4CAF50; }
   .result-status.dup { color:#F44336; }
@@ -213,6 +221,14 @@ const params = new URLSearchParams(window.location.search);
 const eventId = params.get('event');
 
 let eventData = null;
+
+// Ivory is the light theme on the invitation and dashboard; here it keeps the
+// default dark gold look (see the note on the theme variables above).
+const SCAN_THEMES = ['rose', 'emerald', 'sapphire'];
+function applyEventTheme(name) {
+  if (SCAN_THEMES.includes(name)) document.body.setAttribute('data-theme', name);
+  else document.body.removeAttribute('data-theme');
+}
 let guests = [];
 let qrScanner = null;
 let lastScanned = null;
@@ -548,7 +564,7 @@ function renderOfflineList() {
   const query = (document.getElementById('offline-search').value || '').trim();
   const filtered = query ? cache.guests.filter(g => g.name.includes(query)) : cache.guests;
   results.innerHTML = filtered.map(g => `
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 4px; border-bottom:1px solid rgba(224,188,122,0.15);">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 4px; border-bottom:1px solid rgba(var(--accent-rgb),0.15);">
       <span>${escapeHtml(g.name)}</span>
       <span style="font-size:12px; color:${g.scanned ? '#4CAF50' : '#8a857a'};">${g.scanned ? '✓ دخل' : 'لسه'}</span>
     </div>
@@ -679,6 +695,7 @@ async function init() {
     return;
   }
   eventData = snap.data();
+  applyEventTheme(eventData.theme);
 
   const user = await waitForAuth();
   document.getElementById('loading-msg').style.display = 'none';
