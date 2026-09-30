@@ -6,7 +6,8 @@ import {
   onAuthStateChanged, signOut, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
-  getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, addDoc, query, where, onSnapshot, serverTimestamp,
   doc, setDoc, getDoc, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
@@ -21,7 +22,15 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+// A persistent local cache (IndexedDB), shared across tabs: an organizer
+// dashboard and a scanner open on the same device/browser reuse one copy
+// instead of each downloading their own. On reload, every onSnapshot
+// listener here resumes from that cache and the server sends only what
+// changed since — not the whole guest list again — which is what keeps a
+// busy event day from burning through the free plan's daily read quota.
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 
 window._auth = auth;
 window._db = db;
