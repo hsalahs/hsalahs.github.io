@@ -68,7 +68,8 @@ test('the free-tier reassurance says "no fees", never the ambiguous "no card", o
     expect(src, f + ' should not say "بدون بطاقة"').not.toContain('بدون بطاقة');
   }
   await page.goto('/index.html');
-  await expect(page.locator('.trial-note')).toContainText('بدون دفع رسوم');
+  // The hero badge is the invitation to try; the "no fees" wording lives in the price section, the link preview and the sign-up note.
+  await expect(page.locator('.trial-note')).toHaveText('🎁 أنشئ دعوتك وجرّب النظام مجانًا');
   await expect(page.locator('.price-card')).toContainText('بدون دفع رسوم');
   expect(await page.locator('meta[property="og:description"]').getAttribute('content')).toContain('بدون دفع رسوم');
   await page.goto('/guide.html');
@@ -179,4 +180,20 @@ test('in the in-between tablet width the cards stay in one readable column', asy
   await page.goto('/index.html');
   const lefts = await page.locator('.features .feature').evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().left)));
   expect(new Set(lefts).size).toBe(1);
+});
+
+// The link preview image: what WhatsApp and friends fetch. It has to be the
+// size the og:image tags promise and light enough that WhatsApp does not skip it.
+test('the link-preview image is 1200x630 and small enough for WhatsApp', () => {
+  const buf = require('fs').readFileSync(repoFile('icons/og-image.jpg'));
+  expect(buf.length).toBeLessThan(300 * 1024);
+  // Read the size from the JPEG's start-of-frame marker.
+  let i = 2, w = 0, h = 0;
+  while (i < buf.length) {
+    if (buf[i] !== 0xFF) { i++; continue; }
+    const marker = buf[i + 1];
+    if (marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) { h = buf.readUInt16BE(i + 5); w = buf.readUInt16BE(i + 7); break; }
+    i += 2 + buf.readUInt16BE(i + 2);
+  }
+  expect([w, h]).toEqual([1200, 630]);
 });
