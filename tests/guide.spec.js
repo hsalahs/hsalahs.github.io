@@ -35,7 +35,7 @@ test('every button and message the guide quotes still exists in the page it belo
     'event.html': [
       '✏️ تعديل المناسبة', '📂 استيراد قائمة (Excel / CSV / أسماء)', '🔢 إضافة أرقام متسلسلة (مثال: 1–200)',
       '📦 تحميل كل الدعوات (ZIP)', '📥 تحميل نطاق معيّن (مثال: 1–100)', '📊 تصدير قائمة الضيوف (Excel)', '📄 تصدير قائمة الضيوف (CSV)', '🖨️ كشف الحضور (طباعة / PDF)',
-      '🔔 تفعيل إشعارات الطلبات', '📥 الطلبات', '🔄 كود جديد', 'رقم الدخول للفريق', 'اسم ضيف جديد',
+      '🔔 تفعيل إشعارات الطلبات', '📥 الطلبات', '🔄 كود جديد', 'رقم دخول المشرفين', 'اسم ضيف جديد',
     ],
     'scan.html': [
       'تشغيل الكاميرا', 'تحقق', 'عرض الأسماء', 'أو أدخل الكود يدويًا', 'مسموح بالدخول',
@@ -94,4 +94,21 @@ test('the door-day section talks about a door supervisor the organizer chooses, 
   expect(src).toContain('قريب أو صديق أو أي أحد من فريقك');
   // The safety note covers handing the phone to someone else, not only a shift ending.
   expect(src).toContain('أو سلّمت جهازك لشخص ثاني');
+});
+
+// The people at the door are "المشرفين" (supervisors the organizer picks), never
+// a "security team"; and the panel is the organizer's own ("المنظّم"), not "the organizers'".
+test('no page, script or manifest says "فريق الأمن" or "لوحة تحكم المنظّمين", and the scanner link is described as being for supervisors', () => {
+  const offenders = [];
+  for (const f of fs.readdirSync(path.join(__dirname, '..')).filter(n => /\.(html|js|webmanifest)$/.test(n))) {
+    const src = read(f);
+    for (const phrase of ['فريق الأمن', 'فريق الامن', 'لفريق الأمن', 'لوحة تحكم المنظّمين', 'رقم الدخول للفريق']) {
+      if (src.includes(phrase)) offenders.push(f + ': ' + phrase);
+    }
+  }
+  expect(offenders).toEqual([]);
+  expect(read('event.html')).toContain('رابط السكانر — شاركه مع المشرفين');
+  expect(read('event.html')).toContain('رقم دخول المشرفين');
+  expect(read('scan.html')).toContain('<div class="sub">سكانر الدخول</div>');
+  expect(read('app.html')).toContain('لوحة تحكم المنظّم — أنشئ دعوة رقمية لمناسبتك');
 });
