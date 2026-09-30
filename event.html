@@ -300,7 +300,7 @@ setTimeout(() => {
           <input type="text" id="new-guest-name" placeholder="اسم ضيف جديد">
           <button class="btn" style="width:auto; margin:0; padding:13px 22px;" onclick="addGuest()">إضافة</button>
         </div>
-        <input type="file" id="csv-import" accept=".xlsx,.csv,.txt" style="display:none" onchange="importCSV(event)">
+        <input type="file" id="csv-import" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="importCSV(event)">
       </div>
       <div class="card">
         <input type="text" id="guest-search" placeholder="🔍 بحث بالاسم" oninput="searchGuests()" style="margin:0;">
@@ -328,6 +328,7 @@ setTimeout(() => {
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="utils.js"></script>
 <script src="format.js"></script>
+<script src="guest-names.js"></script>
 <script src="xlsx-names.js"></script>
 <script src="xlsx-export.js"></script>
 <script>
@@ -1509,38 +1510,23 @@ async function importCSV(evt) {
     return;
   }
 
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      const text = e.target.result;
-      const lines = String(text).split('\n').map(l => l.trim()).filter(l => l);
-
-      // Accept either a real CSV (name is the first column) or a plain
-      // list of one name per line
-      let names = [];
-      lines.forEach(line => {
-        if (line.includes(',')) {
-          const name = line.split(',')[0].trim();
-          if (name && name.toLowerCase() !== 'name') names.push(name);
-        } else {
-          names.push(line);
-        }
-      });
-
-      if (names.length === 0) {
-        alert('ما لقينا أي أسماء صالحة بالملف');
-        document.getElementById('csv-import').value = '';
-        return;
-      }
-
-      await importGuestNames(names);
-      document.getElementById('csv-import').value = '';
-    } catch (e2) {
-      showErr(e2);
-      document.getElementById('csv-import').value = '';
-    }
-  };
-  reader.readAsText(file);
+  // CSV / text / tab-separated: whatever encoding and separator Excel used,
+  // Arabic, English or mixed (see guest-names.js).
+  const input = document.getElementById('csv-import');
+  try {
+    const buffer = await file.arrayBuffer();
+    const head = new Uint8Array(buffer.slice(0, 2));
+    // An Excel workbook saved or renamed with a .csv / .txt name (a zip starts "PK").
+    if (head[0] === 0x50 && head[1] === 0x4B) { await importXlsx(file); return; }
+    const names = readTextNames(buffer);
+    if (names.length === 0) { alert('ما لقينا أي أسماء صالحة بالملف'); return; }
+    await importGuestNames(names);
+  } catch (e) {
+    if (e.message === 'NOT_TEXT') alert('هذا الملف ما يبدو قائمة أسماء. استخدم ملف Excel (.xlsx) أو CSV أو ملف نصي فيه اسم في كل سطر.');
+    else showErr(e);
+  } finally {
+    input.value = '';
+  }
 }
 
 async function importXlsx(file) {

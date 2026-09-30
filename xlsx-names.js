@@ -4,15 +4,11 @@
 // spreadsheet library, which keeps the page light and works from a plain
 // file with nothing to fetch.
 //
-// Only the FIRST sheet is read. Which column holds the names:
-//   1. the column whose header says name / الاسم / اسم … (any position — lists
-//      often start with a "م" or "#" numbering column);
-//   2. otherwise the leftmost column that has at least one non-numeric cell;
-//   3. otherwise (a sheet of bare numbers, e.g. tickets 1..200) the leftmost
-//      column with anything in it.
-// A header row is skipped; blank cells are ignored; nothing else is inferred.
-const XLSX_NAME_HEADERS = ['name', 'names', 'guest', 'guests', 'guest name', 'full name',
-  'الاسم', 'اسم', 'الأسماء', 'الاسماء', 'اسم الضيف', 'اسم المدعو', 'الاسم الكامل', 'المدعو', 'المدعوين', 'الضيف', 'الضيوف'];
+// Only the FIRST sheet is read. Which column holds the names is decided by
+// pickGuestNames() in guest-names.js (shared with the CSV / text import): the
+// column headed as a name column, in Arabic, English or both, wherever it
+// sits; else the leftmost column with text; else, for a sheet of bare numbers
+// (tickets 1..200), the leftmost column. Needs guest-names.js loaded first.
 const XLSX_MAX_BYTES = 5 * 1024 * 1024;
 const XLSX_NS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
@@ -77,34 +73,22 @@ async function readXlsxNames(buffer) {
   const sheet = await xlsxParse(zip, await xlsxFirstSheetPath(zip));
   if (!sheet) throw new Error('BAD_XLSX');
 
-  // column index -> [{ row, text, numeric }]
+  // column index -> [text, text, ...] in row order, blanks left out
   const columns = new Map();
   for (const c of Array.from(sheet.getElementsByTagName('c'))) {
     const col = xlsxColumnIndex(c.getAttribute('r'));
     if (col < 0) continue;
     const type = c.getAttribute('t');
     let text = '';
-    let numeric = false;
     const v = Array.from(c.children).find(x => x.localName === 'v');
     if (type === 's') text = v ? (shared[parseInt(v.textContent, 10)] || '') : '';
     else if (type === 'inlineStr') { const is = Array.from(c.children).find(x => x.localName === 'is'); text = is ? xlsxText(is) : ''; }
-    else if (type === 'str') text = v ? v.textContent : '';
     else if (type === 'b' || type === 'e') continue;
-    else { text = v ? v.textContent : ''; numeric = true; }
-    text = text.replace(/\s+/g, ' ').trim();
+    else text = v ? v.textContent : '';      // 'str' (formula text) and plain numbers
+    text = cleanGuestName(text);
     if (!text) continue;
     if (!columns.has(col)) columns.set(col, []);
-    columns.get(col).push({ text, numeric });
+    columns.get(col).push(text);
   }
-  if (columns.size === 0) return [];
-
-  const order = Array.from(columns.keys()).sort((a, b) => a - b);
-  const isHeader = (t) => XLSX_NAME_HEADERS.includes(t.toLowerCase());
-  let chosen = order.find(k => isHeader(columns.get(k)[0].text));
-  if (chosen === undefined) chosen = order.find(k => columns.get(k).some(cell => !cell.numeric));
-  if (chosen === undefined) chosen = order[0];
-
-  const cells = columns.get(chosen);
-  const start = isHeader(cells[0].text) ? 1 : 0;
-  return cells.slice(start).map(cell => cell.text);
+  return pickGuestNames(columns);
 }

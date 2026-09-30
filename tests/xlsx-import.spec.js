@@ -159,3 +159,15 @@ test('a plain CSV still imports exactly as before', async ({ page }) => {
   await expect(page.locator('.guest-item')).toHaveCount(2);
   await expect.poll(async () => (await namesOnPage(page)).sort()).toEqual(['A', 'B']);
 });
+
+test('a bilingual header ("الاسم / Name") is found, and the phone column beside it is not imported', async ({ page }) => {
+  await open(page);
+  await importFile(page, 'xlsx-bilingual-header.xlsx');
+  await expect.poll(async () => (await namesOnPage(page)).sort()).toEqual(['John Smith', 'Sarah سارة', 'أحمد الغامدي'].sort());
+});
+
+test('with no header, a phone column stored as text is skipped and the names (Arabic, English, mixed) are used', async ({ page }) => {
+  await open(page);
+  await importFile(page, 'xlsx-phone-first-no-header.xlsx');
+  await expect.poll(async () => (await namesOnPage(page)).sort()).toEqual(['John Smith', 'Sarah سارة', 'أحمد الغامدي'].sort());
+});
