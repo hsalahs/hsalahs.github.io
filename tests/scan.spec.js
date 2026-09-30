@@ -539,3 +539,88 @@ test('a wrong password on the admin-login form shows an error instead of a gener
   await expect(page.locator('#admin-login-err')).toContainText('البريد أو كلمة المرور غلط');
   await expect(page.locator('#scanner-view')).toBeHidden();
 });
+
+// Signing out in one tab of a browser signs out every tab of that browser
+// (Firebase shares the sign-in between them). The scanner used to answer that
+// with "the code changed", which sent the organizer hunting for a code change
+// that never happened.
+const OWNER = { uid: 'u1', email: 'owner@example.com', isAnonymous: false };
+
+test('the organizer opens the scanner on their own account, then presses "خروج" on the dashboard in another tab: the scanner says they were signed out, not that the code changed', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: OWNER, store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();   // the owner needs no code
+
+  // The other tab signs out; this tab is told by Firebase.
+  await page.evaluate(() => window._authFns.signOut(window._auth));
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect(page.locator('#scanner-view')).toBeHidden();
+  await expect(page.locator('#pin-err')).toContainText('تم تسجيل الخروج من الحساب على هذا الجهاز');
+  await expect(page.locator('#pin-err')).not.toContainText('تغيّر كود الدخول');
+});
+
+test('the same for the admin', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'admin-1', email: 'hsallah@outlook.sa', isAnonymous: false }, store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.evaluate(() => window._authFns.signOut(window._auth));
+  await expect(page.locator('#pin-err')).toContainText('تم تسجيل الخروج من الحساب على هذا الجهاز');
+});
+
+test('a door device that unlocked with the code and then loses its sign-in gets the sign-out message, and can simply type the code again', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.evaluate(() => window._authFns.signOut(window._auth));
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect(page.locator('#pin-err')).toContainText('تم تسجيل الخروج من الحساب على هذا الجهاز');
+  // Typing the code again works (a fresh anonymous identity is created).
+  await page.evaluate(() => { window.__fakeFirebase.auth.nextAnonUid = 'anon-2'; window.__fakeFirebase.store['events/e1/scanSessions'] = {}; });
+  await page.locator('#pin-input').fill('123456');
+  await page.getByRole('button', { name: 'دخول', exact: true }).click();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+});
+
+test('a real code change still says the code changed (the identity is still there, only its session is refused)', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.evaluate(() => { window.__fakeFirebase.denyPaths = ['events/e1/scanSessions']; document.dispatchEvent(new Event('visibilitychange')); });
+  await expect(page.locator('#pin-err')).toContainText('تغيّر كود الدخول');
+  await expect(page.locator('#pin-err')).not.toContainText('تم تسجيل الخروج');
+});
+
+test('the wording follows the cause when the failure surfaces from Firestore instead of from the sign-in change', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: OWNER, store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  // Organizer identity present but refused: neither a sign-out nor a code change.
+  await page.evaluate(() => sessionRevoked());
+  await expect(page.locator('#pin-err')).toContainText('ما عاد عندك صلاحية على هذا الجهاز');
+  await expect(page.locator('#pin-err')).not.toContainText('تغيّر كود الدخول');
+});
+
+test('pressing "تسجيل خروج من هذا الجهاز" on purpose goes back to the code screen with no error message', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.locator('#lock-device-btn').click();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect(page.locator('#pin-err')).toBeHidden();
+});
+
+test('a scanner tab that was never signed in is not disturbed by other tabs signing in and out', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await page.evaluate(() => window._authFns.signOut(window._auth));
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect(page.locator('#pin-err')).toBeHidden();
+});
