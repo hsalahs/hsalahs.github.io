@@ -16,6 +16,24 @@ function escapeForJsAttr(str) {
   return escapeHtml(String(str)).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
+// Guest name order shared by the dashboard's own list and the scanner's
+// offline name search, so a supervisor comparing notes with the organizer
+// sees the same order. Numeric names (like "1", "2", "150" — a ticket-style
+// list added via "إضافة أرقام متسلسلة") sort by value first, in order; then
+// everyone else sorts alphabetically after them. Never by arrival/scanned
+// status: door staff searching for a name shouldn't have to first work out
+// which half of a jumping list it's currently in.
+function sortGuestsByName(list) {
+  return [...list].sort((a, b) => {
+    const aNum = /^\d+$/.test(a.name.trim());
+    const bNum = /^\d+$/.test(b.name.trim());
+    if (aNum && bNum) return parseInt(a.name, 10) - parseInt(b.name, 10);
+    if (aNum) return -1;
+    if (bNum) return 1;
+    return a.name.localeCompare(b.name, 'ar');
+  });
+}
+
 // Single admin allowlist — was previously copy-pasted separately into
 // app.html, event.html, and scan.html, an easy way for admin access to
 // quietly break in just one of them if this email ever changes and someone

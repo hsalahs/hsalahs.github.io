@@ -807,3 +807,23 @@ test('a refresh button is pinned on screen at all times — loading, the code sc
   await Promise.all([page.waitForEvent('load'), btn.click()]);
   expect(await page.evaluate(() => window.__beforeReload)).toBeUndefined();
 });
+
+test('the offline name list is sorted (numbers by value, then Arabic alphabetically) — not by arrival order or scanned status', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: DEVICE,
+    store: unlockedStore({
+      'WD-4': { name: '4', id: 'WD-4', scanned: false },
+      'WD-5': { name: '5', id: 'WD-5', scanned: false },
+      'WD-2': { name: '2', id: 'WD-2', scanned: false },
+      'WD-1': { name: '1', id: 'WD-1', scanned: true },
+      'WD-3': { name: '3', id: 'WD-3', scanned: false },
+    }),
+  });
+  await page.goto('/scan.html?event=e1');
+  await page.locator('#offline-list-btn').click();
+  const names = await page.locator('#offline-list-results span').evaluateAll(
+    spans => spans.filter((_, i) => i % 2 === 0).map(s => s.textContent)
+  );
+  expect(names).toEqual(['1', '2', '3', '4', '5']);
+});

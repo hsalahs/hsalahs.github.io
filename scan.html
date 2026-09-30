@@ -572,7 +572,7 @@ function renderOfflineList() {
   meta.textContent = '📋 آخر نسخة محفوظة (' + savedTime + ') — للقراءة فقط، ما تسجّل حضور';
   const query = (document.getElementById('offline-search').value || '').trim();
   const filtered = query ? cache.guests.filter(g => g.name.includes(query)) : cache.guests;
-  results.innerHTML = filtered.map(g => `
+  results.innerHTML = sortGuestsByName(filtered).map(g => `
     <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 4px; border-bottom:1px solid rgba(var(--accent-rgb),0.15);">
       <span>${escapeHtml(g.name)}</span>
       <span style="font-size:12px; color:${g.scanned ? '#4CAF50' : '#8a857a'};">${g.scanned ? '✓ دخل' : 'لسه'}</span>
