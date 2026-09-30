@@ -257,7 +257,7 @@ test('re-scanning an already-checked-in guest shows a clear red "already used" a
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: DEVICE,
-    store: unlockedStore({ g1: { name: 'ضيف مكرر', id: 'WD-DUP123', scanned: true } }),
+    store: unlockedStore({ 'WD-DUP123': { name: 'ضيف مكرر', id: 'WD-DUP123', scanned: true } }),
   });
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
@@ -275,7 +275,7 @@ test('a check-in write that fails on the network resets the scanner instead of s
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: DEVICE,
-    store: unlockedStore({ g1: { name: 'ضيف', id: 'WD-NET1', scanned: false } }),
+    store: unlockedStore({ 'WD-NET1': { name: 'ضيف', id: 'WD-NET1', scanned: false } }),
   });
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
@@ -702,4 +702,53 @@ test('the scanner uses the very same accent colours as the dashboard for each th
     };
     expect(grab(sc)).toEqual(grab(ev));
   }
+});
+
+// ---- the scanner reads one guest directly, not the whole collection ----
+
+test('the barcode text is the guest\'s Firestore document id — a code nobody registered under is just "not registered"', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: DEVICE,
+    store: unlockedStore({ 'WD-REAL1': { name: 'ضيف حقيقي', id: 'WD-REAL1', scanned: false } }),
+  });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+
+  await page.locator('#manual-code').fill('WD-GHOST9');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+  await expect(page.locator('#result-denied')).toBeVisible();
+  await expect(page.locator('#camera-status')).toContainText('باركود غير مسجّل');
+});
+
+test('a successful scan updates the counter and the offline cache right away, on a list that was only loaded once', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: DEVICE,
+    store: unlockedStore({ 'WD-A': { name: 'أ', id: 'WD-A', scanned: false }, 'WD-B': { name: 'ب', id: 'WD-B', scanned: false } }),
+  });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 2');
+
+  await page.locator('#manual-code').fill('WD-A');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+  await expect(page.locator('#result-allowed')).toBeVisible();
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 / 2');
+
+  await page.getByRole('button', { name: /عرض الأسماء/ }).click();
+  await expect(page.locator('#offline-list-results')).toContainText('✓ دخل');
+});
+
+test('the guest list is read once, on open — a guest another device adds afterward does not change this device\'s total until it reopens', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore({ 'WD-A': { name: 'أ', id: 'WD-A', scanned: false } }) });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 1');
+
+  await page.evaluate(() => {
+    window.__fakeFirebase.store['events/e1/guests']['WD-C'] = { name: 'ج', id: 'WD-C', scanned: false };
+  });
+  await page.waitForTimeout(300);
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 1');
 });

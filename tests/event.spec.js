@@ -40,6 +40,17 @@ test('adding a guest confirms with a toast, clears and refocuses the field, and 
   await expect(input).toBeFocused();
   await expect(page.locator('.guest-item')).toHaveCount(2);
 
+  // The new guest's own barcode ("WD-...") is its Firestore document key —
+  // not a separate random doc id — so the scanner can look it up with one
+  // direct read instead of loading the whole guest list.
+  const saved = await page.evaluate(() => {
+    const g = window.__fakeFirebase.store['events/e1/guests'];
+    const [key, data] = Object.entries(g).find(([, d]) => d.name === 'سارة');
+    return { key, id: data.id };
+  });
+  expect(saved.key).toBe(saved.id);
+  expect(saved.key).toMatch(/^WD-/);
+
   // Same name again should be rejected as a duplicate within this list.
   await input.fill('سارة');
   await page.getByRole('button', { name: 'إضافة' }).click();
@@ -145,6 +156,11 @@ test('adding sequential numbers creates that many numbered guests without needin
   await expect(page.locator('.guest-item')).toHaveCount(5);
   const names = (await page.locator('.guest-item .name').allTextContents()).sort((a, b) => Number(a) - Number(b));
   expect(names).toEqual(['1', '2', '3', '4', '5']);
+
+  // The bulk-import path keys every guest by its own barcode id too.
+  const mismatched = await page.evaluate(() =>
+    Object.entries(window.__fakeFirebase.store['events/e1/guests']).filter(([key, d]) => key !== d.id));
+  expect(mismatched).toEqual([]);
 });
 
 test('a large batch of sequential numbers shows progress instead of looking frozen', async ({ page }) => {
@@ -785,12 +801,15 @@ test('approving a guest request copies the new barcode id onto the request, for 
   await expect(page.locator('#toast')).toContainText('تمت الموافقة');
   const state = await page.evaluate(() => {
     const s = window.__fakeFirebase.store;
-    const guest = Object.values(s['events/e1/guests'])[0];
-    return { request: s['events/e1/requests'].r1, guestId: guest && guest.id };
+    const g = s['events/e1/guests'];
+    const [key, guest] = Object.entries(g)[0];
+    return { request: s['events/e1/requests'].r1, guestId: guest.id, docKey: key };
   });
   expect(state.request.status).toBe('approved');
   expect(state.guestId).toMatch(/^WD-/);
   expect(state.request.guestId).toBe(state.guestId);
+  // Same rule as a manually-added guest: doc key === the barcode id.
+  expect(state.docKey).toBe(state.guestId);
 });
 
 test('guests approved before the invite page stopped reading the guests collection get their barcode id backfilled onto their request', async ({ page }) => {

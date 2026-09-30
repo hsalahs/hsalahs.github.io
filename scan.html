@@ -234,7 +234,6 @@ let qrScanner = null;
 let lastScanned = null;
 let scanCooldown = false;
 let audioCtx = null;
-let guestsUnsub = null;
 
 // ADMIN_EMAILS/isAdmin now live in utils.js (shared with app.html and
 // event.html). An admin who's already signed in on this device (their
@@ -400,7 +399,6 @@ function sessionRevoked() {
   const why = whyAccessLost();
   usesSessionDoc = false;
   stopSessionWatch();
-  if (guestsUnsub) { guestsUnsub(); guestsUnsub = null; }
   if (qrScanner) {
     try { qrScanner.stop(); } catch (_) {}
     try { qrScanner.destroy(); } catch (_) {}
@@ -488,7 +486,7 @@ function showScanner() {
   // reloaded a borrowed phone, the only way to end that session vanished
   // from the UI entirely.
   document.getElementById('lock-device-btn').style.display = 'block';
-  startGuestsListener();
+  loadGuestsOnce();
   if (usesSessionDoc) startSessionWatch();
 }
 
@@ -502,7 +500,6 @@ async function lockDevice() {
   lockingDevice = true;
   usesSessionDoc = false;
   stopSessionWatch();
-  if (guestsUnsub) { guestsUnsub(); guestsUnsub = null; }
   const user = window._auth.currentUser;
   if (user) {
     const { deleteDoc } = window._fsFns;
@@ -585,19 +582,28 @@ function refreshConnectionBanner(ok) {
   if (b) b.style.display = ok ? 'none' : 'block';
 }
 
-function startGuestsListener() {
-  const { collection, onSnapshot } = window._fsFns;
-  if (guestsUnsub) guestsUnsub();
-  guestsUnsub = onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
+// A one-time read instead of a live listener: this used to re-download the
+// whole guest list on every scanner open AND on every change to it for as
+// long as the tab stayed open (an event-day flood of reads against the free
+// plan's shared daily quota). The counter and the offline cache just stay
+// in step with what THIS device does afterward (see handleScan) — the
+// authoritative duplicate check is the transaction inside handleScan, not
+// this list, so a guest scanned from another device between this load and
+// the next page open is still caught correctly, just not reflected in the
+// counter until reopened.
+async function loadGuestsOnce() {
+  const { collection, getDocs } = window._fsFns;
+  try {
+    const snap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     updateScanCounter();
     refreshConnectionBanner(true);
     cacheGuestsOffline();
-  }, (error) => {
-    console.error('guests onSnapshot error:', error);
+  } catch (error) {
+    console.error('guests load error:', error);
     if (error && error.code === 'permission-denied') { sessionRevoked(); return; }
     refreshConnectionBanner(false);
-  });
+  }
 }
 
 // Used to just clear the result cards and assume the camera was still
@@ -803,52 +809,58 @@ async function handleScan(raw) {
   status.textContent = '🔍 جاري التحقق...';
   hideResultCards();
 
-  const found = guests.find(g => g.id === val);
-
-  if (!found) {
+  // The guest's own barcode text IS its document id (see event.html), so
+  // this goes straight to that one document — no collection read, and no
+  // dependency on the once-loaded `guests` array staying in sync. The
+  // transaction's own tx.get() is the single source of truth for both
+  // "not registered" and "already scanned"; it re-reads live every time,
+  // so two devices scanning the same guest at once can't both win.
+  const { doc, runTransaction } = window._fsFns;
+  const gRef = doc(window._db, 'events', eventId, 'guests', val);
+  let outcome, guestName;
+  try {
+    outcome = await runTransaction(window._db, async (tx) => {
+      const snap = await tx.get(gRef);
+      if (!snap.exists()) return 'missing';
+      guestName = snap.data().name;
+      if (snap.data().scanned) return 'dup';
+      tx.update(gRef, { scanned: true, scannedAt: new Date().toISOString() });
+      return 'ok';
+    });
+  } catch (e) {
+    // A failed write used to escape this function entirely, which left
+    // scanCooldown stuck on true — the scanner silently ignored every
+    // barcode after one network hiccup until "مسح جديد" was pressed.
+    console.error('check-in failed:', e);
+    if (e && e.code === 'permission-denied') { sessionRevoked(); return; }
+    status.textContent = '⚠️ تعذّر تسجيل الدخول — تأكد من الإنترنت وحاول مرة ثانية';
+    playBeep(false);
+    scanCooldown = false; lastScanned = null;
+    return;
+  }
+  if (outcome === 'ok') {
+    document.getElementById('result-name-ok').textContent = guestName;
+    document.getElementById('result-allowed').style.display = 'block';
+    status.textContent = '✅ مسموح بالدخول';
+    playBeep(true);
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    // The full list was only read once, at open — keep the counter and the
+    // offline name list in step with scans this device does afterward.
+    const cached = guests.find(g => g.id === val);
+    if (cached) cached.scanned = true;
+    else guests.push({ docId: val, id: val, name: guestName, scanned: true });
+    updateScanCounter();
+    cacheGuestsOffline();
+  } else if (outcome === 'dup') {
+    document.getElementById('result-name-dup').textContent = guestName;
+    document.getElementById('result-duplicate').style.display = 'block';
+    status.textContent = '🚫 تم استخدام هذه الدعوة مسبقًا';
+    playBeep(false);
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  } else {
     document.getElementById('result-denied').style.display = 'block';
     status.textContent = '❌ باركود غير مسجّل';
     playBeep(false);
-  } else {
-    const { doc, runTransaction } = window._fsFns;
-    const gRef = doc(window._db, 'events', eventId, 'guests', found.docId);
-    let outcome;
-    try {
-      outcome = await runTransaction(window._db, async (tx) => {
-        const snap = await tx.get(gRef);
-        if (!snap.exists()) return 'missing';
-        if (snap.data().scanned) return 'dup';
-        tx.update(gRef, { scanned: true, scannedAt: new Date().toISOString() });
-        return 'ok';
-      });
-    } catch (e) {
-      // A failed write used to escape this function entirely, which left
-      // scanCooldown stuck on true — the scanner silently ignored every
-      // barcode after one network hiccup until "مسح جديد" was pressed.
-      console.error('check-in failed:', e);
-      if (e && e.code === 'permission-denied') { sessionRevoked(); return; }
-      status.textContent = '⚠️ تعذّر تسجيل الدخول — تأكد من الإنترنت وحاول مرة ثانية';
-      playBeep(false);
-      scanCooldown = false; lastScanned = null;
-      return;
-    }
-    if (outcome === 'ok') {
-      document.getElementById('result-name-ok').textContent = found.name;
-      document.getElementById('result-allowed').style.display = 'block';
-      status.textContent = '✅ مسموح بالدخول';
-      playBeep(true);
-      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    } else if (outcome === 'dup') {
-      document.getElementById('result-name-dup').textContent = found.name;
-      document.getElementById('result-duplicate').style.display = 'block';
-      status.textContent = '🚫 تم استخدام هذه الدعوة مسبقًا';
-      playBeep(false);
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-    } else {
-      document.getElementById('result-denied').style.display = 'block';
-      status.textContent = '❌ غير مسجّل';
-      playBeep(false);
-    }
   }
 
   setTimeout(() => {
