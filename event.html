@@ -924,6 +924,7 @@ async function undoGuestAttend(docId, name) {
   // Mirrors markGuestAttend: decrements scannedCount in the same
   // transaction as the flip back to unscanned, so a guest who's undone
   // and later re-scanned at the door isn't counted twice.
+  if (!confirm('التراجع عن حضور "' + name + '"؟')) return;
   const { doc, runTransaction } = window._fsFns;
   const gRef = doc(window._db, 'events', eventId, 'guests', docId);
   const eventRef = doc(window._db, 'events', eventId);

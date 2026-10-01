@@ -157,6 +157,7 @@ test('undoing attendance decrements scannedCount, so re-scanning the same guest 
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
 
+  page.on('dialog', d => d.accept());
   await page.locator('.undo-btn').click();
   await expect(page.locator('.attend-btn')).toBeVisible();
 
