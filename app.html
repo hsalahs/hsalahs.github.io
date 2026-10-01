@@ -26,6 +26,13 @@
   .card { background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.2); border-radius:16px; padding:22px; margin-bottom:16px; }
   input { width:100%; padding:13px 14px; margin-bottom:12px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(224,188,122,0.25); color:#FAF8F4; font-size:15px; font-family:inherit; }
   input:focus { outline:none; border-color:#E0BC7A; }
+  /* Safari (notably iOS) renders <input type="date">'s native calendar
+     icon/segment layout with its own default light-theme chrome, which
+     throws off its effective box compared to sibling text inputs even with
+     identical width/padding — that's the misaligned date field. Stripping
+     the native appearance and declaring the color scheme lets our own
+     border/background/padding fully control the box like any other input. */
+  input[type="date"] { appearance:none; -webkit-appearance:none; color-scheme:dark; }
   .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; margin-bottom:10px; }
   .btn.ghost { background:transparent; border:1px solid rgba(224,188,122,0.3); color:#E0BC7A; }
   .btn.small { width:auto; padding:8px 16px; font-size:13px; }

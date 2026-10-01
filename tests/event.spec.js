@@ -75,6 +75,7 @@ test('a guest name containing a backslash and a quote does not break the delete 
 
   let dialogMessage = '';
   page.on('dialog', (d) => { dialogMessage = d.message(); d.accept(); });
+  await page.locator('.guest-item .more-btn').click();
   await page.locator('.guest-item .del-btn').click();
 
   expect(dialogMessage).toContain(trickyName);
@@ -123,12 +124,12 @@ test('marking a guest as attended from the list asks for confirmation first, so 
 
   page.on('dialog', d => d.dismiss());
   await page.locator('.attend-btn').click();
-  await expect(page.locator('.badge')).toHaveText('لسه');
+  await expect(page.locator('.attend-btn')).toBeVisible();
 
   page.removeAllListeners('dialog');
   page.on('dialog', d => d.accept());
   await page.locator('.attend-btn').click();
-  await expect(page.locator('.badge')).toHaveText('✓ حضر');
+  await expect(page.locator('.undo-btn')).toBeVisible();
 });
 
 test('marking attended manually bumps the event\'s scannedCount, so the door scanner\'s live counter sees it too', async ({ page }) => {
@@ -142,7 +143,7 @@ test('marking attended manually bumps the event\'s scannedCount, so the door sca
 
   page.on('dialog', d => d.accept());
   await page.locator('.attend-btn').click();
-  await expect(page.locator('.badge')).toHaveText('✓ حضر');
+  await expect(page.locator('.undo-btn')).toBeVisible();
 
   await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.scannedCount)).toBe(1);
 });
@@ -156,8 +157,9 @@ test('undoing attendance decrements scannedCount, so re-scanning the same guest 
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
 
+  page.on('dialog', d => d.accept());
   await page.locator('.undo-btn').click();
-  await expect(page.locator('.badge')).toHaveText('لسه');
+  await expect(page.locator('.attend-btn')).toBeVisible();
 
   await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.scannedCount)).toBe(0);
 });
@@ -172,6 +174,7 @@ test('deleting a guest frees up their slot, so the customer can add a replacemen
   await expect(page.locator('#dashboard')).toBeVisible();
 
   page.on('dialog', d => d.accept());
+  await page.locator('.guest-item .more-btn').click();
   await page.locator('.guest-item .del-btn').click();
   await expect(page.locator('.guest-item')).toHaveCount(0);
 
