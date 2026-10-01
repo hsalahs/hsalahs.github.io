@@ -5,7 +5,7 @@ Read this first. It replaces the memory of earlier sessions.
 ## What this is
 An Arabic, multi-tenant digital-invitation service (weddings and other occasions). Organizers create an event, add guests (by hand, Excel/CSV import, or self-registration requests), send each guest an invitation card with a QR code, and door supervisors scan the QR at the entrance.
 
-- Static site on **GitHub Pages** (no build step, no backend, no server). Live at `https://hsalahs.github.io/`.
+- Static site on **GitHub Pages** (no build step, no backend, no server). Live at `https://da3wt.com/` (custom domain, done — DNS/SSL/GitHub Pages/Firebase Auth authorized domains all set up; the old `https://hsalahs.github.io/` still works too, GitHub doesn't disable it, and that's intentional — any already-sent invite links keep working).
 - **Firebase** (Firestore + Auth, v10.12.0 from the CDN), project `wedding-qr-16d01`, **Spark (free) plan**. No Cloud Functions.
 - Installable as a PWA (`manifest.webmanifest`, `sw.js`); there is no app-store app.
 - Pages: `index.html` (landing), `app.html` (organizer's events list, admin activation), `event.html` (one event's dashboard), `invite.html` (what a guest opens), `scan.html` (door scanner), `guide.html` (user guide).
@@ -26,12 +26,12 @@ A non-technical founder on a tight budget who **writes Arabic** (answer in Arabi
 2. Develop on branch `claude/code-review-rhjmxj`. Push with `git push -u origin claude/code-review-rhjmxj`.
 3. Open a PR to `main` (GitHub MCP tools, not `gh`). CI runs two checks: "Page tests (Playwright)" and "Firestore security rules (emulator)".
 4. Wait for the user's "ادمج". Confirm both checks are green **on the exact head sha**, then squash-merge with `expectedHeadSha`.
-5. GitHub Pages caches HTML ~10 minutes: poll `curl "https://hsalahs.github.io/<page>?nc=$RANDOM"` and grep for the new text.
+5. GitHub Pages caches HTML ~10 minutes: poll `curl "https://da3wt.com/<page>?nc=$RANDOM"` and grep for the new text.
 6. **Firestore rules are published by the user by hand** in the Firebase Console (the deploy tool is blocked). After they publish, verify with `firebase_get_security_rules` / REST probes.
 
 ## Tests
-- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 6 minutes, 243 tests). Run a single file while developing, the full suite once before pushing.
-- Rules tests (real emulator): `npm run test:rules` (98 checks; `RULES_PATH` overrides the rules file).
+- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 6-7 minutes, 257 tests). Run a single file while developing, the full suite once before pushing.
+- Rules tests (real emulator): `npm run test:rules` (117 checks; `RULES_PATH` overrides the rules file).
 - Playwright uses in-memory Firebase stubs (`tests/mocks/*.stub.js`, `tests/helpers.js`: `stubFirebase`, `seedFakeFirebase`). The store resets on navigation. JSZip is served from `node_modules` via `page.route`. See `tests/README.md`.
 - Tool quirks: heredocs expand `\uXXXX` (use the Write tool for escapes); avoid `pkill -f`; foreground `sleep` is blocked (use until-loops).
 
@@ -40,9 +40,11 @@ A non-technical founder on a tight budget who **writes Arabic** (answer in Arabi
 - **Door supervisors** ("مشرف الباب"): open the scan link and type a 6-digit door code; the anonymous session lives in `events/{id}/scanSessions`. Wording: "مشرفين", never "فريق الأمن".
 - **Theme:** five palettes (gold, rose, emerald, sapphire, ivory). The dashboard and invitation follow the theme; the scanner follows the accents only and stays dark. The QR itself is always black on light.
 - **Not building:** a "plan label", and the human services (event-day support, field supervisors).
-- **Deferred:** event-type field, time / organizer / notes fields, party-size cards and open registration, App Check (no budget), landing "install hint", pricing section.
-- **`main` is now branch-protected** (classic rule, user set it up): requires a PR + the "Page tests (Playwright)" status check to pass before merging. No required-approvals rule (the user is the only account, so self-approval would be impossible). The "Firestore security rules (emulator)" check wasn't in GitHub's search yet at setup time and may still need adding by hand later — not required for merges to work.
-- **Domain:** the user will register a `.com` (name still undecided; ideas were haflatna.com, 3azeema.com, farhatk.com, da3wt.com). Needs: a `CNAME` file, GitHub Pages custom domain, the new domain added to Firebase Auth authorized domains, and the absolute URLs in `index.html` (canonical, og:url, og:image). Old github.io links redirect. Browser storage and sessions reset on the new origin. Do it away from event days.
+- **Deferred:** event-type field, time / organizer / notes fields, party-size cards and open registration, App Check (no budget), landing "install hint".
+- **`main` is now branch-protected** (classic rule, user set it up): requires a PR + both the "Page tests (Playwright)" and "Firestore security rules (emulator)" status checks to pass before merging. No required-approvals rule (the user is the only account, so self-approval would be impossible).
+- **Domain:** `da3wt.com`, registered via Sahara Net — done (see above). Registrar portal: Registrar Lock is on, auto-renew is on, ICANN verification done.
+- **guestCount can now decrease:** deleting a guest frees up their slot (business decision — the cap means "current guest count", not "total ever added"). `event.html`'s `deleteGuest()` does this in a transaction (delete + decrement together); `firestore.rules` has a matching owner-only, -1-only rule next to the scannedCount one. Not cryptographically tied to an actual guest deletion (accepted low-stakes trade-off, not worth the added rule complexity for this non-adversarial project).
+- **Not yet done: a full logged-in customer walkthrough on the live site** (sign up → create event → add guest → view invite → scan a QR) — only the public pages (landing, login screen, guide) have been visually checked on `da3wt.com` so far. Needs either a disposable test account the user creates and shares, or the user doing it themselves and sending screenshots. Come back to this.
 
 ## Open problem: Firebase read quota
 - **Blaze (paid) is not available to the user**: billing addresses in Saudi Arabia must go through the reseller CNTXT and need a commercial registration. Stay on Spark (about 50k reads/day for the whole project; when it runs out everything stops until the daily reset).
