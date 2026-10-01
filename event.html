@@ -1488,11 +1488,14 @@ async function importGuestNames(names) {
   let capForMsg = FREE_GUEST_LIMIT;
   const batchSize = 50;
   const total = toAdd.length;
-  // A few hundred entries means several transaction round-trips in a row —
-  // long enough with no feedback that it can look frozen. Same progress
-  // toast pattern as the bulk card download, so it reads as "still working"
-  // rather than stuck, and just goes away on its own once done.
-  if (total > batchSize) showToast('⏳ جاري الإضافة... 0 / ' + total);
+  // Always shown, even for a handful of names: adding guests writes through
+  // a transaction, which — unlike a plain write — isn't echoed to the UI
+  // until the server round-trip actually completes. With no feedback at
+  // all, a short wait on a slow connection looked identical to the button
+  // not having done anything, and reaching for a manual refresh was the
+  // only way anyone found to tell. Same progress toast pattern as the bulk
+  // card download; it just goes away on its own once the alert() below replaces it.
+  showToast('⏳ جاري الإضافة... 0 / ' + total);
   for (let i = 0; i < toAdd.length; i += batchSize) {
     const batch = toAdd.slice(i, i + batchSize);
     const addedThisBatch = await runTransaction(window._db, async (tx) => {
@@ -1512,7 +1515,7 @@ async function importGuestNames(names) {
       return toWrite.length;
     });
     added += addedThisBatch;
-    if (total > batchSize) showToast('⏳ جاري الإضافة... ' + Math.min(added, total) + ' / ' + total);
+    showToast('⏳ جاري الإضافة... ' + Math.min(added, total) + ' / ' + total);
     // Everything not yet written is left out — this batch's remainder AND every later batch.
     if (addedThisBatch < batch.length) { blockedByGate = total - added; break; }
   }

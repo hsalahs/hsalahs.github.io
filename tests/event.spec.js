@@ -163,6 +163,30 @@ test('adding sequential numbers creates that many numbered guests without needin
   expect(mismatched).toEqual([]);
 });
 
+test('a small add still shows "جاري الإضافة" while it writes — not just large imports, since a transaction write has no instant local echo to lean on', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { events: { e1: EVENT }, 'events/e1/guests': {}, 'events/e1/requests': {} },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  const toasts = [];
+  await page.exposeFunction('__recordToast', (t) => toasts.push(t));
+  await page.evaluate(() => { const real = showToast; window.showToast = (m) => { window.__recordToast(m); real(m); }; });
+
+  let promptCount = 0;
+  page.on('dialog', async (d) => {
+    if (d.type() === 'prompt') { promptCount++; await d.accept(promptCount === 1 ? '1' : '5'); }
+    else await d.accept();
+  });
+  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: /إضافة أرقام متسلسلة/ }).click();
+  await expect(page.locator('.guest-item')).toHaveCount(5);
+
+  expect(toasts.some(t => t.includes('⏳ جاري الإضافة'))).toBe(true);
+});
+
 test('a large batch of sequential numbers shows progress instead of looking frozen', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
