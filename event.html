@@ -934,9 +934,20 @@ async function undoGuestAttend(docId, name) {
 
 async function deleteGuest(docId, name) {
   if (!confirm('حذف "' + name + '" نهائيًا؟')) return;
-  const { doc, deleteDoc } = window._fsFns;
+  // A transaction, not a plain deleteDoc: frees up the guest's slot in the
+  // same write as removing them, so a customer who deletes a duplicate or
+  // mistaken entry can add a replacement right away instead of it counting
+  // against their cap forever. firestore.rules caps this at exactly -1 per
+  // write, floored at 0 — see the guestCount rule next to scannedCount's.
+  const { doc, runTransaction } = window._fsFns;
+  const gRef = doc(window._db, 'events', eventId, 'guests', docId);
+  const eventRef = doc(window._db, 'events', eventId);
   try {
-    await deleteDoc(doc(window._db, 'events', eventId, 'guests', docId));
+    await runTransaction(window._db, async (tx) => {
+      const evSnap = await tx.get(eventRef);
+      tx.delete(gRef);
+      tx.update(eventRef, { guestCount: Math.max(0, (evSnap.data().guestCount || 0) - 1) });
+    });
     showToast('✅ تم حذف الضيف');
   } catch (e) { showErr(e); }
 }

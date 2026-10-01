@@ -175,6 +175,23 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['scannedCount']) &&
         request.resource.data.scannedCount == resource.data.get('scannedCount', 0) + 1;
 
+      // Freeing up a guest slot after a delete: the owner may lower
+      // guestCount by exactly 1 per write, and only that field — separate
+      // from the general owner-update rule above, which keeps
+      // guestCountNotDecreased() untouched, so a plain edit to the event's
+      // own details still can't silently shrink the count. This isn't tied
+      // to an actual guest document being deleted in the same write (the
+      // owner already has broad trust over their own event); accepted as a
+      // deliberate, low-stakes trade-off rather than added complexity.
+      allow update: if request.auth != null &&
+        resource.data.ownerUid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestCount']) &&
+        (
+          (resource.data.get('guestCount', 0) > 0 &&
+           request.resource.data.guestCount == resource.data.get('guestCount', 0) - 1) ||
+          (resource.data.get('guestCount', 0) <= 0 && request.resource.data.guestCount == 0)
+        );
+
       allow delete: if request.auth != null &&
         (isAdmin() || resource.data.ownerUid == request.auth.uid);
 
