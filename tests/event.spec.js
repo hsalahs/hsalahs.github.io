@@ -131,6 +131,37 @@ test('marking a guest as attended from the list asks for confirmation first, so 
   await expect(page.locator('.badge')).toHaveText('✓ حضر');
 });
 
+test('marking attended manually bumps the event\'s scannedCount, so the door scanner\'s live counter sees it too', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  page.on('dialog', d => d.accept());
+  await page.locator('.attend-btn').click();
+  await expect(page.locator('.badge')).toHaveText('✓ حضر');
+
+  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.scannedCount)).toBe(1);
+});
+
+test('undoing attendance decrements scannedCount, so re-scanning the same guest later doesn\'t double-count them', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { ...baseStore([{ id: 'WD-1', name: 'أحمد', scanned: true }]), events: { e1: { ...EVENT, scannedCount: 1 } } },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  await page.locator('.undo-btn').click();
+  await expect(page.locator('.badge')).toHaveText('لسه');
+
+  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.scannedCount)).toBe(0);
+});
+
 test('adding sequential numbers creates that many numbered guests without needing a file', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
