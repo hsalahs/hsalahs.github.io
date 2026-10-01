@@ -577,12 +577,19 @@ async function downloadInviteCard() {
 }
 
 async function renderApproved(eventData, guest) {
+  // The demo can't simulate the door camera itself — only the card a real
+  // guest would end up with — so a visitor could otherwise assume that's
+  // the whole product and miss that scanning happens for real at the door.
+  const demoScanNote = isDemo
+    ? '<div style="margin-top:12px; font-size:12px; color:#8a857a; line-height:1.7;">هذه معاينة لتجربة ضيفك. مسح الكود عند الباب يتم لحظياً عبر كاميرا جوال المشرف بدون الحاجة لتطبيقات.</div>'
+    : '';
   card.innerHTML = `
     <div class="status-icon">🎉</div>
     <div class="status-msg">تم تأكيد حضورك!</div>
     ${eventInfoHtml(eventData)}
     <div id="card-wrap" style="margin-top:16px;"></div>
     <button class="btn" id="save-btn" style="margin-top:14px; display:none;" onclick="downloadInviteCard()">⬇️ حفظ الدعوة</button>
+    ${demoScanNote}
   `;
   startCountdown(eventData);
   const built = await buildInviteCard(eventData, guest);
