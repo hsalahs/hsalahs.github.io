@@ -123,28 +123,31 @@
   .t-sapphire { background:#5A6FA0; } .t-ivory { background:#B08D57; }
 
   .guest-list { background:linear-gradient(145deg,var(--glass-bg-1),var(--glass-bg-2)); border:1px solid var(--glass-border); border-radius:18px; overflow:hidden; max-height:60vh; overflow-y:auto; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
-  /* No flex-wrap on purpose, matching the legacy site: the number, badge,
-     and action buttons must never drop to their own line — only the name
-     column (flex:1, min-width:0 below) is allowed to shrink, so a long
-     name gets squeezed or wraps within its own space instead of the
-     buttons scattering into a second row. */
-  .guest-item { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid rgba(var(--accent-rgb),0.08); gap:10px; transition:background 0.2s ease; }
+  /* No flex-wrap on purpose: the number and action buttons must never drop
+     to their own line — only the name column (flex:1, min-width:0 below)
+     is allowed to shrink or wrap within its own space. The attend/undo
+     colour already carries the status, so there's no separate badge taking
+     up room, and delete — the one rare, destructive action — sits behind
+     the "⋮" menu instead of sitting inline next to it. */
+  .guest-item { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid rgba(var(--accent-rgb),0.08); gap:8px; transition:background 0.2s ease; }
   .guest-item:hover { background:rgba(var(--accent-rgb),0.05); }
   .guest-item:last-child { border-bottom:none; }
   .guest-item .name { color:var(--text-main); font-size:14px; font-weight:500; }
   .guest-item .gid { color:var(--text-soft); font-size:11px; direction:ltr; opacity:0.8; }
   .guest-item .gnum { flex:0 0 auto; min-width:26px; text-align:center; font-size:13px; font-weight:700; color:var(--gold); opacity:0.75; direction:ltr; }
-  .guest-item .dl-btn { background:none; border:1px solid rgba(var(--accent-rgb),0.3); color:var(--gold); font-size:13px; cursor:pointer; padding:4px 10px; border-radius:8px; transition:all 0.2s ease; white-space:nowrap; }
+  .guest-item .dl-btn { background:none; border:1px solid rgba(var(--accent-rgb),0.3); color:var(--gold); font-size:11px; cursor:pointer; padding:3px 8px; border-radius:8px; transition:all 0.2s ease; white-space:nowrap; }
   .guest-item .dl-btn:hover { background:rgba(var(--accent-rgb),0.1); border-color:var(--gold); }
-  .guest-item .attend-btn { background:rgba(76,175,80,0.12); border:1px solid rgba(76,175,80,0.5); color:#4CAF50; font-size:13px; cursor:pointer; padding:4px 10px; border-radius:8px; transition:all 0.2s ease; white-space:nowrap; }
+  .guest-item .attend-btn { background:rgba(76,175,80,0.12); border:1px solid rgba(76,175,80,0.5); color:#4CAF50; font-size:11px; cursor:pointer; padding:3px 8px; border-radius:8px; transition:all 0.2s ease; white-space:nowrap; }
   .guest-item .attend-btn:hover { background:rgba(76,175,80,0.25); border-color:#4CAF50; }
-  .guest-item .undo-btn { background:rgba(255,152,0,0.10); border:1px solid rgba(255,152,0,0.40); color:#FF9800; font-size:13px; cursor:pointer; padding:4px 10px; border-radius:8px; transition:all 0.2s ease; white-space:nowrap; opacity:0.85; }
+  .guest-item .undo-btn { background:rgba(255,152,0,0.10); border:1px solid rgba(255,152,0,0.40); color:#FF9800; font-size:11px; cursor:pointer; padding:3px 8px; border-radius:8px; transition:all 0.2s ease; white-space:nowrap; opacity:0.85; }
   .guest-item .undo-btn:hover { opacity:1; background:rgba(255,152,0,0.18); }
-  .guest-item .del-btn { background:rgba(244,67,54,0.08); border:1px solid rgba(244,67,54,0.25); color:#F44336; font-size:16px; cursor:pointer; padding:7px 10px; border-radius:8px; margin-inline-start:8px; transition:all 0.2s ease; }
+  .guest-item .more-wrap { position:relative; }
+  .guest-item .more-btn { background:none; border:1px solid rgba(var(--accent-rgb),0.25); color:var(--gold); font-size:13px; cursor:pointer; padding:3px 8px; border-radius:8px; line-height:1; transition:all 0.2s ease; }
+  .guest-item .more-btn:hover { background:rgba(var(--accent-rgb),0.1); }
+  .guest-item .more-menu { display:none; position:absolute; top:calc(100% + 6px); left:0; background:var(--bg-1); border:1px solid rgba(var(--accent-rgb),0.3); border-radius:10px; padding:6px; z-index:20; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+  .guest-item .more-menu.open { display:block; }
+  .guest-item .del-btn { background:rgba(244,67,54,0.08); border:1px solid rgba(244,67,54,0.25); color:#F44336; font-size:16px; cursor:pointer; padding:7px 10px; border-radius:8px; transition:all 0.2s ease; }
   .guest-item .del-btn:hover { background:rgba(244,67,54,0.18); border-color:#F44336; }
-  .badge { padding:4px 12px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .badge.scanned { background:rgba(76,175,80,0.15); color:#4CAF50; }
-  .badge.pending { background:rgba(255,255,255,0.05); color:var(--text-soft); }
   .pending-item { display:flex; align-items:center; gap:8px; padding:10px 6px; border-bottom:1px solid rgba(255,255,255,0.06); }
   .pending-item:last-child { border-bottom:none; }
   .pending-info { flex:1; min-width:0; }
@@ -879,12 +882,16 @@ function renderGuests() {
         <div class="name">${escapeHtml(g.name)}</div>
         <div class="gid">${escapeHtml(g.id)}</div>
       </div>
-      <span class="badge ${g.scanned ? 'scanned' : 'pending'}">${g.scanned ? '✓ حضر' : 'لسه'}</span>
       ${g.scanned
         ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">↩️ تراجع</button>`
         : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">✓ حضر</button>`}
       <button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">💾 حفظ</button>
-      <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeForJsAttr(g.name)}')">🗑</button>
+      <div class="more-wrap">
+        <button class="more-btn" onclick="toggleGuestMenu(event)">⋮</button>
+        <div class="more-menu">
+          <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeForJsAttr(g.name)}')">🗑</button>
+        </div>
+      </div>
     </div>
   `).join('');
 }
@@ -1219,6 +1226,19 @@ function closeTopMenu() {
 document.addEventListener('click', (e) => {
   const menu = document.getElementById('top-menu');
   if (menu && menu.style.display === 'block' && !e.target.closest('.toolbar')) closeTopMenu();
+});
+
+function toggleGuestMenu(e) {
+  e.stopPropagation();
+  const menu = e.currentTarget.nextElementSibling;
+  const wasOpen = menu.classList.contains('open');
+  document.querySelectorAll('.guest-item .more-menu.open').forEach(m => m.classList.remove('open'));
+  if (!wasOpen) menu.classList.add('open');
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.guest-item .more-wrap')) {
+    document.querySelectorAll('.guest-item .more-menu.open').forEach(m => m.classList.remove('open'));
+  }
 });
 
 function openRequestsModal() {
