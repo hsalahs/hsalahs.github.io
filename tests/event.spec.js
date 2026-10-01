@@ -162,6 +162,22 @@ test('undoing attendance decrements scannedCount, so re-scanning the same guest 
   await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.scannedCount)).toBe(0);
 });
 
+test('deleting a guest frees up their slot, so the customer can add a replacement', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { ...baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]), events: { e1: { ...EVENT, guestCount: 1 } } },
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  page.on('dialog', d => d.accept());
+  await page.locator('.guest-item .del-btn').click();
+  await expect(page.locator('.guest-item')).toHaveCount(0);
+
+  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.guestCount)).toBe(0);
+});
+
 test('adding sequential numbers creates that many numbered guests without needing a file', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {

@@ -93,6 +93,20 @@ await check('with a session: cannot decrease it', () => assertFails(anon('dev1')
 await check('with a session: cannot bump the counter together with any other field', () => assertFails(anon('dev1').doc('events/e1').update({ scannedCount: 3, name: 'hacked' })));
 await check('with a session: cannot use this path to touch guestCount instead', () => assertFails(anon('dev1').doc('events/e1').update({ guestCount: 99 })));
 
+console.log('\nfreeing up a guest slot after a delete (events/{id}.guestCount, owner-only, -1 only):');
+// e1 is still ownerUid 'owner1', guestCount: 2 at this point — untouched by
+// the scannedCount checks above.
+await check('unauthenticated: cannot decrement it', () => assertFails(unauth().doc('events/e1').update({ guestCount: 1 })));
+await check('a different signed-in customer cannot decrement it', () => assertFails(user('u9', 'other@example.com').doc('events/e1').update({ guestCount: 1 })));
+await check('a scan-session device cannot decrement it (not the owner)', () => assertFails(anon('dev1').doc('events/e1').update({ guestCount: 1 })));
+await check('the owner cannot jump it down by more than 1', () => assertFails(owner().doc('events/e1').update({ guestCount: 0 })));
+await check('the owner cannot bundle the decrement with another field', () => assertFails(owner().doc('events/e1').update({ guestCount: 1, name: 'hacked' })));
+await check('the owner CAN decrement it by exactly 1, alone, after deleting a guest', () => assertSucceeds(owner().doc('events/e1').update({ guestCount: 1 })));
+await check('...and again, down to 0', () => assertSucceeds(owner().doc('events/e1').update({ guestCount: 0 })));
+await check('...but not past 0', () => assertFails(owner().doc('events/e1').update({ guestCount: -1 })));
+await check('writing 0 again at the floor is a harmless no-op, still allowed', () => assertSucceeds(owner().doc('events/e1').update({ guestCount: 0 })));
+await check('the general "edit event details" rule still refuses to smuggle a guestCount decrease alongside another field', () => assertFails(owner().doc('events/e1').update({ name: 'New name', guestCount: -5 })));
+
 console.log('\nrevocation:');
 await check('the owner can change the code', () => assertSucceeds(owner().doc('events/e1/private/scan').set({ scanPin: '5678' })));
 await check('after the change: the old session can no longer be read back', () => assertFails(anon('dev1').doc('events/e1/scanSessions/dev1').get()));
