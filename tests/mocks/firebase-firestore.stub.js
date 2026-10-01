@@ -36,7 +36,10 @@ function permissionDenied(path) {
 function notify(path) {
   const ls = F().listeners[path];
   if (!ls) return;
-  ls.slice().forEach(entry => entry.cb(buildQuerySnapshot(path, entry.filters)));
+  // Doc-listener entries wrap their own re-fetch in `cb` (see onSnapshot)
+  // and ignore whatever's passed in; only query/collection entries need a
+  // freshly built snapshot (with docChanges) handed to them here.
+  ls.slice().forEach(entry => entry.cb(entry.kind === 'doc' ? undefined : snapshotWithChanges(path, entry)));
 }
 
 function matchesFilters(data, filters) {
@@ -65,6 +68,30 @@ function buildQuerySnapshot(path, filters) {
     empty: docs.length === 0,
     forEach(cb) { docs.forEach(cb); },
   };
+}
+
+// Adds docChanges() to a query/collection snapshot — which added, modified
+// or removed document just produced this snapshot, matching the real SDK's
+// method. `entry` carries the listener's own memory of the ids+data it last
+// saw (one listener's view can differ from another's, e.g. different
+// filters), which this call both reads and updates.
+function snapshotWithChanges(path, entry) {
+  const snap = buildQuerySnapshot(path, entry.filters);
+  const prev = entry.prevDocsById || {};
+  const next = {};
+  const changes = [];
+  snap.docs.forEach(d => {
+    const json = JSON.stringify(d.data());
+    next[d.id] = json;
+    if (!(d.id in prev)) changes.push({ type: 'added', doc: d });
+    else if (prev[d.id] !== json) changes.push({ type: 'modified', doc: d });
+  });
+  Object.keys(prev).forEach(id => {
+    if (!(id in next)) changes.push({ type: 'removed', doc: makeDocSnap(path, id, undefined) });
+  });
+  entry.prevDocsById = next;
+  snap.docChanges = () => changes;
+  return snap;
 }
 
 function makeDocSnap(path, id, data) {
@@ -172,6 +199,10 @@ export function getDoc(ref) {
 
 export function getDocs(refOrQuery) {
   if (isDenied(refOrQuery.path) || isListDenied(refOrQuery.path)) return Promise.reject(permissionDenied(refOrQuery.path));
+  // Test-only tally of which collection paths actually got a real read, so
+  // a test can assert a quota-saving change really stopped a redundant one
+  // (not just that the UI still ends up showing the right numbers).
+  (F().getDocsPaths = F().getDocsPaths || []).push(refOrQuery.path);
   if (refOrQuery.__type === 'query') {
     return Promise.resolve(buildQuerySnapshot(refOrQuery.path, refOrQuery.filters));
   }
@@ -210,7 +241,7 @@ export function onSnapshot(refOrQuery, cb, errCb) {
       const coll = F().store[refOrQuery.collPath] || {};
       cb(makeDocSnap(refOrQuery.collPath, refOrQuery.id, coll[refOrQuery.id]));
     };
-    const entry = { cb: emit, filters: null };
+    const entry = { cb: emit, filters: null, kind: 'doc' };
     F().listeners[path] = F().listeners[path] || [];
     F().listeners[path].push(entry);
     emit();
@@ -219,10 +250,10 @@ export function onSnapshot(refOrQuery, cb, errCb) {
     };
   }
   const filters = refOrQuery.__type === 'query' ? refOrQuery.filters : null;
-  const entry = { cb, filters };
+  const entry = { cb, filters, kind: 'query' };
   F().listeners[path] = F().listeners[path] || [];
   F().listeners[path].push(entry);
-  cb(buildQuerySnapshot(path, filters));
+  cb(snapshotWithChanges(path, entry));
   return () => {
     F().listeners[path] = (F().listeners[path] || []).filter(e => e !== entry);
   };
