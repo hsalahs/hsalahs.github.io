@@ -148,6 +148,8 @@
   .guest-item .more-menu.open { display:block; }
   .guest-item .del-btn { background:rgba(244,67,54,0.08); border:1px solid rgba(244,67,54,0.25); color:#F44336; font-size:16px; cursor:pointer; padding:7px 10px; border-radius:8px; transition:all 0.2s ease; }
   .guest-item .del-btn:hover { background:rgba(244,67,54,0.18); border-color:#F44336; }
+  #bulk-bar { display:flex; align-items:center; justify-content:space-between; background:rgba(244,67,54,0.08); border:1px solid rgba(244,67,54,0.3); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:13px; color:#ff9d9d; }
+  .guest-item .gsel { width:18px; height:18px; accent-color:var(--gold); flex-shrink:0; cursor:pointer; }
   .pending-item { display:flex; align-items:center; gap:8px; padding:10px 6px; border-bottom:1px solid rgba(255,255,255,0.06); }
   .pending-item:last-child { border-bottom:none; }
   .pending-info { flex:1; min-width:0; }
@@ -213,6 +215,7 @@ setTimeout(() => {
       <button class="icon-btn" onclick="window.location.href='app.html';" title="كل مناسباتي">📋</button>
       <div class="dropdown-menu" id="top-menu" style="display:none;">
         <button onclick="location.reload();">🔄 تحديث الصفحة</button>
+        <button onclick="closeTopMenu(); enterSelectionMode();">☑️ تحديد ضيوف للحذف</button>
         <button onclick="closeTopMenu(); openRequestsModal();" style="display:flex; align-items:center; justify-content:space-between;">📥 الطلبات<span class="badge-count" id="requests-badge" style="display:none;">0</span></button>
         <button id="notif-toggle-btn" onclick="closeTopMenu(); toggleRequestNotifications();">🔔 تفعيل إشعارات الطلبات</button>
         <button onclick="closeTopMenu(); document.getElementById('csv-import').click();">📂 استيراد قائمة (Excel / CSV / أسماء)</button>
@@ -309,6 +312,13 @@ setTimeout(() => {
       </div>
       <div class="card">
         <input type="text" id="guest-search" placeholder="🔍 بحث بالاسم" oninput="searchGuests()" style="margin:0;">
+      </div>
+      <div id="bulk-bar" style="display:none;">
+        <span id="bulk-count"></span>
+        <div style="display:flex; gap:8px;">
+          <button class="btn ghost" style="width:auto; margin:0; padding:8px 14px; font-size:12px;" onclick="exitSelectionMode()">إلغاء</button>
+          <button class="btn danger" style="width:auto; margin:0; padding:8px 14px; font-size:12px;" onclick="bulkDeleteSelected()">🗑 حذف المحددين</button>
+        </div>
       </div>
       <div class="guest-list" id="guests-list"></div>
     </div>
@@ -457,6 +467,8 @@ let guests = [];
 let requests = [];
 let statusFilter = 'all'; // 'all' | 'attended' | 'pending'
 let searchQuery = '';
+let selectionMode = false;
+let selectedGuestIds = new Set();
 
 function copyInviteLink() {
   if (paymentGateActive()) { openPaymentWhatsapp(); return; }
@@ -877,23 +889,76 @@ function renderGuests() {
   if (list.length === 0) { el.innerHTML = '<div class="empty">لسه ما فيه ضيوف</div>'; return; }
   el.innerHTML = list.map((g, i) => `
     <div class="guest-item">
-      <span class="gnum">${i + 1}</span>
+      ${selectionMode
+        ? `<input type="checkbox" class="gsel" ${selectedGuestIds.has(g.docId) ? 'checked' : ''} onchange="toggleGuestSelect('${g.docId}', this.checked)">`
+        : `<span class="gnum">${i + 1}</span>`}
       <div style="flex:1; min-width:0;">
         <div class="name">${escapeHtml(g.name)}</div>
         <div class="gid">${escapeHtml(g.id)}</div>
       </div>
-      ${g.scanned
+      ${selectionMode ? '' : (g.scanned
         ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">↩️ تراجع</button>`
-        : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">✓ حضر</button>`}
-      <button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">💾 حفظ</button>
+        : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">✓ حضر</button>`)}
+      ${selectionMode ? '' : `<button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">💾 حفظ</button>
       <div class="more-wrap">
         <button class="more-btn" onclick="toggleGuestMenu(event)">⋮</button>
         <div class="more-menu">
           <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeForJsAttr(g.name)}')">🗑</button>
         </div>
-      </div>
+      </div>`}
     </div>
   `).join('');
+}
+
+function enterSelectionMode() {
+  selectionMode = true;
+  selectedGuestIds = new Set();
+  document.getElementById('bulk-bar').style.display = 'flex';
+  updateBulkCount();
+  renderGuests();
+}
+
+function exitSelectionMode() {
+  selectionMode = false;
+  selectedGuestIds = new Set();
+  document.getElementById('bulk-bar').style.display = 'none';
+  renderGuests();
+}
+
+function toggleGuestSelect(docId, checked) {
+  if (checked) selectedGuestIds.add(docId); else selectedGuestIds.delete(docId);
+  updateBulkCount();
+}
+
+function updateBulkCount() {
+  document.getElementById('bulk-count').textContent = 'محدد: ' + selectedGuestIds.size;
+}
+
+async function bulkDeleteSelected() {
+  const ids = [...selectedGuestIds];
+  if (ids.length === 0) { showToast('حدد ضيف واحد على الأقل'); return; }
+  if (!confirm('حذف ' + ids.length + ' ضيف نهائيًا؟ هذا الإجراء لا يمكن التراجع عنه.')) return;
+  // Sequential, not a single batched write: firestore.rules caps guestCount
+  // at exactly -1 per write (see deleteGuest), so each guest is its own
+  // delete+decrement transaction, same as deleting one at a time.
+  const { doc, runTransaction } = window._fsFns;
+  const eventRef = doc(window._db, 'events', eventId);
+  let deleted = 0;
+  showToast('⏳ جاري الحذف... 0 / ' + ids.length);
+  for (const docId of ids) {
+    const gRef = doc(window._db, 'events', eventId, 'guests', docId);
+    try {
+      await runTransaction(window._db, async (tx) => {
+        const evSnap = await tx.get(eventRef);
+        tx.delete(gRef);
+        tx.update(eventRef, { guestCount: Math.max(0, (evSnap.data().guestCount || 0) - 1) });
+      });
+      deleted++;
+      showToast('⏳ جاري الحذف... ' + deleted + ' / ' + ids.length);
+    } catch (e) { showErr(e); }
+  }
+  exitSelectionMode();
+  showToast('✅ تم حذف ' + deleted + ' ضيف');
 }
 
 async function markGuestAttend(docId, name) {
