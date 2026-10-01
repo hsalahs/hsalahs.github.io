@@ -40,7 +40,8 @@ A non-technical founder on a tight budget who **writes Arabic** (answer in Arabi
 - **Door supervisors** ("مشرف الباب"): open the scan link and type a 6-digit door code; the anonymous session lives in `events/{id}/scanSessions`. Wording: "مشرفين", never "فريق الأمن".
 - **Theme:** five palettes (gold, rose, emerald, sapphire, ivory). The dashboard and invitation follow the theme; the scanner follows the accents only and stays dark. The QR itself is always black on light.
 - **Not building:** a "plan label", and the human services (event-day support, field supervisors).
-- **Deferred:** event-type field, time / organizer / notes fields, party-size cards and open registration, App Check (no budget), GitHub main-branch protection (the user may do it), landing "install hint", pricing section.
+- **Deferred:** event-type field, time / organizer / notes fields, party-size cards and open registration, App Check (no budget), landing "install hint", pricing section.
+- **`main` is now branch-protected** (classic rule, user set it up): requires a PR + the "Page tests (Playwright)" status check to pass before merging. No required-approvals rule (the user is the only account, so self-approval would be impossible). The "Firestore security rules (emulator)" check wasn't in GitHub's search yet at setup time and may still need adding by hand later — not required for merges to work.
 - **Domain:** the user will register a `.com` (name still undecided; ideas were haflatna.com, 3azeema.com, farhatk.com, da3wt.com). Needs: a `CNAME` file, GitHub Pages custom domain, the new domain added to Firebase Auth authorized domains, and the absolute URLs in `index.html` (canonical, og:url, og:image). Old github.io links redirect. Browser storage and sessions reset on the new origin. Do it away from event days.
 
 ## Open problem: Firebase read quota
