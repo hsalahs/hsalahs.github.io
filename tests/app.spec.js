@@ -72,6 +72,42 @@ test('the admin account sees every event, not just their own, and bypasses the l
   await expect(page.locator('#create-toggle-btn')).toBeVisible();
 });
 
+test('changing one event does not re-read every other listed event\'s guest list', async ({ page }) => {
+  // Regression test for the admin dashboard, which watches every customer's
+  // events at once: one customer's change used to re-fetch EVERY listed
+  // event's full guest subcollection, not just the one that changed.
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: {
+      events: {
+        e1: { name: 'Customer A Event', ownerUid: 'u1', date: '', venue: '', createdAt: { seconds: 1 }, guestCount: 0 },
+        e2: { name: 'Customer B Event', ownerUid: 'u2', date: '', venue: '', createdAt: { seconds: 2 }, guestCount: 0 },
+      },
+      'events/e1/guests': {}, 'events/e2/guests': {},
+    },
+  });
+  await page.goto('/app.html');
+  await expect(page.locator('#events-list')).toContainText('Customer A Event');
+
+  const guestReads = (p) => page.evaluate((path) =>
+    (window.__fakeFirebase.getDocsPaths || []).filter(x => x === path).length, p);
+
+  // Initial load reads both events' guest lists once each.
+  await expect.poll(() => guestReads('events/e1/guests')).toBe(1);
+  await expect.poll(() => guestReads('events/e2/guests')).toBe(1);
+
+  // Something changes on e1 only — e2's own doc is untouched.
+  await page.evaluate(() => {
+    const { doc, updateDoc } = window._fsFns;
+    return updateDoc(doc(window._db, 'events', 'e1'), { guestCount: 1 });
+  });
+
+  // e1's stats re-read, but e2's guest list is NOT read again.
+  await expect.poll(() => guestReads('events/e1/guests')).toBe(2);
+  expect(await guestReads('events/e2/guests')).toBe(1);
+});
+
 test('the admin sees a counter banner for unpaid events, and each event has one unified card with its own activate button', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {

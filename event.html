@@ -794,7 +794,7 @@ function scheduleRenderGuests() {
 }
 
 function startListeners() {
-  const { collection, onSnapshot } = window._fsFns;
+  const { collection, query, where, onSnapshot } = window._fsFns;
   onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     updateStats();
@@ -806,8 +806,13 @@ function startListeners() {
     guestsListenerOK = false;
     refreshConnectionBanner();
   });
-  onSnapshot(collection(window._db, 'events', eventId, 'requests'), (snap) => {
-    requests = snap.docs.map(d => ({ docId: d.id, ...d.data() })).filter(r => r.status === 'pending');
+  // Filtered server-side rather than loaded in full and filtered here: an
+  // event that gets most of its guests through self-registration can rack up
+  // a long history of already-approved/rejected requests, and this listener
+  // only ever displays the pending ones.
+  const pendingRequests = query(collection(window._db, 'events', eventId, 'requests'), where('status', '==', 'pending'));
+  onSnapshot(pendingRequests, (snap) => {
+    requests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     updateRequestsBadge();
     renderRequests();
     requestsListenerOK = true;

@@ -304,7 +304,23 @@ async function createNewEvent() {
   }
 }
 
-function renderEvents(events, showOwner) {
+// Last real {total, attended} read for each event, so a change on ONE
+// listed event doesn't force every other event's stat box back to "…" and
+// a fresh guest-subcollection read on the next render — see renderEvents
+// and loadEventStats.
+const eventStatsCache = {};
+
+function statsBoxHtml(ev) {
+  const cached = eventStatsCache[ev.id];
+  const total = cached ? cached.total : '…';
+  const attended = cached ? cached.attended : '…';
+  return `
+    <div class="event-stat"><div class="n">${total}</div><div class="l">كل الضيوف</div></div>
+    <div class="event-stat"><div class="n">${attended}</div><div class="l">حضروا</div></div>
+  `;
+}
+
+function renderEvents(events, showOwner, changedIds) {
   const list = document.getElementById('events-list');
   if (events.length === 0) {
     list.innerHTML = '<div class="empty">لسه ما أنشأت أي مناسبة</div>';
@@ -319,10 +335,7 @@ function renderEvents(events, showOwner) {
           ${showOwner ? `<div class="event-date">👤 ${escapeHtml(ev.ownerEmail || ev.ownerUid || '')}</div>` : ''}
         </div>
       </div>
-      <div class="event-stats" id="stats-${ev.id}">
-        <div class="event-stat"><div class="n">…</div><div class="l">كل الضيوف</div></div>
-        <div class="event-stat"><div class="n">…</div><div class="l">حضروا</div></div>
-      </div>
+      <div class="event-stats" id="stats-${ev.id}">${statsBoxHtml(ev)}</div>
       <div class="event-actions">
         ${showOwner && !ev.paid ? `<button class="btn small" style="margin:0; flex:1;" onclick="quickActivatePayment('${ev.id}')">✅ تفعيل</button>` : ''}
         <a class="btn ghost small" style="text-decoration:none; margin:0; flex:1; text-align:center;" href="event.html?id=${ev.id}">فتح</a>
@@ -330,7 +343,15 @@ function renderEvents(events, showOwner) {
       </div>
     </div>
   `).join('');
-  events.forEach(loadEventStats);
+  // Re-read a listed event's guest subcollection only when that event's own
+  // doc was just added/changed (changedIds, from watchEvents' docChanges)
+  // or we've never loaded it before — not every listed event on every
+  // snapshot. On the admin's dashboard, which watches every customer's
+  // events at once, one customer adding a guest used to re-bill reads for
+  // every other customer's guest list too.
+  events.forEach(ev => {
+    if (!changedIds || changedIds.has(ev.id) || !eventStatsCache[ev.id]) loadEventStats(ev);
+  });
 }
 
 async function loadEventStats(ev) {
@@ -341,6 +362,7 @@ async function loadEventStats(ev) {
     const snap = await getDocs(collection(window._db, 'events', ev.id, 'guests'));
     const total = snap.size;
     const attended = snap.docs.filter(d => d.data().scanned).length;
+    eventStatsCache[ev.id] = { total, attended };
     box.innerHTML = `
       <div class="event-stat"><div class="n">${total}</div><div class="l">كل الضيوف</div></div>
       <div class="event-stat"><div class="n">${attended}</div><div class="l">حضروا</div></div>
@@ -495,7 +517,8 @@ function watchEvents(user) {
     events.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
     myEventsCount = admin ? events.filter(ev => ev.ownerUid === user.uid).length : events.length;
     updateCreateGate(admin);
-    renderEvents(events, admin);
+    const changedIds = new Set(snap.docChanges().filter(c => c.type !== 'removed').map(c => c.doc.id));
+    renderEvents(events, admin, changedIds);
     if (admin) {
       renderUnpaidEvents(events);
       checkNewlyCappedEvents(events);
