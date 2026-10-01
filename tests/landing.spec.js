@@ -19,7 +19,7 @@ test('sharing the link shows a proper card: title, description and a real image 
   // WhatsApp and friends fetch the image from the public address, so it must
   // be absolute, and the file it points at must actually be in the repo.
   const image = await meta('meta[property="og:image"]');
-  expect(image).toMatch(/^https:\/\/hsalahs\.github\.io\/icons\/og-image\.jpg$/);
+  expect(image).toMatch(/^https:\/\/da3wt\.com\/icons\/og-image\.jpg$/);
   expect(await meta('meta[name="twitter:image"]')).toBe(image);
   const file = repoFile(new URL(image).pathname.slice(1));
   expect(fs.existsSync(file)).toBe(true);
