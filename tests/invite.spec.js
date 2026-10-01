@@ -68,6 +68,8 @@ test('an approved guest gets their card from the request itself — the invite p
   });
   await page.goto('/invite.html?event=e1');
   await expect(page.locator('#card')).toContainText('تم تأكيد حضورك');
+  // The demo-only scanning note shouldn't show up for a real guest.
+  await expect(page.locator('#card')).not.toContainText('مسح الكود عند الباب يتم لحظياً');
 });
 
 test('an approval that predates the barcode-id-on-request change shows "preparing your card", then the card once it is filled in', async ({ page }) => {
@@ -193,6 +195,9 @@ test('the sample invitation (?demo=1) walks through registration and approval wi
   await expect(page.locator('#card')).toContainText('بانتظار موافقة المنظّم');
   await expect(page.locator('#card')).toContainText('يوافق المنظّم', { timeout: 3000 });
   await expect(page.locator('#card')).toContainText('تم تأكيد حضورك', { timeout: 5000 });
+  // The demo can't simulate the door camera itself, only the card a real
+  // guest ends up with — this clarifies scanning still happens for real.
+  await expect(page.locator('#card')).toContainText('مسح الكود عند الباب يتم لحظياً');
 
   const state = await page.evaluate(() => ({
     store: JSON.stringify(window.__fakeFirebase.store),
