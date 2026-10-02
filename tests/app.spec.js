@@ -140,6 +140,36 @@ test('the admin sees a counter banner for unpaid events, and each event has one 
   expect(await page.evaluate(() => window.__fakeFirebase.store.events.e1.guestLimit)).toBe(120);
 });
 
+test('the admin sees every account that ever registered, even one with no event', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: {
+      events: {},
+      users: { u1: { email: 'noevent@example.com', createdAt: { seconds: 1700000000 } } },
+    },
+  });
+  await page.goto('/app.html');
+  await expect(page.locator('#admin-accounts-section')).toBeVisible();
+  await expect(page.locator('#admin-accounts-badge')).toHaveText('1');
+  await expect(page.locator('#admin-accounts-list')).toContainText('noevent@example.com');
+});
+
+test('signing up writes a record the admin can see later, even if the account never creates an event', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: null });
+  await page.goto('/app.html');
+  await page.locator('#auth-toggle a').click();
+  await page.locator('#auth-email').fill('newcustomer@example.com');
+  await page.locator('#auth-pass').fill('whatever123');
+  await page.locator('#auth-submit-btn').click();
+  await expect(page.locator('#app-view')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => {
+    const u = window.__fakeFirebase.store.users && window.__fakeFirebase.store.users['test-uid'];
+    return u ? u.email : null;
+  })).toBe('newcustomer@example.com');
+});
+
 test('cancelling the number prompt leaves the event unactivated', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {

@@ -124,6 +124,17 @@ service cloud.firestore {
       );
     }
 
+    // Mirrors every signup so the admin can see every account that ever
+    // registered, even one that created no event or deleted it — Firebase
+    // Auth itself keeps no record the admin's own client code can list
+    // (that needs a service account, which this no-backend site doesn't
+    // have). Written once at signup; nothing else ever changes it.
+    match /users/{uid} {
+      allow read: if isAdmin();
+      allow create: if request.auth != null && request.auth.uid == uid &&
+        request.resource.data.keys().hasOnly(['email', 'createdAt']);
+    }
+
     match /events/{eventId} {
       // Public on purpose: invite.html (guests) and scan.html (door staff)
       // need the name/date/venue/theme without signing in. Nothing secret
