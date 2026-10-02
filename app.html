@@ -111,7 +111,7 @@ setTimeout(() => {
       <input type="email" id="auth-email" placeholder="البريد الإلكتروني">
       <input type="password" id="auth-pass" placeholder="كلمة المرور">
       <button class="btn" id="auth-submit-btn" onclick="submitAuth()">دخول</button>
-      <div class="toggle-row" id="auth-toggle">ما عندك حساب؟ <a onclick="toggleAuthMode()">سجّل واحد جديد</a></div>
+      <div class="toggle-row" id="auth-toggle">ليس لديك حساب؟ <a onclick="toggleAuthMode()">أنشئ حساب</a></div>
       <div class="toggle-row" id="forgot-pass-row"><a onclick="sendResetEmail()">نسيت كلمة المرور؟</a></div>
     </div>
   </div>
@@ -152,7 +152,7 @@ setTimeout(() => {
     </div>
 
     <div class="card" id="create-form" style="display:none">
-      <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: عرس حسن وفاطمة)">
+      <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: زفاف حسن وفاطمة)">
       <input type="date" id="ev-date" placeholder="التاريخ">
       <input type="text" id="ev-venue" placeholder="مكان الحفل">
       <input type="text" id="ev-maps" placeholder="رابط الموقع على الخريطة (اختياري)">
@@ -182,8 +182,8 @@ function toggleAuthMode() {
   authMode = authMode === 'login' ? 'signup' : 'login';
   document.getElementById('auth-submit-btn').textContent = authMode === 'login' ? 'دخول' : 'إنشاء حساب';
   document.getElementById('auth-toggle').innerHTML = authMode === 'login'
-    ? 'ما عندك حساب؟ <a onclick="toggleAuthMode()">سجّل واحد جديد</a>'
-    : 'عندك حساب؟ <a onclick="toggleAuthMode()">سجّل دخول</a>';
+    ? 'ليس لديك حساب؟ <a onclick="toggleAuthMode()">أنشئ حساب</a>'
+    : 'لديك حساب؟ <a onclick="toggleAuthMode()">سجّل دخول</a>';
   document.getElementById('forgot-pass-row').style.display = authMode === 'login' ? 'block' : 'none';
 }
 
