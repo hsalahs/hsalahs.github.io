@@ -674,9 +674,23 @@ async function init() {
   else renderForm(currentEvent);
 }
 
-if (isDemo) startDemo();          // needs no database at all
-else if (window._db) init();
-else window.addEventListener('appDbReady', init);
+if (isDemo) {
+  startDemo();          // needs no database at all
+} else if (window._db) {
+  init();
+} else {
+  // Same "trapped forever" failure other pages' init guards close: a slow
+  // or dropped connection while firebase-init.js's own CDN imports load
+  // means appDbReady never fires, leaving this stuck on "جاري التحميل..."
+  // forever with no way out.
+  const appDbTimeout = setTimeout(() => {
+    const el = document.getElementById('loading');
+    el.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
+    el.style.cursor = 'pointer';
+    el.onclick = () => location.reload();
+  }, 8000);
+  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); init(); });
+}
 </script>
 </body>
 </html>

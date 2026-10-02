@@ -1771,8 +1771,21 @@ async function rejectRequest(reqDocId) {
   } catch (e) { showErr(e); }
 }
 
-if (window._auth) init();
-else window.addEventListener('appDbReady', init);
+if (window._auth) {
+  init();
+} else {
+  // Same "trapped forever" failure the getDoc retry above closes, one layer
+  // earlier: a slow or dropped connection while firebase-init.js's own CDN
+  // imports load means appDbReady never fires, leaving this stuck on
+  // "جاري التحميل..." forever with no way out.
+  const appDbTimeout = setTimeout(() => {
+    const el = document.getElementById('loading-msg');
+    el.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
+    el.style.cursor = 'pointer';
+    el.onclick = () => location.reload();
+  }, 8000);
+  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); init(); });
+}
 </script>
 </body>
 </html>
