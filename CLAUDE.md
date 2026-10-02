@@ -42,8 +42,8 @@ These are standing instructions the user gave in chat for how to respond, not pr
 6. **Firestore rules are published by the user by hand** in the Firebase Console (the deploy tool is blocked). After they publish, verify with `firebase_get_security_rules` / REST probes.
 
 ## Tests
-- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 6-7 minutes, 257 tests). Run a single file while developing, the full suite once before pushing.
-- Rules tests (real emulator): `npm run test:rules` (117 checks; `RULES_PATH` overrides the rules file).
+- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 6-7 minutes, 259 tests). Run a single file while developing, the full suite once before pushing.
+- Rules tests (real emulator): `npm run test:rules` (125 checks; `RULES_PATH` overrides the rules file).
 - Playwright uses in-memory Firebase stubs (`tests/mocks/*.stub.js`, `tests/helpers.js`: `stubFirebase`, `seedFakeFirebase`). The store resets on navigation. JSZip is served from `node_modules` via `page.route`. See `tests/README.md`.
 - Tool quirks: heredocs expand `\uXXXX` (use the Write tool for escapes); avoid `pkill -f`; foreground `sleep` is blocked (use until-loops).
 
@@ -58,6 +58,7 @@ These are standing instructions the user gave in chat for how to respond, not pr
 - **guestCount can now decrease:** deleting a guest frees up their slot (business decision — the cap means "current guest count", not "total ever added"). `event.html`'s `deleteGuest()` does this in a transaction (delete + decrement together); `firestore.rules` has a matching owner-only, -1-only rule next to the scannedCount one.
 - **⚠️ Needs revisiting — the user flagged this specifically:** the guestCount-decrement rule is NOT tied to an actual guest being deleted. A technically savvy customer could manually call the decrement (dev tools / raw API) without deleting a real guest, then add a replacement — repeating this to gradually add more guests than agreed, bypassing the cap over time even though no single moment exceeds it. Accepted for now as a low-stakes trade-off (small, non-adversarial customer base, informal WhatsApp-agreed pricing), but the user wants to come back to this — options to properly close it: tie the decrement to a real guest deletion via a cross-document rule check (more rules complexity), or accept and monitor.
 - **Not yet done: a full logged-in customer walkthrough on the live site** (sign up → create event → add guest → view invite → scan a QR) — only the public pages (landing, login screen, guide) have been visually checked on `da3wt.com` so far. Needs either a disposable test account the user creates and shares, or the user doing it themselves and sending screenshots.
+- **`users/{uid}` collection:** every signup mirrors itself into Firestore (email + createdAt, written once in `app.html`'s `submitAuth()`) — Firebase Auth alone keeps no record the client can list, and the admin's old "events only" view showed nothing for an account that never created an event or deleted it. `app.html`'s admin view has a "كل الحسابات المسجّلة" panel reading it. `firestore.rules`: owner can create only their own doc with exactly `{email, createdAt}`; only the admin can read it.
 
 ## Open problem: Firebase read quota
 - **Blaze (paid) is not available to the user**: billing addresses in Saudi Arabia must go through the reseller CNTXT and need a commercial registration. Stay on Spark (about 50k reads/day for the whole project; when it runs out everything stops until the daily reset).
