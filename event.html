@@ -243,15 +243,15 @@ setTimeout(() => {
     <div class="stats">
       <div class="stat-box tappable" id="box-all" onclick="setStatusFilter('all')">
         <div class="stat-num" id="stat-total">0</div>
-        <div class="stat-label">كل الضيوف</div>
+        <div class="stat-label">عداد الضيوف</div>
       </div>
       <div class="stat-box tappable" id="box-attended" onclick="setStatusFilter('attended')">
         <div class="stat-num" id="stat-attended">0</div>
-        <div class="stat-label">حضروا</div>
+        <div class="stat-label">الحضور</div>
       </div>
       <div class="stat-box tappable" id="box-pending" onclick="setStatusFilter('pending')">
         <div class="stat-num" id="stat-pending">0</div>
-        <div class="stat-label">لسه</div>
+        <div class="stat-label">لم يحضروا</div>
       </div>
     </div>
 
@@ -277,9 +277,9 @@ setTimeout(() => {
 
     <div id="rules-warning" style="display:none; background:rgba(229,72,77,0.10); border:1px solid rgba(229,72,77,0.35); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:12.5px; color:#ffb3b3; line-height:1.7;">⚠️ (للأدمن فقط) قواعد أمان Firestore الجديدة غير منشورة بعد — كود دخول السكانر لسا مكشوف لأي شخص معه رابط الدعوة. انشر ملف firestore.rules من Firebase.</div>
     <div id="payment-gate">
-      <div class="pg-title" id="pg-title">🔒 وصلت لحد الضيوف المجانيين</div>
-      <div class="pg-sub" id="pg-sub">أضفت أول 5 ضيوف مجانًا — لإضافة المزيد تواصل معنا ونتفق على العدد المناسب لمناسبتك.</div>
-      <button class="btn wa" onclick="openPaymentWhatsapp()">💬 تواصل معنا عبر واتساب</button>
+      <div class="pg-title" id="pg-title">🔒 الحد المجاني لعدد الضيوف</div>
+      <div class="pg-sub" id="pg-sub">أضفت أول 5 ضيوف مجانًا — لإضافة المزيد تواصل معنا.</div>
+      <button class="btn wa" onclick="openPaymentWhatsapp()">💬 للتواصل عبر واتساب</button>
     </div>
 
     <div class="card" id="invite-link-card">
@@ -385,10 +385,10 @@ function renderPaymentGate() {
   const onFreeTier = !eventData || !eventData.paid;
   if (active) {
     document.getElementById('pg-title').textContent = onFreeTier
-      ? '🔒 وصلت لحد الضيوف المجانيين'
+      ? '🔒 الحد المجاني لعدد الضيوف'
       : '🔒 وصلت لحد الضيوف (' + cap + ')';
     document.getElementById('pg-sub').textContent = onFreeTier
-      ? 'أضفت أول ' + FREE_GUEST_LIMIT + ' ضيوف مجانًا — لإضافة المزيد تواصل معنا ونتفق على العدد المناسب لمناسبتك.'
+      ? 'أضفت أول ' + FREE_GUEST_LIMIT + ' ضيوف مجانًا — لإضافة المزيد تواصل معنا.'
       : 'وصلت للعدد المتفق عليه لمناسبتك (' + cap + ' ضيف) — لزيادته تواصل معنا.';
   }
 
