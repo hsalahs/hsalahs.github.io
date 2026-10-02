@@ -886,7 +886,7 @@ function searchGuests() {
 function renderGuests() {
   const el = document.getElementById('guests-list');
   const list = visibleGuests();
-  if (list.length === 0) { el.innerHTML = '<div class="empty">لسه ما فيه ضيوف</div>'; return; }
+  if (list.length === 0) { el.innerHTML = '<div class="empty">لا يوجد ضيف للآن</div>'; return; }
   el.innerHTML = list.map((g, i) => `
     <div class="guest-item">
       ${selectionMode
