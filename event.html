@@ -275,7 +275,7 @@ setTimeout(() => {
       <button class="btn danger" style="width:100%; margin-top:12px;" onclick="deleteThisEvent()">🗑 حذف المناسبة نهائيًا</button>
     </div>
 
-    <div id="rules-warning" style="display:none; background:rgba(229,72,77,0.10); border:1px solid rgba(229,72,77,0.35); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:12.5px; color:#ffb3b3; line-height:1.7;">⚠️ (للأدمن فقط) قواعد أمان Firestore الجديدة غير منشورة بعد — كود دخول السكانر لسا مكشوف لأي شخص معه رابط الدعوة. انشر ملف firestore.rules من Firebase.</div>
+    <div id="rules-warning" style="display:none; background:rgba(229,72,77,0.10); border:1px solid rgba(229,72,77,0.35); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:12.5px; color:#ffb3b3; line-height:1.7;">⚠️ (للأدمن فقط) قواعد أمان Firestore الجديدة غير منشورة بعد — كود دخول السكانر لسه مكشوف لأي شخص معه رابط الدعوة. انشر ملف firestore.rules من Firebase.</div>
     <div id="payment-gate">
       <div class="pg-title" id="pg-title">🔒 الحد المجاني لعدد الضيوف</div>
       <div class="pg-sub" id="pg-sub">أضفت أول 5 ضيوف مجانًا — لإضافة المزيد تواصل معنا.</div>
@@ -418,7 +418,7 @@ function renderPaymentGate() {
   } else if (active) {
     menuItem.innerHTML = '<span style="color:#E5484D;">🔒 وصلت للحد المجاني</span>';
   } else {
-    menuItem.innerHTML = '<span style="color:var(--gold);">🎁 ' + (FREE_GUEST_LIMIT - guestCount()) + ' ضيوف مجانيين متبقين</span>';
+    menuItem.innerHTML = '<span style="color:var(--gold);">🎁 باقي لك ' + (FREE_GUEST_LIMIT - guestCount()) + ' ' + guestWord(FREE_GUEST_LIMIT - guestCount()) + ' مجانًا</span>';
   }
 }
 
@@ -1374,8 +1374,8 @@ async function downloadAllCards(from, to) {
   link.download = 'Invitations' + label + '.zip';
   link.click();
   showToast(failed > 0
-    ? '⚠️ تم التحميل، لكن ' + failed + ' من ' + total + ' بطاقة فشلت — جرّب متصفح ثاني لها'
-    : '✅ تم تحميل الملف! (' + total + ' دعوة)');
+    ? '⚠️ تم التحميل، لكن ' + failed + ' من ' + total + ' ' + arPlural(total, 'بطاقة', 'بطاقتين', 'بطاقات') + ' فشلت — جرّب متصفح ثاني لها'
+    : '✅ تم تحميل الملف! (' + total + ' ' + arPlural(total, 'دعوة', 'دعوتين', 'دعوات') + ')');
 }
 
 function askRangeDownload() {
@@ -1521,7 +1521,7 @@ async function toggleRequestNotifications() {
 
 function renderRequests() {
   const el = document.getElementById('requests-list');
-  if (requests.length === 0) { el.innerHTML = '<div class="empty">مافيه طلبات جديدة</div>'; return; }
+  if (requests.length === 0) { el.innerHTML = '<div class="empty">ما فيه طلبات جديدة</div>'; return; }
   el.innerHTML = requests.map(r => `
     <div class="pending-item">
       <div class="pending-info">
@@ -1645,8 +1645,8 @@ async function importGuestNames(names) {
     if (addedThisBatch < batch.length) { blockedByGate = total - added; break; }
   }
 
-  let msg = 'تم استيراد ' + added + ' ' + guestWord(added) + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' مكرر)' : '');
-  if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + capForMsg + ' ' + guestWord(capForMsg) + '، ' + blockedByGate + ' اسم ما انضاف. تواصل معنا لزيادة العدد.';
+  let msg = 'تم استيراد ' + added + ' ' + guestWord(added) + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' ' + arPlural(duplicates, 'اسم مكرر', 'اسمين مكررين', 'أسماء مكررة') + ')' : '');
+  if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + capForMsg + ' ' + guestWord(capForMsg) + '، وما انضاف ' + blockedByGate + ' ' + arPlural(blockedByGate, 'اسم', 'اسمين', 'أسماء') + '. تواصل معنا لزيادة العدد.';
   alert(msg);
   if (blockedByGate > 0) openPaymentWhatsapp();
 }

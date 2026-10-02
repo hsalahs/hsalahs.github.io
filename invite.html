@@ -232,9 +232,9 @@ function startCountdown(eventData) {
     const h = Math.floor((diff % 86400000) / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
     const parts = [];
-    if (d > 0) parts.push(d + ' يوم');
-    parts.push(h + ' ساعة');
-    parts.push(m + ' دقيقة');
+    if (d > 0) parts.push(d + ' ' + arPlural(d, 'يوم', 'يومين', 'أيام'));
+    parts.push(h + ' ' + arPlural(h, 'ساعة', 'ساعتين', 'ساعات'));
+    parts.push(m + ' ' + arPlural(m, 'دقيقة', 'دقيقتين', 'دقائق'));
     el.textContent = 'باقي ' + parts.join(' و ');
   }
   tick();
@@ -329,7 +329,7 @@ function renderPending() {
 function renderRejected() {
   card.innerHTML = `
     <div class="status-icon">😕</div>
-    <div class="status-msg">للأسف ما قدرنا نأكد حضورك حاليًا</div>
+    <div class="status-msg">للأسف ما قدرنا نؤكد حضورك حاليًا</div>
     <button class="btn" style="margin-top:18px;" onclick="retryRequest()">حاول مرة ثانية</button>
   `;
 }

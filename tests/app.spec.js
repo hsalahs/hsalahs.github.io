@@ -233,7 +233,7 @@ test('the admin gets a one-time nudge toast on a fresh page load when unpaid eve
     },
   });
   await page.goto('/app.html');
-  await expect(page.locator('#toast')).toContainText('2 مناسبة وصلت لحد الضيوف');
+  await expect(page.locator('#toast')).toContainText('2 مناسبتين وصلت لحد الضيوف');
   // Doesn't call out either event by name — that's what the standing list is for.
   await expect(page.locator('#toast')).not.toContainText('Already Capped');
 });
@@ -312,4 +312,14 @@ test('a refresh button forces a real reload — no address bar to pull down on, 
   await page.evaluate(() => { window.__beforeReload = true; });
   await Promise.all([page.waitForEvent('load'), page.getByTitle('تحديث الصفحة').click()]);
   expect(await page.evaluate(() => window.__beforeReload)).toBeUndefined();
+});
+
+test('Arabic counted nouns: 1 singular, 2 dual, 3-10 plural, 11+ singular again', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: null });
+  await page.goto('/app.html');
+  const words = await page.evaluate(() => [0, 1, 2, 3, 5, 10, 11, 15, 100, 200].map(n => guestWord(n)));
+  expect(words).toEqual(['ضيف', 'ضيف', 'ضيفين', 'ضيوف', 'ضيوف', 'ضيوف', 'ضيف', 'ضيف', 'ضيف', 'ضيف']);
+  const days = await page.evaluate(() => [1, 2, 4, 12].map(n => arPlural(n, 'يوم', 'يومين', 'أيام')));
+  expect(days).toEqual(['يوم', 'يومين', 'أيام', 'يوم']);
 });

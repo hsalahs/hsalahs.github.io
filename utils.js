@@ -16,15 +16,16 @@ function escapeForJsAttr(str) {
   return escapeHtml(String(str)).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
-// Arabic noun-count agreement for "ضيف" (guest): 0/1 singular, 2 dual, 3-10
-// plural, 11+ back to singular ("15 ضيف", not "15 ضيوف") — the standard
-// split, same categories CLDR uses for Arabic plural rules. Call as
-// n + ' ' + guestWord(n) anywhere a guest count is shown.
-function guestWord(n) {
-  if (n === 2) return 'ضيفين';
-  if (n >= 3 && n <= 10) return 'ضيوف';
-  return 'ضيف';
+// Arabic noun-count agreement: 0/1 singular, 2 dual, 3-10 plural, 11+ back
+// to singular ("15 ضيف", not "15 ضيوف") — the standard split, same
+// categories CLDR uses for Arabic plural rules. Returns the noun only; call
+// as n + ' ' + arPlural(n, ...) anywhere a count is shown next to a noun.
+function arPlural(n, one, two, many) {
+  if (n === 2) return two;
+  if (n >= 3 && n <= 10) return many;
+  return one;
 }
+function guestWord(n) { return arPlural(n, 'ضيف', 'ضيفين', 'ضيوف'); }
 
 // Guest name order shared by the dashboard's own list and the scanner's
 // offline name search, so a supervisor comparing notes with the organizer
