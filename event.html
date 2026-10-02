@@ -389,7 +389,7 @@ function renderPaymentGate() {
       : '🔒 وصلت لحد الضيوف (' + cap + ')';
     document.getElementById('pg-sub').textContent = onFreeTier
       ? 'أضفت أول ' + FREE_GUEST_LIMIT + ' ضيوف مجانًا — لإضافة المزيد تواصل معنا.'
-      : 'وصلت للعدد المتفق عليه لمناسبتك (' + cap + ' ضيف) — لزيادته تواصل معنا.';
+      : 'وصلت للعدد المتفق عليه لمناسبتك (' + cap + ' ' + guestWord(cap) + ') — لزيادته تواصل معنا.';
   }
 
   if (active && gateWasActive === false) {
@@ -398,7 +398,7 @@ function renderPaymentGate() {
       : '🔒 وصلت لحد الضيوف (' + cap + ')! تواصل معنا لزيادة العدد');
     notifyAdmin(
       onFreeTier ? 'وصل لحد الضيوف المجانيين 💰' : 'وصل لحد الضيوف المتفق عليه',
-      'مناسبة "' + eventData.name + '" وصلت للحد (' + cap + ' ضيف) — العميل بانتظار التواصل. الإيميل: ' + (currentUser.email || currentUser.uid)
+      'مناسبة "' + eventData.name + '" وصلت للحد (' + cap + ' ' + guestWord(cap) + ') — العميل بانتظار التواصل. الإيميل: ' + (currentUser.email || currentUser.uid)
     );
   }
   gateWasActive = active;
@@ -407,9 +407,9 @@ function renderPaymentGate() {
   if (eventData && eventData.paid) {
     const limited = Number.isFinite(cap);
     if (isAdmin(currentUser)) {
-      menuItem.innerHTML = '<span style="color:#4CAF50;">✅ مفعّلة (' + (limited ? cap + ' ضيف' : 'بلا حد') + ') — تعديل الحد</span>';
+      menuItem.innerHTML = '<span style="color:#4CAF50;">✅ مفعّلة (' + (limited ? cap + ' ' + guestWord(cap) : 'بلا حد') + ') — تعديل الحد</span>';
     } else if (limited) {
-      menuItem.innerHTML = '<span style="color:' + (active ? '#E5484D' : '#4CAF50') + ';">' + (active ? '🔒 ' : '✅ ') + guestCount() + ' من ' + cap + ' ضيف</span>';
+      menuItem.innerHTML = '<span style="color:' + (active ? '#E5484D' : '#4CAF50') + ';">' + (active ? '🔒 ' : '✅ ') + guestCount() + ' من ' + cap + ' ' + guestWord(cap) + '</span>';
     } else {
       menuItem.innerHTML = '<span style="color:#4CAF50;">✅ المناسبة مفعّلة</span>';
     }
@@ -741,7 +741,7 @@ function watchPaymentStatus() {
     if (!isAdmin(currentUser) && guestCapOf(eventData) > wasCap) {
       const c = guestCapOf(eventData);
       showToast(!wasPaid && eventData.paid && Number.isFinite(c)
-        ? '🎉 تم تفعيل مناسبتك! تقدر تضيف لين ' + c + ' ضيف'
+        ? '🎉 تم تفعيل مناسبتك! تقدر تضيف لين ' + c + ' ' + guestWord(c)
         : Number.isFinite(c) ? '🎉 تم تحديث حد الضيوف إلى ' + c : '🎉 تم تفعيل مناسبتك!');
     }
   });
@@ -937,7 +937,7 @@ function updateBulkCount() {
 async function bulkDeleteSelected() {
   const ids = [...selectedGuestIds];
   if (ids.length === 0) { showToast('حدد ضيف واحد على الأقل'); return; }
-  if (!confirm('حذف ' + ids.length + ' ضيف نهائيًا؟ هذا الإجراء لا يمكن التراجع عنه.')) return;
+  if (!confirm('حذف ' + ids.length + ' ' + guestWord(ids.length) + ' نهائيًا؟ هذا الإجراء لا يمكن التراجع عنه.')) return;
   // Sequential, not a single batched write: firestore.rules caps guestCount
   // at exactly -1 per write (see deleteGuest), so each guest is its own
   // delete+decrement transaction, same as deleting one at a time.
@@ -958,7 +958,7 @@ async function bulkDeleteSelected() {
     } catch (e) { showErr(e); }
   }
   exitSelectionMode();
-  showToast('✅ تم حذف ' + deleted + ' ضيف');
+  showToast('✅ تم حذف ' + deleted + ' ' + guestWord(deleted));
 }
 
 async function markGuestAttend(docId, name) {
@@ -1645,8 +1645,8 @@ async function importGuestNames(names) {
     if (addedThisBatch < batch.length) { blockedByGate = total - added; break; }
   }
 
-  let msg = 'تم استيراد ' + added + ' ضيف' + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' مكرر)' : '');
-  if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + capForMsg + ' ضيف، ' + blockedByGate + ' اسم ما انضاف. تواصل معنا لزيادة العدد.';
+  let msg = 'تم استيراد ' + added + ' ' + guestWord(added) + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' مكرر)' : '');
+  if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + capForMsg + ' ' + guestWord(capForMsg) + '، ' + blockedByGate + ' اسم ما انضاف. تواصل معنا لزيادة العدد.';
   alert(msg);
   if (blockedByGate > 0) openPaymentWhatsapp();
 }
@@ -1723,7 +1723,7 @@ async function addSequentialNumbers() {
     showToast('⚠️ الحد الأقصى 1000 رقم بالمرة الواحدة');
     return;
   }
-  if (!confirm('بيتضاف ' + count + ' ضيف بأرقام من ' + from + ' إلى ' + to + '. متأكد؟')) return;
+  if (!confirm('بيتضاف ' + count + ' ' + guestWord(count) + ' بأرقام من ' + from + ' إلى ' + to + '. متأكد؟')) return;
 
   const names = [];
   for (let i = from; i <= to; i++) names.push(String(i));

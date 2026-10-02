@@ -16,6 +16,16 @@ function escapeForJsAttr(str) {
   return escapeHtml(String(str)).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
+// Arabic noun-count agreement for "ضيف" (guest): 0/1 singular, 2 dual, 3-10
+// plural, 11+ back to singular ("15 ضيف", not "15 ضيوف") — the standard
+// split, same categories CLDR uses for Arabic plural rules. Call as
+// n + ' ' + guestWord(n) anywhere a guest count is shown.
+function guestWord(n) {
+  if (n === 2) return 'ضيفين';
+  if (n >= 3 && n <= 10) return 'ضيوف';
+  return 'ضيف';
+}
+
 // Guest name order shared by the dashboard's own list and the scanner's
 // offline name search, so a supervisor comparing notes with the organizer
 // sees the same order. Numeric names (like "1", "2", "150" — a ticket-style
@@ -75,9 +85,9 @@ function askGuestLimit({ name, current, activated, guestCount }) {
   if (!/^\d+$/.test(typed)) { alert('اكتب رقمًا صحيحًا فقط.'); return null; }
   const n = parseInt(typed, 10);
   if (n === 0) return activated ? 0 : (alert('اكتب رقمًا من 1 إلى ' + MAX_GUEST_LIMIT + '.'), null);
-  if (n > MAX_GUEST_LIMIT) { alert('الحد الأقصى ' + MAX_GUEST_LIMIT + ' ضيف.'); return null; }
-  if (n > CONFIRM_ABOVE_GUESTS && !confirm('الرقم كبير (' + n + ' ضيف). هل هو صحيح؟')) return null;
-  if (guestCount > n && !confirm('العميل عنده الآن ' + guestCount + ' ضيف، أكثر من ' + n + '. سيتوقف عن إضافة ضيوف جدد. متأكد؟')) return null;
+  if (n > MAX_GUEST_LIMIT) { alert('الحد الأقصى ' + MAX_GUEST_LIMIT + ' ' + guestWord(MAX_GUEST_LIMIT) + '.'); return null; }
+  if (n > CONFIRM_ABOVE_GUESTS && !confirm('الرقم كبير (' + n + ' ' + guestWord(n) + '). هل هو صحيح؟')) return null;
+  if (guestCount > n && !confirm('العميل عنده الآن ' + guestCount + ' ' + guestWord(guestCount) + '، أكثر من ' + n + '. سيتوقف عن إضافة ضيوف جدد. متأكد؟')) return null;
   return n;
 }
 

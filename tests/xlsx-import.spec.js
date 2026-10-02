@@ -40,7 +40,7 @@ test('a single column of names imports, skipping blank rows and tidying the spac
   await importFile(page, 'names-only.xlsx');
   await expect(page.locator('.guest-item')).toHaveCount(4);
   await expect.poll(async () => (await namesOnPage(page)).sort()).toEqual(['أحمد الغامدي', 'سارة العتيبي', 'محمد بن سعد القحطاني', 'نورة'].sort());
-  expect(messages.join(' ')).toContain('تم استيراد 4 ضيف');
+  expect(messages.join(' ')).toContain('تم استيراد 4 ضيوف');
   expect(await guestCount(page)).toBe(4);
 });
 
