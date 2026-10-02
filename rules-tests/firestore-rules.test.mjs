@@ -180,6 +180,16 @@ await check('a customer cannot create a doc for someone else', () => assertFails
 await check('an unauthenticated visitor cannot create one', () => assertFails(unauth().doc('accountLimits/cust5').set({ eventLimit: 1, eventCount: 1 })));
 await check('the admin can create one for a customer with no doc yet (approving an extra-event request)', () => assertSucceeds(admin().doc('accountLimits/cust6').set({ eventLimit: 2, eventCount: 0 })));
 
+console.log('\nusers (mirrors every signup so the admin can see accounts that never created an event):');
+await check('a customer can create their own signup record', () => assertSucceeds(user('signee1', 's1@example.com').doc('users/signee1').set({ email: 's1@example.com', createdAt: 'x' })));
+await check('a customer cannot create a signup record for someone else', () => assertFails(user('signee2', 's2@example.com').doc('users/signee3').set({ email: 's2@example.com', createdAt: 'x' })));
+await check('an unauthenticated visitor cannot create one', () => assertFails(unauth().doc('users/signee4').set({ email: 'x@example.com', createdAt: 'x' })));
+await check('extra fields are rejected', () => assertFails(user('signee5', 's5@example.com').doc('users/signee5').set({ email: 's5@example.com', createdAt: 'x', admin: true })));
+await check('a customer cannot read their own signup record', () => assertFails(user('signee1', 's1@example.com').doc('users/signee1').get()));
+await check('a stranger cannot read someone else\'s signup record', () => assertFails(user('signee6', 's6@example.com').doc('users/signee1').get()));
+await check('the admin can read any signup record', () => assertSucceeds(admin().doc('users/signee1').get()));
+await check('the admin can list every signup record', () => assertSucceeds(admin().collection('users').get()));
+
 console.log('\nguest limits (5 free; beyond that the number the admin sets; nothing else):');
 await testEnv.withSecurityRulesDisabled(async (ctx) => {
   const db = ctx.firestore();

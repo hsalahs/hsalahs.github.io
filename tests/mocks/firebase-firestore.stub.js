@@ -57,11 +57,24 @@ function matchesFilters(data, filters) {
   });
 }
 
-function buildQuerySnapshot(path, filters) {
+function orderValue(v) {
+  // Sortable key for both a plain number/string and this stub's
+  // serverTimestamp() shape ({ __serverTimestamp: true, seconds }).
+  return v && typeof v === 'object' && 'seconds' in v ? v.seconds : v;
+}
+
+function buildQuerySnapshot(path, filters, order) {
   const coll = F().store[path] || {};
-  const docs = Object.keys(coll)
-    .filter(id => !filters || matchesFilters(coll[id], filters))
-    .map(id => makeDocSnap(path, id, coll[id]));
+  let ids = Object.keys(coll).filter(id => !filters || matchesFilters(coll[id], filters));
+  if (order) {
+    const dir = order.direction === 'desc' ? -1 : 1;
+    ids = ids.sort((a, b) => {
+      const av = orderValue(coll[a][order.orderField]);
+      const bv = orderValue(coll[b][order.orderField]);
+      return av < bv ? -dir : av > bv ? dir : 0;
+    });
+  }
+  const docs = ids.map(id => makeDocSnap(path, id, coll[id]));
   return {
     docs,
     size: docs.length,
@@ -76,7 +89,7 @@ function buildQuerySnapshot(path, filters) {
 // saw (one listener's view can differ from another's, e.g. different
 // filters), which this call both reads and updates.
 function snapshotWithChanges(path, entry) {
-  const snap = buildQuerySnapshot(path, entry.filters);
+  const snap = buildQuerySnapshot(path, entry.filters, entry.order);
   const prev = entry.prevDocsById || {};
   const next = {};
   const changes = [];
@@ -132,15 +145,25 @@ export function collection(db, ...segs) {
 }
 
 export function query(collRef, ...clauses) {
-  return { __type: 'query', path: collRef.path, filters: clauses.filter(c => c && c.field) };
+  return {
+    __type: 'query',
+    path: collRef.path,
+    filters: clauses.filter(c => c && c.field),
+    order: clauses.find(c => c && c.orderField) || null,
+  };
 }
 
 export function where(field, op, value) {
   return { field, op, value };
 }
 
+export function orderBy(field, direction) {
+  return { orderField: field, direction: direction || 'asc' };
+}
+
 export function serverTimestamp() {
-  return { __serverTimestamp: true, seconds: Math.floor(Date.now() / 1000) };
+  const seconds = Math.floor(Date.now() / 1000);
+  return { __serverTimestamp: true, seconds, toDate: () => new Date(seconds * 1000) };
 }
 
 export function increment(n) {
@@ -204,7 +227,7 @@ export function getDocs(refOrQuery) {
   // (not just that the UI still ends up showing the right numbers).
   (F().getDocsPaths = F().getDocsPaths || []).push(refOrQuery.path);
   if (refOrQuery.__type === 'query') {
-    return Promise.resolve(buildQuerySnapshot(refOrQuery.path, refOrQuery.filters));
+    return Promise.resolve(buildQuerySnapshot(refOrQuery.path, refOrQuery.filters, refOrQuery.order));
   }
   return Promise.resolve(buildQuerySnapshot(refOrQuery.path, null));
 }
@@ -250,7 +273,8 @@ export function onSnapshot(refOrQuery, cb, errCb) {
     };
   }
   const filters = refOrQuery.__type === 'query' ? refOrQuery.filters : null;
-  const entry = { cb, filters, kind: 'query' };
+  const order = refOrQuery.__type === 'query' ? refOrQuery.order : null;
+  const entry = { cb, filters, order, kind: 'query' };
   F().listeners[path] = F().listeners[path] || [];
   F().listeners[path].push(entry);
   cb(snapshotWithChanges(path, entry));

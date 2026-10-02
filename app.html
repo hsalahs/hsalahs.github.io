@@ -144,6 +144,14 @@ setTimeout(() => {
       <div id="admin-requests-list"></div>
     </div>
 
+    <div id="admin-accounts-section" style="display:none; margin-bottom:16px;">
+      <div class="sub" style="margin-bottom:8px; text-align:right; display:flex; align-items:center; justify-content:flex-end; gap:8px;">
+        👥 كل الحسابات المسجّلة
+        <span class="badge-count" id="admin-accounts-badge">0</span>
+      </div>
+      <div id="admin-accounts-list"></div>
+    </div>
+
     <button class="btn" id="create-toggle-btn" onclick="showCreateForm()" style="display:none">➕ إنشاء مناسبة جديدة</button>
     <div id="limit-box" style="display:none; margin-bottom:16px;">
       <div class="sub" id="limit-box-msg" style="margin-bottom:10px;">وصلت لحد مناسباتك الحالي.</div>
@@ -219,7 +227,14 @@ async function submitAuth() {
   const { createUserWithEmailAndPassword, signInWithEmailAndPassword } = window._authFns;
   try {
     if (authMode === 'signup') {
-      await createUserWithEmailAndPassword(window._auth, email, pass);
+      const cred = await createUserWithEmailAndPassword(window._auth, email, pass);
+      // Firebase Auth itself keeps no record the admin's own client code
+      // can list (that needs a service account, which this no-backend site
+      // doesn't have) — mirror the signup into Firestore so the admin's
+      // "كل الحسابات المسجّلة" panel can show every account that ever
+      // registered, even one that never created an event or deleted it.
+      const { doc, setDoc, serverTimestamp } = window._fsFns;
+      await setDoc(doc(window._db, 'users', cred.user.uid), { email, createdAt: serverTimestamp() });
     } else {
       await signInWithEmailAndPassword(window._auth, email, pass);
     }
@@ -420,6 +435,7 @@ let eventsUnsub = null;
 let limitUnsub = null;
 let requestUnsub = null;
 let adminRequestsUnsub = null;
+let allAccountsUnsub = null;
 let myEventsCount = 0;
 let myEventLimit = 1;
 let myPendingRequestId = null;
@@ -440,6 +456,7 @@ function initAuthWatcher() {
       watchEvents(user);
       if (admin) {
         watchAdminRequests();
+        watchAllAccounts();
       } else {
         watchMyLimitAndRequest(user);
       }
@@ -643,6 +660,39 @@ function renderAdminRequests(reqs) {
       </div>
     </div>
   `).join('');
+}
+
+// Mirrors every signup (see the write in submitAuth and the matching
+// firestore.rules), so the admin sees every account that ever registered —
+// even one that created no event or deleted it, which the events list alone
+// can't show.
+function watchAllAccounts() {
+  const { collection, query, orderBy, onSnapshot } = window._fsFns;
+  if (allAccountsUnsub) allAccountsUnsub();
+  allAccountsUnsub = onSnapshot(
+    query(collection(window._db, 'users'), orderBy('createdAt', 'desc')),
+    (snap) => renderAllAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+  );
+}
+
+function renderAllAccounts(accounts) {
+  const section = document.getElementById('admin-accounts-section');
+  const list = document.getElementById('admin-accounts-list');
+  if (accounts.length === 0) { section.style.display = 'none'; list.innerHTML = ''; return; }
+  section.style.display = 'block';
+  document.getElementById('admin-accounts-badge').textContent = accounts.length > 99 ? '99+' : String(accounts.length);
+  list.innerHTML = accounts.map(a => {
+    const dt = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate() : null;
+    const when = dt ? (dt.getDate() + ' ' + AR_MONTHS[dt.getMonth()] + ' ' + dt.getFullYear()) : '…';
+    return `
+    <div class="card event-card-top">
+      <div>
+        <div class="event-name">${escapeHtml(a.email || a.id)}</div>
+        <div class="event-date">سجّل: ${when}</div>
+      </div>
+    </div>
+  `;
+  }).join('');
 }
 
 async function approveEventRequest(requestId, uid) {
