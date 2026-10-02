@@ -722,8 +722,22 @@ async function rejectEventRequest(requestId) {
   }
 }
 
-if (window._auth) initAuthWatcher();
-else window.addEventListener('appDbReady', initAuthWatcher);
+if (window._auth) {
+  initAuthWatcher();
+} else {
+  // A slow or dropped connection while firebase-init.js's own CDN imports
+  // load means appDbReady never fires — same "trapped forever" failure the
+  // splash/dashboard fixes closed elsewhere, one layer earlier: with no
+  // fallback here, the login screen was stuck on "جاري التحميل..." forever
+  // with no way out.
+  const appDbTimeout = setTimeout(() => {
+    const el = document.getElementById('auth-loading');
+    el.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
+    el.style.cursor = 'pointer';
+    el.onclick = () => location.reload();
+  }, 8000);
+  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); initAuthWatcher(); });
+}
 </script>
 </body>
 </html>

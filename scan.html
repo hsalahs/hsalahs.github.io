@@ -915,8 +915,21 @@ async function handleScan(raw) {
   }, 2500);
 }
 
-if (window._db) init();
-else window.addEventListener('appDbReady', init);
+if (window._db) {
+  init();
+} else {
+  // Same "trapped forever" failure other pages' init guards close: a slow
+  // or dropped connection while firebase-init.js's own CDN imports load
+  // means appDbReady never fires, leaving this stuck on "جاري التحميل..."
+  // forever with no way out — bad on any page, worse on the door scanner.
+  const appDbTimeout = setTimeout(() => {
+    const el = document.getElementById('loading-msg');
+    el.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
+    el.style.cursor = 'pointer';
+    el.onclick = () => location.reload();
+  }, 8000);
+  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); init(); });
+}
 
 window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) {
