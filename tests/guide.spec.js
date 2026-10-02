@@ -119,7 +119,7 @@ test('the guide explains what changing the colour changes, and the code really b
   const guide = read('guide.html');
   expect(guide).toContain('ماذا يتغيّر مع اللون؟');
   expect(guide).toContain('ألوان صفحة سكانر الدخول');
-  expect(guide).toContain('الباركود نفسه</b> فيبقى دايمًا أسود على خلفية فاتحة');
+  expect(guide).toContain('الباركود نفسه</b> فيبقى دائمًا أسود على خلفية فاتحة');
   expect(guide).toContain('البطاقات اللي حفظتها أو أرسلتها قبل تغيير اللون تبقى بلونها القديم');
   for (const f of ['event.html', 'invite.html']) {
     const src = read(f);

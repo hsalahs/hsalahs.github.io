@@ -374,7 +374,7 @@ test('a fresh unpaid event shows no payment-gate banner and lets the owner add a
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#payment-gate')).toBeHidden();
   await page.getByRole('button', { name: '☰' }).click();
-  await expect(page.locator('#payment-menu-item')).toContainText('5 ضيوف مجانيين متبقين');
+  await expect(page.locator('#payment-menu-item')).toContainText('باقي لك 5 ضيوف مجانًا');
   await page.getByRole('button', { name: '☰' }).click();
   await page.locator('#new-guest-name').fill('ضيف جديد');
   await page.getByRole('button', { name: 'إضافة' }).click();
@@ -580,7 +580,7 @@ test('an activated event stops at the admin-set number: the owner is blocked, se
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#payment-gate')).toBeHidden();
   await page.getByRole('button', { name: '☰' }).click();
-  await expect(page.locator('#payment-menu-item')).toContainText('2 من 3 ضيف');
+  await expect(page.locator('#payment-menu-item')).toContainText('2 من 3 ضيوف');
   await page.getByRole('button', { name: '☰' }).click();
 
   await page.locator('#new-guest-name').fill('الثالث');
@@ -616,7 +616,7 @@ test('CSV import stops at the admin-set number and says how many names were left
     buffer: Buffer.from('A\nB\nC\nD\nE'),
   });
   await expect(page.locator('.guest-item')).toHaveCount(3);
-  expect(messages.join(' ')).toContain('وصلت لحد الـ4 ضيف، 2 اسم ما انضاف');
+  expect(messages.join(' ')).toContain('وصلت لحد الـ4 ضيوف، وما انضاف 2 اسمين');
   expect((await storedEvent(page)).guestCount).toBe(4);
 });
 

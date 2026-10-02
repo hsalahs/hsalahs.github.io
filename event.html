@@ -275,7 +275,7 @@ setTimeout(() => {
       <button class="btn danger" style="width:100%; margin-top:12px;" onclick="deleteThisEvent()">🗑 حذف المناسبة نهائيًا</button>
     </div>
 
-    <div id="rules-warning" style="display:none; background:rgba(229,72,77,0.10); border:1px solid rgba(229,72,77,0.35); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:12.5px; color:#ffb3b3; line-height:1.7;">⚠️ (للأدمن فقط) قواعد أمان Firestore الجديدة غير منشورة بعد — كود دخول السكانر لسا مكشوف لأي شخص معه رابط الدعوة. انشر ملف firestore.rules من Firebase.</div>
+    <div id="rules-warning" style="display:none; background:rgba(229,72,77,0.10); border:1px solid rgba(229,72,77,0.35); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:12.5px; color:#ffb3b3; line-height:1.7;">⚠️ (للأدمن فقط) قواعد أمان Firestore الجديدة غير منشورة بعد — كود دخول السكانر لسه مكشوف لأي شخص معه رابط الدعوة. انشر ملف firestore.rules من Firebase.</div>
     <div id="payment-gate">
       <div class="pg-title" id="pg-title">🔒 الحد المجاني لعدد الضيوف</div>
       <div class="pg-sub" id="pg-sub">أضفت أول 5 ضيوف مجانًا — لإضافة المزيد تواصل معنا.</div>
@@ -389,7 +389,7 @@ function renderPaymentGate() {
       : '🔒 وصلت لحد الضيوف (' + cap + ')';
     document.getElementById('pg-sub').textContent = onFreeTier
       ? 'أضفت أول ' + FREE_GUEST_LIMIT + ' ضيوف مجانًا — لإضافة المزيد تواصل معنا.'
-      : 'وصلت للعدد المتفق عليه لمناسبتك (' + cap + ' ضيف) — لزيادته تواصل معنا.';
+      : 'وصلت للعدد المتفق عليه لمناسبتك (' + cap + ' ' + guestWord(cap) + ') — لزيادته تواصل معنا.';
   }
 
   if (active && gateWasActive === false) {
@@ -398,7 +398,7 @@ function renderPaymentGate() {
       : '🔒 وصلت لحد الضيوف (' + cap + ')! تواصل معنا لزيادة العدد');
     notifyAdmin(
       onFreeTier ? 'وصل لحد الضيوف المجانيين 💰' : 'وصل لحد الضيوف المتفق عليه',
-      'مناسبة "' + eventData.name + '" وصلت للحد (' + cap + ' ضيف) — العميل بانتظار التواصل. الإيميل: ' + (currentUser.email || currentUser.uid)
+      'مناسبة "' + eventData.name + '" وصلت للحد (' + cap + ' ' + guestWord(cap) + ') — العميل بانتظار التواصل. الإيميل: ' + (currentUser.email || currentUser.uid)
     );
   }
   gateWasActive = active;
@@ -407,9 +407,9 @@ function renderPaymentGate() {
   if (eventData && eventData.paid) {
     const limited = Number.isFinite(cap);
     if (isAdmin(currentUser)) {
-      menuItem.innerHTML = '<span style="color:#4CAF50;">✅ مفعّلة (' + (limited ? cap + ' ضيف' : 'بلا حد') + ') — تعديل الحد</span>';
+      menuItem.innerHTML = '<span style="color:#4CAF50;">✅ مفعّلة (' + (limited ? cap + ' ' + guestWord(cap) : 'بلا حد') + ') — تعديل الحد</span>';
     } else if (limited) {
-      menuItem.innerHTML = '<span style="color:' + (active ? '#E5484D' : '#4CAF50') + ';">' + (active ? '🔒 ' : '✅ ') + guestCount() + ' من ' + cap + ' ضيف</span>';
+      menuItem.innerHTML = '<span style="color:' + (active ? '#E5484D' : '#4CAF50') + ';">' + (active ? '🔒 ' : '✅ ') + guestCount() + ' من ' + cap + ' ' + guestWord(cap) + '</span>';
     } else {
       menuItem.innerHTML = '<span style="color:#4CAF50;">✅ المناسبة مفعّلة</span>';
     }
@@ -418,7 +418,7 @@ function renderPaymentGate() {
   } else if (active) {
     menuItem.innerHTML = '<span style="color:#E5484D;">🔒 وصلت للحد المجاني</span>';
   } else {
-    menuItem.innerHTML = '<span style="color:var(--gold);">🎁 ' + (FREE_GUEST_LIMIT - guestCount()) + ' ضيوف مجانيين متبقين</span>';
+    menuItem.innerHTML = '<span style="color:var(--gold);">🎁 باقي لك ' + (FREE_GUEST_LIMIT - guestCount()) + ' ' + guestWord(FREE_GUEST_LIMIT - guestCount()) + ' مجانًا</span>';
   }
 }
 
@@ -741,7 +741,7 @@ function watchPaymentStatus() {
     if (!isAdmin(currentUser) && guestCapOf(eventData) > wasCap) {
       const c = guestCapOf(eventData);
       showToast(!wasPaid && eventData.paid && Number.isFinite(c)
-        ? '🎉 تم تفعيل مناسبتك! تقدر تضيف لين ' + c + ' ضيف'
+        ? '🎉 تم تفعيل مناسبتك! تقدر تضيف لين ' + c + ' ' + guestWord(c)
         : Number.isFinite(c) ? '🎉 تم تحديث حد الضيوف إلى ' + c : '🎉 تم تفعيل مناسبتك!');
     }
   });
@@ -937,7 +937,7 @@ function updateBulkCount() {
 async function bulkDeleteSelected() {
   const ids = [...selectedGuestIds];
   if (ids.length === 0) { showToast('حدد ضيف واحد على الأقل'); return; }
-  if (!confirm('حذف ' + ids.length + ' ضيف نهائيًا؟ هذا الإجراء لا يمكن التراجع عنه.')) return;
+  if (!confirm('حذف ' + ids.length + ' ' + guestWord(ids.length) + ' نهائيًا؟ هذا الإجراء لا يمكن التراجع عنه.')) return;
   // Sequential, not a single batched write: firestore.rules caps guestCount
   // at exactly -1 per write (see deleteGuest), so each guest is its own
   // delete+decrement transaction, same as deleting one at a time.
@@ -958,7 +958,7 @@ async function bulkDeleteSelected() {
     } catch (e) { showErr(e); }
   }
   exitSelectionMode();
-  showToast('✅ تم حذف ' + deleted + ' ضيف');
+  showToast('✅ تم حذف ' + deleted + ' ' + guestWord(deleted));
 }
 
 async function markGuestAttend(docId, name) {
@@ -1374,8 +1374,8 @@ async function downloadAllCards(from, to) {
   link.download = 'Invitations' + label + '.zip';
   link.click();
   showToast(failed > 0
-    ? '⚠️ تم التحميل، لكن ' + failed + ' من ' + total + ' بطاقة فشلت — جرّب متصفح ثاني لها'
-    : '✅ تم تحميل الملف! (' + total + ' دعوة)');
+    ? '⚠️ تم التحميل، لكن ' + failed + ' من ' + total + ' ' + arPlural(total, 'بطاقة', 'بطاقتين', 'بطاقات') + ' فشلت — جرّب متصفح ثاني لها'
+    : '✅ تم تحميل الملف! (' + total + ' ' + arPlural(total, 'دعوة', 'دعوتين', 'دعوات') + ')');
 }
 
 function askRangeDownload() {
@@ -1521,7 +1521,7 @@ async function toggleRequestNotifications() {
 
 function renderRequests() {
   const el = document.getElementById('requests-list');
-  if (requests.length === 0) { el.innerHTML = '<div class="empty">مافيه طلبات جديدة</div>'; return; }
+  if (requests.length === 0) { el.innerHTML = '<div class="empty">ما فيه طلبات جديدة</div>'; return; }
   el.innerHTML = requests.map(r => `
     <div class="pending-item">
       <div class="pending-info">
@@ -1645,8 +1645,8 @@ async function importGuestNames(names) {
     if (addedThisBatch < batch.length) { blockedByGate = total - added; break; }
   }
 
-  let msg = 'تم استيراد ' + added + ' ضيف' + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' مكرر)' : '');
-  if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + capForMsg + ' ضيف، ' + blockedByGate + ' اسم ما انضاف. تواصل معنا لزيادة العدد.';
+  let msg = 'تم استيراد ' + added + ' ' + guestWord(added) + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' ' + arPlural(duplicates, 'اسم مكرر', 'اسمين مكررين', 'أسماء مكررة') + ')' : '');
+  if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + capForMsg + ' ' + guestWord(capForMsg) + '، وما انضاف ' + blockedByGate + ' ' + arPlural(blockedByGate, 'اسم', 'اسمين', 'أسماء') + '. تواصل معنا لزيادة العدد.';
   alert(msg);
   if (blockedByGate > 0) openPaymentWhatsapp();
 }
@@ -1723,7 +1723,7 @@ async function addSequentialNumbers() {
     showToast('⚠️ الحد الأقصى 1000 رقم بالمرة الواحدة');
     return;
   }
-  if (!confirm('بيتضاف ' + count + ' ضيف بأرقام من ' + from + ' إلى ' + to + '. متأكد؟')) return;
+  if (!confirm('بيتضاف ' + count + ' ' + guestWord(count) + ' بأرقام من ' + from + ' إلى ' + to + '. متأكد؟')) return;
 
   const names = [];
   for (let i = from; i <= to; i++) names.push(String(i));

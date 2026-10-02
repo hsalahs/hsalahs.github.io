@@ -40,7 +40,7 @@ test('a single column of names imports, skipping blank rows and tidying the spac
   await importFile(page, 'names-only.xlsx');
   await expect(page.locator('.guest-item')).toHaveCount(4);
   await expect.poll(async () => (await namesOnPage(page)).sort()).toEqual(['أحمد الغامدي', 'سارة العتيبي', 'محمد بن سعد القحطاني', 'نورة'].sort());
-  expect(messages.join(' ')).toContain('تم استيراد 4 ضيف');
+  expect(messages.join(' ')).toContain('تم استيراد 4 ضيوف');
   expect(await guestCount(page)).toBe(4);
 });
 
@@ -133,7 +133,7 @@ test('an Excel import stops at the guest limit like a CSV one, and says how many
   const messages = await open(page, { guestLimit: 100, guestCount: 0 });
   await importFile(page, 'large-300.xlsx');
   await expect.poll(() => guestCount(page), { timeout: 20000 }).toBe(100);
-  expect(messages.join(' ')).toContain('وصلت لحد الـ100 ضيف، 200 اسم ما انضاف');
+  expect(messages.join(' ')).toContain('وصلت لحد الـ100 ضيف، وما انضاف 200 اسم');
 });
 
 test('the same names already on the list are counted as duplicates, not added twice', async ({ page }) => {
@@ -142,7 +142,7 @@ test('the same names already on the list are counted as duplicates, not added tw
   await expect(page.locator('.guest-item')).toHaveCount(4);
   await importFile(page, 'names-only.xlsx');
   await expect.poll(() => messages.length).toBe(2);
-  expect(messages[1]).toContain('تم استيراد 0 ضيف (تجاهلنا 4 مكرر)');
+  expect(messages[1]).toContain('تم استيراد 0 ضيف (تجاهلنا 4 أسماء مكررة)');
   expect(await guestCount(page)).toBe(4);
 });
 
