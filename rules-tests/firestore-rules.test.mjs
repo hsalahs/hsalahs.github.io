@@ -188,6 +188,9 @@ await check('extra fields are rejected', () => assertFails(user('signee5', 's5@e
 await check('a customer cannot read their own signup record', () => assertFails(user('signee1', 's1@example.com').doc('users/signee1').get()));
 await check('a stranger cannot read someone else\'s signup record', () => assertFails(user('signee6', 's6@example.com').doc('users/signee1').get()));
 await check('the admin can read any signup record', () => assertSucceeds(admin().doc('users/signee1').get()));
+await check('a customer cannot delete their own signup record', () => assertFails(user('signee1', 's1@example.com').doc('users/signee1').delete()));
+await check('a stranger cannot delete someone else\'s signup record', () => assertFails(user('signee6', 's6@example.com').doc('users/signee1').delete()));
+await check('the admin can delete a signup record (tidying the list)', () => assertSucceeds(admin().doc('users/signee1').delete()));
 await check('the admin can list every signup record', () => assertSucceeds(admin().collection('users').get()));
 
 console.log('\nguest limits (5 free; beyond that the number the admin sets; nothing else):');

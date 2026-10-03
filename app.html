@@ -147,11 +147,14 @@ setTimeout(() => {
     </div>
 
     <div id="admin-accounts-section" style="display:none; margin-bottom:16px;">
-      <div class="sub" style="margin-bottom:8px; text-align:right; display:flex; align-items:center; justify-content:flex-end; gap:8px;">
-        👥 كل الحسابات المسجّلة
+      <div class="card" id="admin-accounts-toggle" onclick="toggleAllAccounts()" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; padding:14px 18px; margin-bottom:0;">
+        <span class="sub" style="margin:0;">👥 كل الحسابات المسجّلة <span id="admin-accounts-arrow" style="color:#E0BC7A">▾</span></span>
         <span class="badge-count" id="admin-accounts-badge">0</span>
       </div>
-      <div id="admin-accounts-list"></div>
+      <div id="admin-accounts-body" style="display:none; margin-top:10px;">
+        <input type="text" id="admin-accounts-search" placeholder="🔍 ابحث بالإيميل" oninput="renderAllAccounts()" style="margin-bottom:10px;">
+        <div id="admin-accounts-list"></div>
+      </div>
     </div>
 
     <button class="btn" id="create-toggle-btn" onclick="showCreateForm()" style="display:none">➕ إنشاء مناسبة جديدة</button>
@@ -440,7 +443,7 @@ let eventsUnsub = null;
 let limitUnsub = null;
 let requestUnsub = null;
 let adminRequestsUnsub = null;
-let allAccountsUnsub = null;
+let allAccounts = null; // loaded the first time the admin opens the section
 let myEventsCount = 0;
 let myEventLimit = 1;
 let myPendingRequestId = null;
@@ -461,7 +464,7 @@ function initAuthWatcher() {
       watchEvents(user);
       if (admin) {
         watchAdminRequests();
-        watchAllAccounts();
+        loadAccountsCount();
       } else {
         watchMyLimitAndRequest(user);
       }
@@ -671,21 +674,52 @@ function renderAdminRequests(reqs) {
 // firestore.rules), so the admin sees every account that ever registered —
 // even one that created no event or deleted it, which the events list alone
 // can't show.
-function watchAllAccounts() {
-  const { collection, query, orderBy, onSnapshot } = window._fsFns;
-  if (allAccountsUnsub) allAccountsUnsub();
-  allAccountsUnsub = onSnapshot(
-    query(collection(window._db, 'users'), orderBy('createdAt', 'desc')),
-    (snap) => renderAllAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-  );
+// Collapsed by default, and loaded only when opened: this list grows with
+// every signup, and reading it in full on every admin page load would cost
+// one read per account against the free plan's daily quota. The badge uses
+// a server-side count instead (about one read however many accounts).
+async function loadAccountsCount() {
+  const { collection, getCountFromServer } = window._fsFns;
+  try {
+    const snap = await getCountFromServer(collection(window._db, 'users'));
+    setAccountsBadge(snap.data().count);
+  } catch (e) { console.error('accounts count failed:', e); }
 }
 
-function renderAllAccounts(accounts) {
-  const section = document.getElementById('admin-accounts-section');
+function setAccountsBadge(n) {
+  document.getElementById('admin-accounts-section').style.display = n > 0 ? 'block' : 'none';
+  document.getElementById('admin-accounts-badge').textContent = n > 99 ? '99+' : String(n);
+}
+
+async function toggleAllAccounts() {
+  const body = document.getElementById('admin-accounts-body');
+  const open = body.style.display !== 'block';
+  body.style.display = open ? 'block' : 'none';
+  document.getElementById('admin-accounts-arrow').textContent = open ? '▴' : '▾';
+  if (!open || allAccounts) return;
   const list = document.getElementById('admin-accounts-list');
-  if (accounts.length === 0) { section.style.display = 'none'; list.innerHTML = ''; return; }
-  section.style.display = 'block';
-  document.getElementById('admin-accounts-badge').textContent = accounts.length > 99 ? '99+' : String(accounts.length);
+  list.innerHTML = '<div class="sub" style="text-align:center;">⏳ جاري التحميل...</div>';
+  const { collection, query, orderBy, getDocs } = window._fsFns;
+  try {
+    const snap = await getDocs(query(collection(window._db, 'users'), orderBy('createdAt', 'desc')));
+    allAccounts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    setAccountsBadge(allAccounts.length);
+    renderAllAccounts();
+  } catch (e) {
+    console.error('accounts load failed:', e);
+    list.innerHTML = '<div class="sub" style="text-align:center;">⚠️ تعذّر التحميل — اقفل القسم وافتحه مرة ثانية</div>';
+  }
+}
+
+function renderAllAccounts() {
+  if (!allAccounts) return;
+  const list = document.getElementById('admin-accounts-list');
+  const q = document.getElementById('admin-accounts-search').value.trim().toLowerCase();
+  const accounts = q ? allAccounts.filter(a => (a.email || a.id).toLowerCase().includes(q)) : allAccounts;
+  if (accounts.length === 0) {
+    list.innerHTML = '<div class="sub" style="text-align:center;">' + (q ? 'لا يوجد حساب بهذا الإيميل' : 'لا يوجد حسابات') + '</div>';
+    return;
+  }
   list.innerHTML = accounts.map(a => {
     const c = a.createdAt;
     const dt = c ? (c.toDate ? c.toDate() : (c.seconds ? new Date(c.seconds * 1000) : null)) : null;
@@ -699,9 +733,29 @@ function renderAllAccounts(accounts) {
         <div class="event-name">${escapeHtml(a.email || a.id)}</div>
         <div class="event-date">سجّل: ${when}</div>
       </div>
+      <button class="btn ghost small acc-del-btn" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteAccountRecord('${escapeForJsAttr(a.id)}', '${escapeForJsAttr(a.email || a.id)}')">🗑</button>
     </div>
   `;
   }).join('');
+}
+
+// Removes the record from this list only — the users/{uid} mirror written
+// at signup. The customer's real sign-in (Firebase Auth) and their events
+// and guests live elsewhere and are untouched; they just won't reappear
+// here, since the record is only ever written once, at signup.
+async function deleteAccountRecord(uid, email) {
+  if (!confirm('حذف "' + email + '" من القائمة؟\n\nيحذف من القائمة فقط — حساب العميل ومناسباته ما تتأثر، ويقدر يدخل عادي. بس ما راح يرجع يظهر هنا.')) return;
+  const { doc, deleteDoc } = window._fsFns;
+  try {
+    await deleteDoc(doc(window._db, 'users', uid));
+    allAccounts = allAccounts.filter(a => a.id !== uid);
+    setAccountsBadge(allAccounts.length);
+    renderAllAccounts();
+    showToast('✅ انحذف من القائمة');
+  } catch (e) {
+    alert('صار خطأ أثناء الحذف: ' + (e.code || '') + ' — ' + e.message);
+    console.error(e);
+  }
 }
 
 async function approveEventRequest(requestId, uid) {

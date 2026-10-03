@@ -8,7 +8,7 @@ import {
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp,
-  doc, setDoc, getDoc, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc
+  doc, setDoc, getDoc, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc, getCountFromServer
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -36,7 +36,7 @@ window._auth = auth;
 window._db = db;
 window._eventsCol = collection(db, 'events');
 window._authFns = { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, signOut, sendPasswordResetEmail };
-window._fsFns = { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, setDoc, getDoc, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc };
+window._fsFns = { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, setDoc, getDoc, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc, getCountFromServer };
 // Firestore shuts its local cache down on every `pagehide`, and on iOS
 // Safari it also stops the whole client for good. If Safari then brings the
 // same page back (back button / back-forward cache, or the tab coming back
