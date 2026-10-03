@@ -179,6 +179,32 @@
   .approve-btn { background:rgba(76,175,80,0.15); border:1px solid rgba(76,175,80,0.55); color:#4CAF50; font-size:13px; padding:6px 12px; border-radius:8px; cursor:pointer; white-space:nowrap; }
   .reject-btn { background:rgba(229,72,77,0.12); border:1px solid rgba(229,72,77,0.45); color:#E5484D; font-size:13px; padding:6px 10px; border-radius:8px; cursor:pointer; }
   .link-box { display:flex; gap:8px; align-items:center; }
+  /* Date and venue as chips under the title. */
+  .meta-chips { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px; }
+  .meta-chip { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--text-soft); background:rgba(var(--accent-rgb),0.08); border:1px solid rgba(var(--accent-rgb),0.18); padding:5px 11px; border-radius:999px; letter-spacing:0; }
+  .meta-chip svg.ic { color:var(--gold); }
+  .stat-ic { width:30px; height:30px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:6px; background:rgba(var(--accent-rgb),0.12); color:var(--gold); }
+  .stat-ic.green { background:rgba(76,175,80,0.14); color:#7fd48a; }
+  .stat-ic.amber { background:rgba(255,152,0,0.12); color:#ffb54d; }
+  .att-bar { margin:2px 2px 14px; }
+  .att-bar .att-row { display:flex; justify-content:space-between; font-size:12px; color:var(--text-soft); margin-bottom:6px; }
+  .att-bar .att-pct { color:#7fd48a; font-weight:600; }
+  .att-bar .att-track { height:7px; border-radius:99px; background:rgba(255,255,255,0.06); overflow:hidden; }
+  .att-bar .att-fill { height:100%; width:0; border-radius:99px; background:linear-gradient(90deg,#4CAF50,#7fd48a); transition:width 0.5s ease; }
+  .theme-lbl { display:flex; align-items:center; justify-content:center; gap:6px; font-size:11.5px; color:var(--text-soft); margin-bottom:-4px; }
+  .share-card .sc-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .share-card .sc-title { font-size:14px; font-weight:600; color:var(--text-main); }
+  .share-card .sc-sub { font-size:11.5px; color:var(--text-soft); }
+  .chipbox { width:36px; height:36px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; background:rgba(var(--accent-rgb),0.12); color:var(--gold); }
+  .share-card .link-box input { direction:ltr; text-align:left; text-overflow:ellipsis; color:var(--text-soft); }
+  .ibtn { width:44px; height:44px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; border:none; cursor:pointer; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; padding:0; }
+  .ibtn.ghost { background:transparent; border:1px solid rgba(var(--accent-rgb),0.35); color:var(--gold); }
+  .pin-row { display:flex; align-items:center; justify-content:space-between; margin-top:12px; padding:10px 12px; border-radius:12px; background:rgba(var(--accent-rgb),0.06); border:1px dashed rgba(var(--accent-rgb),0.3); }
+  .pin-row .pin-lbl { font-size:11.5px; color:var(--text-soft); display:flex; align-items:center; gap:6px; }
+  #scan-pin-display { display:block; font-size:20px; font-weight:700; letter-spacing:5px; color:var(--gold); direction:ltr; text-align:right; }
+  .inwrap { position:relative; flex:1; }
+  .inwrap > svg.ic { position:absolute; right:13px; top:50%; transform:translateY(-50%); color:var(--gold); opacity:0.8; pointer-events:none; }
+  .inwrap > input { padding-right:42px !important; }
   .link-box input { flex:1; margin:0; font-size:12px; }
   .empty { text-align:center; color:var(--text-soft); font-size:13px; padding:14px 0; opacity:0.7; }
   /* Top-fixed rather than bottom — same reasoning as app.html's toast: this
@@ -271,19 +297,28 @@ setTimeout(() => {
 
     <div class="stats">
       <div class="stat-box tappable" id="box-all" onclick="setStatusFilter('all')">
+        <div class="stat-ic"><i data-ic="users" data-size="16"></i></div>
         <div class="stat-num" id="stat-total">0</div>
         <div class="stat-label">عداد الضيوف</div>
       </div>
       <div class="stat-box tappable" id="box-attended" onclick="setStatusFilter('attended')">
+        <div class="stat-ic green"><i data-ic="user-check" data-size="16"></i></div>
         <div class="stat-num" id="stat-attended">0</div>
         <div class="stat-label">الحضور</div>
       </div>
       <div class="stat-box tappable" id="box-pending" onclick="setStatusFilter('pending')">
+        <div class="stat-ic amber"><i data-ic="clock" data-size="16"></i></div>
         <div class="stat-num" id="stat-pending">0</div>
         <div class="stat-label">لم يحضروا</div>
       </div>
     </div>
 
+    <!-- Attendance at a glance: fills as guests check in. -->
+    <div class="att-bar" id="att-bar">
+      <div class="att-row"><span>نسبة الحضور</span><span class="att-pct" id="att-pct">0%</span></div>
+      <div class="att-track"><div class="att-fill" id="att-fill"></div></div>
+    </div>
+    <div class="theme-lbl"><i data-ic="palette" data-size="13"></i> لون التصميم</div>
     <div class="theme-switcher">
       <button class="theme-dot t-gold" onclick="setTheme('gold')" title="ذهبي"></button>
       <button class="theme-dot t-rose" onclick="setTheme('rose')" title="وردي"></button>
@@ -312,36 +347,45 @@ setTimeout(() => {
       <button class="btn wa" onclick="openPaymentWhatsapp()"><i data-ic="message-circle" data-size="17"></i> للتواصل عبر واتساب</button>
     </div>
 
-    <div class="card" id="invite-link-card">
-      <div style="font-size:12px; color:#B8B4AC; margin-bottom:6px;">رابط الدعوة — شاركه مع ضيوفك</div>
+    <div class="card share-card" id="invite-link-card">
+      <div class="sc-head">
+        <span class="chipbox"><i data-ic="link"></i></span>
+        <div><div class="sc-title">رابط الدعوة</div><div class="sc-sub">شاركه مع ضيوفك</div></div>
+      </div>
       <div class="link-box">
         <input type="text" id="invite-link" readonly>
-        <button class="btn" onclick="copyInviteLink()">نسخ</button>
+        <button class="ibtn ghost" onclick="shareInviteLink()" aria-label="مشاركة" title="مشاركة"><i data-ic="share-2"></i></button>
+        <button class="ibtn" onclick="copyInviteLink()" aria-label="نسخ" title="نسخ"><i data-ic="copy"></i></button>
       </div>
     </div>
-
-    <div class="card">
-      <div style="font-size:12px; color:#B8B4AC; margin-bottom:6px;">رابط السكانر — شاركه مع المشرفين (للمسح والبحث بالأسماء فقط، بدون تعديل أو حذف)</div>
+    <div class="card share-card">
+      <div class="sc-head">
+        <span class="chipbox"><i data-ic="scan-line"></i></span>
+        <div><div class="sc-title">رابط السكانر</div><div class="sc-sub">شاركه مع المشرفين على الباب — للمسح والبحث بالأسماء فقط، بدون تعديل أو حذف</div></div>
+      </div>
       <div class="link-box">
         <input type="text" id="scan-link" readonly>
-        <button class="btn" onclick="copyScanLink()">نسخ</button>
+        <button class="ibtn ghost" onclick="shareScanLink()" aria-label="مشاركة" title="مشاركة"><i data-ic="share-2"></i></button>
+        <button class="ibtn" onclick="copyScanLink()" aria-label="نسخ" title="نسخ"><i data-ic="copy"></i></button>
       </div>
-      <div style="font-size:12px; color:#B8B4AC; margin-top:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-        رقم دخول المشرفين: <span id="scan-pin-display" style="color:#E0BC7A; font-weight:700; letter-spacing:2px;"></span>
-        <button class="btn ghost" style="width:auto; margin:0; padding:4px 10px; font-size:11px;" onclick="regenerateScanPin()"><i data-ic="refresh-cw" data-size="12"></i> كود جديد</button>
+      <div class="pin-row">
+        <div>
+          <div class="pin-lbl"><i data-ic="key-round" data-size="13"></i> رقم دخول المشرفين:</div>
+          <span id="scan-pin-display"></span>
+        </div>
+        <button class="ibtn ghost" onclick="regenerateScanPin()" aria-label="كود جديد" title="كود جديد"><i data-ic="refresh-cw" data-size="17"></i></button>
       </div>
     </div>
-
     <div id="page-guests">
       <div class="card">
         <div class="row">
-          <input type="text" id="new-guest-name" placeholder="اسم ضيف جديد">
-          <button class="btn" style="width:auto; margin:0; padding:13px 22px;" onclick="addGuest()">إضافة</button>
+          <div class="inwrap"><i data-ic="user-plus"></i><input type="text" id="new-guest-name" placeholder="اسم ضيف جديد" style="margin:0;"></div>
+          <button class="btn" style="width:auto; margin:0; padding:13px 20px; display:inline-flex; align-items:center; gap:6px;" onclick="addGuest()"><i data-ic="plus"></i> إضافة</button>
         </div>
         <input type="file" id="csv-import" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="importCSV(event)">
       </div>
       <div class="card">
-        <input type="text" id="guest-search" placeholder="بحث بالاسم" oninput="searchGuests()" style="margin:0;">
+        <div class="inwrap"><i data-ic="search" data-size="17"></i><input type="text" id="guest-search" placeholder="بحث بالاسم" oninput="searchGuests()" style="margin:0;"></div>
       </div>
       <div id="bulk-bar" style="display:none;">
         <span id="bulk-count"></span>
@@ -514,6 +558,20 @@ function copyInviteLink() {
   navigator.clipboard?.writeText(input.value);
 }
 
+// The phone's own share sheet (WhatsApp, Messages...) where there is one;
+// elsewhere, copying is the fallback.
+function shareLink(inputId, title, copyFn) {
+  const url = document.getElementById(inputId).value;
+  if (navigator.share) { navigator.share({ title, url }).catch(() => {}); return; }
+  copyFn();
+  showToast('✅ تم نسخ الرابط');
+}
+function shareInviteLink() {
+  if (paymentGateActive()) { openPaymentWhatsapp(); return; }
+  shareLink('invite-link', eventData ? eventData.name : 'دعوة', copyInviteLink);
+}
+function shareScanLink() { shareLink('scan-link', 'سكانر الدخول', copyScanLink); }
+
 function copyScanLink() {
   const input = document.getElementById('scan-link');
   input.select();
@@ -655,7 +713,7 @@ async function saveEventEdit() {
     await updateDoc(doc(window._db, 'events', eventId), { name, date, venue, mapsLink });
     eventData.name = name; eventData.date = date; eventData.venue = venue; eventData.mapsLink = mapsLink;
     document.getElementById('ev-title').textContent = name;
-    document.getElementById('ev-sub').textContent = [date, venue].filter(Boolean).join(' · ');
+    renderEventMeta();
     toggleEditEvent();
   } catch (e) {
     alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
@@ -751,7 +809,7 @@ async function init() {
     document.getElementById('loading-msg').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
     document.getElementById('ev-title').textContent = eventData.name;
-    document.getElementById('ev-sub').textContent = [formatEventDate(eventData.date), eventData.venue].filter(Boolean).join(' · ');
+    renderEventMeta();
     document.getElementById('invite-link').value = window.location.origin + window.location.pathname.replace('event.html', 'invite.html') + '?event=' + eventId;
     document.getElementById('scan-link').value = window.location.origin + window.location.pathname.replace('event.html', 'scan.html') + '?event=' + eventId;
     document.getElementById('scan-pin-display').textContent = '…';
@@ -775,7 +833,7 @@ function watchPaymentStatus() {
     const wasCap = guestCapOf(eventData);
     eventData = { ...eventData, ...snap.data() };
     document.getElementById('ev-title').textContent = eventData.name;
-    document.getElementById('ev-sub').textContent = [formatEventDate(eventData.date), eventData.venue].filter(Boolean).join(' · ');
+    renderEventMeta();
     renderPaymentGate();
     if (!isAdmin(currentUser) && guestCapOf(eventData) > wasCap) {
       const c = guestCapOf(eventData);
@@ -937,9 +995,21 @@ function visibleGuests() {
 }
 
 function updateStats() {
+  const attended = guests.filter(g => g.scanned).length;
   document.getElementById('stat-total').textContent = guests.length;
-  document.getElementById('stat-attended').textContent = guests.filter(g => g.scanned).length;
-  document.getElementById('stat-pending').textContent = guests.filter(g => !g.scanned).length;
+  document.getElementById('stat-attended').textContent = attended;
+  document.getElementById('stat-pending').textContent = guests.length - attended;
+  const pct = guests.length ? Math.round(attended * 100 / guests.length) : 0;
+  document.getElementById('att-pct').textContent = pct + '%';
+  document.getElementById('att-fill').style.width = pct + '%';
+}
+
+// Date and venue as two chips under the title (either may be missing).
+function renderEventMeta() {
+  const chip = (icon, text) => '<span class="meta-chip">' + ic(icon, 14) + '<span>' + escapeHtml(text) + '</span></span>';
+  const date = formatEventDate(eventData.date);
+  const parts = [date && chip('calendar', date), eventData.venue && chip('map-pin', eventData.venue)].filter(Boolean);
+  document.getElementById('ev-sub').innerHTML = parts.length ? '<div class="meta-chips">' + parts.join('') + '</div>' : '';
 }
 
 function setStatusFilter(mode) {
