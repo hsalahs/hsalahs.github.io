@@ -110,6 +110,16 @@ function notifyAdmin(name, message) {
   }).catch(e => console.error('Admin notify failed:', e));
 }
 
+// Puts a button into a "working…" state (disabled, with a ⏳ label) and
+// returns a function that restores it. Without it a slow network looked
+// like a dead button, and a second tap fired the same action twice.
+function setButtonBusy(btn, label) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ ' + label;
+  return () => { btn.disabled = false; btn.textContent = original; };
+}
+
 // Shared bottom toast — the calling page needs its own #toast element and
 // matching CSS (each page's dark theme sets slightly different colors).
 function showToast(msg) {

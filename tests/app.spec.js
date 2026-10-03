@@ -424,3 +424,50 @@ test('Arabic counted nouns: 1 singular, 2 dual, 3-10 plural, 11+ singular again'
   const days = await page.evaluate(() => [1, 2, 4, 12].map(n => arPlural(n, 'يوم', 'يومين', 'أيام')));
   expect(days).toEqual(['يوم', 'يومين', 'أيام', 'يوم']);
 });
+
+test('the phone keyboard\'s Go key (Enter in the password field) logs in — a real form, not just a button', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: null });
+  await page.goto('/app.html');
+  await page.locator('#auth-email').fill('someone@example.com');
+  await page.locator('#auth-pass').fill('whatever123');
+  await page.locator('#auth-pass').press('Enter');
+  await expect(page.locator('#app-view')).toBeVisible();
+  await expect(page.locator('#auth-email')).toHaveAttribute('autocomplete', 'email');
+});
+
+test('the login button shows it is working and can\'t be pressed twice while waiting', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: null });
+  await page.goto('/app.html');
+  await page.locator('#auth-email').fill('someone@example.com');
+  await page.locator('#auth-pass').fill('whatever123');
+  const state = await page.evaluate(() => {
+    submitAuth();
+    const b = document.getElementById('auth-submit-btn');
+    return { disabled: b.disabled, text: b.textContent };
+  });
+  expect(state).toEqual({ disabled: true, text: '⏳ جاري الدخول...' });
+});
+
+test('the create-event button shows it is working, and Enter on the keyboard submits the form', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: {} } });
+  await page.goto('/app.html');
+  await page.locator('#create-toggle-btn').click();
+  await page.locator('#ev-name').fill('زفاف تجريبي');
+  const state = await page.evaluate(() => {
+    createNewEvent();
+    const b = document.getElementById('create-submit-btn');
+    return { disabled: b.disabled, text: b.textContent };
+  });
+  expect(state).toEqual({ disabled: true, text: '⏳ جاري الإنشاء...' });
+  await page.waitForURL(/event\.html\?id=/);
+
+  await page.goto('/app.html');
+  await page.locator('#create-toggle-btn').click();
+  await page.locator('#ev-name').fill('زفاف ثاني');
+  await page.locator('#ev-venue').fill('الرياض');
+  await page.locator('#ev-venue').press('Enter');
+  await page.waitForURL(/event\.html\?id=/);
+});

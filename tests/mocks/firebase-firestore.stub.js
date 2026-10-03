@@ -215,6 +215,8 @@ export function getDoc(ref) {
     window.__failNextGetDoc = false;
     return Promise.reject(new Error('simulated network failure'));
   }
+  // ...and a read that never answers at all (the stuck-loading case).
+  if (window.__hangGetDoc) return new Promise(() => {});
   if (isDenied(ref.path)) return Promise.reject(permissionDenied(ref.path));
   const coll = F().store[ref.collPath] || {};
   return Promise.resolve(makeDocSnap(ref.collPath, ref.id, coll[ref.id]));

@@ -1859,6 +1859,22 @@ if (window._auth) {
   }, 8000);
   window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); init(); });
 }
+
+// Last safety net for "stuck on جاري التحميل..." with no way out (a real
+// report: an iPhone sat on it for about a minute and a half after creating
+// an event, though the event itself had saved fine). Whatever step is slow
+// — sign-in, the first database read — after STUCK_LOADING_MS the message
+// turns into a tap-to-retry instead of hanging silently.
+const STUCK_LOADING_MS = 12000;
+setTimeout(() => {
+  const el = document.getElementById('loading-msg');
+  // Only the plain loading text: an error or "invalid link" message already
+  // shown there is the real answer, not a hang.
+  if (!el || el.style.display === 'none' || el.onclick || el.textContent.trim() !== 'جاري التحميل...') return;
+  el.textContent = '⚠️ التحميل تأخر — اضغط هنا للمحاولة مرة ثانية';
+  el.style.cursor = 'pointer';
+  el.onclick = () => location.reload();
+}, STUCK_LOADING_MS);
 </script>
 </body>
 </html>
