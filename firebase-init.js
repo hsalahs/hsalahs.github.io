@@ -2,7 +2,8 @@
 // One place to change project config or add an SDK import instead of four.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
-  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously,
+  initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously,
   onAuthStateChanged, signOut, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
@@ -21,7 +22,18 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+// initializeAuth with getAuth()'s exact persistence list, minus its
+// popup/redirect resolver. On iPhones (and any Safari or mobile browser) the
+// SDK makes sign-in WAIT for that resolver before answering anything: it
+// loads apis.google.com plus a cross-origin iframe from
+// wedding-qr-16d01.firebaseapp.com first, every page load. This site only
+// signs in with email/password and anonymously — never a popup or redirect
+// — so that wait bought nothing, and on a slow or picky connection it was
+// the "stuck on جاري التحميل..." an iPhone tester hit. Same persistence, so
+// everyone already signed in stays signed in.
+const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
+});
 // A persistent local cache (IndexedDB), shared across tabs: an organizer
 // dashboard and a scanner open on the same device/browser reuse one copy
 // instead of each downloading their own. On reload, every onSnapshot

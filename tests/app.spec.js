@@ -471,3 +471,14 @@ test('the create-event button shows it is working, and Enter on the keyboard sub
   await page.locator('#ev-venue').press('Enter');
   await page.waitForURL(/event\.html\?id=/);
 });
+
+test('sign-in starts without the popup/redirect helper (it made iPhones wait on an extra Google iframe every page load)', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: null });
+  await page.goto('/app.html');
+  await expect(page.locator('#auth-view')).toBeVisible();
+  expect(await page.evaluate(() => window.__fakeFirebase.authInitOptions)).toEqual({
+    persistence: ['indexedDBLocalPersistence', 'browserLocalPersistence', 'browserSessionPersistence'],
+    hasPopupRedirectResolver: false,
+  });
+});

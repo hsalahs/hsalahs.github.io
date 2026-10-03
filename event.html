@@ -342,8 +342,11 @@ setTimeout(() => {
 <!-- Moved out of <head> so they don't block first paint on three separate
      CDN fetches — nothing needs them until the script below runs. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- async: only needed on a tap (Excel import/export, ZIP download, admin
+     notifications) — as plain scripts they held up the whole dashboard for as
+     long as each CDN took to answer. -->
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="utils.js"></script>
 <script src="format.js"></script>
 <script src="guest-names.js"></script>

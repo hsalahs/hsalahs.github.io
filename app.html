@@ -185,9 +185,10 @@ setTimeout(() => {
 
 </div>
 
-<!-- Moved out of <head> so it doesn't block first paint on a fetch to
-     another CDN — nothing needs it until the script below runs. -->
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- async: nothing on the page waits for it (notifyAdmin initialises it on
+     first use). As a plain script it held up everything after it, sign-in
+     included, for as long as the CDN took to answer. -->
+<script async src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="utils.js"></script>
 <script src="format.js"></script>
 <script>

@@ -7,6 +7,16 @@ export function getAuth() {
   return { fake: true, get currentUser() { return F().auth.user; } };
 }
 
+// firebase-init.js uses initializeAuth (not getAuth) — same fake auth object;
+// records the options so a test can check no popup/redirect resolver is set.
+export function initializeAuth(app, opts) {
+  F().authInitOptions = { persistence: (opts && opts.persistence || []).map(String), hasPopupRedirectResolver: !!(opts && opts.popupRedirectResolver) };
+  return getAuth();
+}
+export const indexedDBLocalPersistence = 'indexedDBLocalPersistence';
+export const browserLocalPersistence = 'browserLocalPersistence';
+export const browserSessionPersistence = 'browserSessionPersistence';
+
 export function onAuthStateChanged(auth, cb) {
   F().auth.listeners.push(cb);
   cb(F().auth.user);
