@@ -733,9 +733,29 @@ function renderAllAccounts() {
         <div class="event-name">${escapeHtml(a.email || a.id)}</div>
         <div class="event-date">سجّل: ${when}</div>
       </div>
+      <button class="btn ghost small acc-del-btn" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteAccountRecord('${escapeForJsAttr(a.id)}', '${escapeForJsAttr(a.email || a.id)}')">🗑</button>
     </div>
   `;
   }).join('');
+}
+
+// Removes the record from this list only — the users/{uid} mirror written
+// at signup. The customer's real sign-in (Firebase Auth) and their events
+// and guests live elsewhere and are untouched; they just won't reappear
+// here, since the record is only ever written once, at signup.
+async function deleteAccountRecord(uid, email) {
+  if (!confirm('حذف "' + email + '" من القائمة؟\n\nيحذف من القائمة فقط — حساب العميل ومناسباته ما تتأثر، ويقدر يدخل عادي. بس ما راح يرجع يظهر هنا.')) return;
+  const { doc, deleteDoc } = window._fsFns;
+  try {
+    await deleteDoc(doc(window._db, 'users', uid));
+    allAccounts = allAccounts.filter(a => a.id !== uid);
+    setAccountsBadge(allAccounts.length);
+    renderAllAccounts();
+    showToast('✅ انحذف من القائمة');
+  } catch (e) {
+    alert('صار خطأ أثناء الحذف: ' + (e.code || '') + ' — ' + e.message);
+    console.error(e);
+  }
 }
 
 async function approveEventRequest(requestId, uid) {

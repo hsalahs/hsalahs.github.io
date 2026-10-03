@@ -133,6 +133,9 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if request.auth != null && request.auth.uid == uid &&
         request.resource.data.keys().hasOnly(['email', 'createdAt']);
+      // The admin tidying the list. Only this record goes — the customer's
+      // sign-in and events are elsewhere and unaffected.
+      allow delete: if isAdmin();
     }
 
     match /events/{eventId} {
