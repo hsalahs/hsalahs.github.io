@@ -232,6 +232,15 @@ export function getDocs(refOrQuery) {
   return Promise.resolve(buildQuerySnapshot(refOrQuery.path, null));
 }
 
+// A count costs about one read however many documents it counts — the
+// tally lets a test tell it apart from a full getDocs.
+export function getCountFromServer(refOrQuery) {
+  if (isDenied(refOrQuery.path) || isListDenied(refOrQuery.path)) return Promise.reject(permissionDenied(refOrQuery.path));
+  (F().countPaths = F().countPaths || []).push(refOrQuery.path);
+  const snap = buildQuerySnapshot(refOrQuery.path, refOrQuery.filters || null, refOrQuery.order);
+  return Promise.resolve({ data: () => ({ count: snap.docs.length }) });
+}
+
 export function updateDoc(ref, patch) {
   if (isDenied(ref.path)) return Promise.reject(permissionDenied(ref.path));
   const coll = ensureColl(ref.collPath);

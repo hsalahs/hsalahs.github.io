@@ -152,7 +152,45 @@ test('the admin sees every account that ever registered, even one with no event'
   await page.goto('/app.html');
   await expect(page.locator('#admin-accounts-section')).toBeVisible();
   await expect(page.locator('#admin-accounts-badge')).toHaveText('1');
+  await page.locator('#admin-accounts-toggle').click();
   await expect(page.locator('#admin-accounts-list')).toContainText('noevent@example.com');
+});
+
+test('the accounts list is collapsed by default and only read when opened — the badge comes from a cheap count', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: {
+      events: {},
+      users: {
+        u1: { email: 'first@example.com', createdAt: { seconds: 1700000000 } },
+        u2: { email: 'second@other.com', createdAt: { seconds: 1700000100 } },
+      },
+    },
+  });
+  await page.goto('/app.html');
+  await expect(page.locator('#admin-accounts-badge')).toHaveText('2');
+  await expect(page.locator('#admin-accounts-body')).toBeHidden();
+  const reads = () => page.evaluate(() => ({
+    full: (window.__fakeFirebase.getDocsPaths || []).filter(p => p === 'users').length,
+    count: (window.__fakeFirebase.countPaths || []).filter(p => p === 'users').length,
+  }));
+  expect(await reads()).toEqual({ full: 0, count: 1 });
+
+  await page.locator('#admin-accounts-toggle').click();
+  await expect(page.locator('#admin-accounts-list .event-name')).toHaveText(['second@other.com', 'first@example.com']);
+  await expect(page.locator('#admin-accounts-arrow')).toHaveText('▴');
+
+  await page.locator('#admin-accounts-search').fill('OTHER');
+  await expect(page.locator('#admin-accounts-list .event-name')).toHaveText(['second@other.com']);
+  await page.locator('#admin-accounts-search').fill('nobody');
+  await expect(page.locator('#admin-accounts-list')).toContainText('لا يوجد حساب بهذا الإيميل');
+
+  await page.locator('#admin-accounts-toggle').click();
+  await expect(page.locator('#admin-accounts-body')).toBeHidden();
+  await page.locator('#admin-accounts-toggle').click();
+  await expect(page.locator('#admin-accounts-body')).toBeVisible();
+  expect((await reads()).full).toBe(1);
 });
 
 test.describe('in Riyadh time', () => {
@@ -170,6 +208,7 @@ test.describe('in Riyadh time', () => {
       },
     });
     await page.goto('/app.html');
+    await page.locator('#admin-accounts-toggle').click();
     const list = page.locator('#admin-accounts-list');
     await expect(list).toContainText('سجّل: 15 نوفمبر 2023 · 1:13 ص');
     await expect(list).toContainText('سجّل: 15 نوفمبر 2023 · 1:00 م');
