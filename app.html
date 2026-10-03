@@ -43,6 +43,14 @@
   .date-label { display:block; font-size:12px; color:#B8B4AC; margin:0 4px 4px; }
   .btn:disabled { opacity:0.7; cursor:default; }
   svg.ic { flex-shrink:0; vertical-align:middle; }
+  .event-meta { display:flex; flex-wrap:wrap; gap:4px 12px; }
+  .event-meta span { display:inline-flex; align-items:center; gap:4px; }
+  .event-meta svg.ic { color:#E0BC7A; }
+  .event-stats .att-bar { flex-basis:100%; margin-top:2px; }
+  .att-row { display:flex; justify-content:space-between; font-size:11.5px; color:#B8B4AC; margin-bottom:5px; }
+  .att-pct { color:#7fd48a; font-weight:600; }
+  .att-track { height:6px; border-radius:99px; background:rgba(255,255,255,0.06); overflow:hidden; }
+  .att-fill { height:100%; border-radius:99px; background:linear-gradient(90deg,#4CAF50,#7fd48a); }
   .chip { width:28px; height:28px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; background:rgba(224,188,122,0.12); color:#E0BC7A; }
   .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; margin-bottom:10px; }
   .btn.ghost { background:transparent; border:1px solid rgba(224,188,122,0.3); color:#E0BC7A; }
@@ -54,7 +62,7 @@
   .event-card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
   .event-name { font-weight:700; color:#E0BC7A; font-size:15px; }
   .event-date { color:#B8B4AC; font-size:12px; margin-top:3px; }
-  .event-stats { display:flex; gap:8px; }
+  .event-stats { display:flex; gap:8px; flex-wrap:wrap; }
   .event-stat { flex:1; text-align:center; background:rgba(224,188,122,0.06); border:1px solid rgba(224,188,122,0.15); border-radius:10px; padding:8px 4px; }
   .event-stat .n { font-weight:700; color:#FAF8F4; font-size:15px; }
   .event-stat .l { color:#8a857a; font-size:10.5px; margin-top:1px; }
@@ -365,11 +373,16 @@ const eventStatsCache = {};
 
 function statsBoxHtml(ev) {
   const cached = eventStatsCache[ev.id];
-  const total = cached ? cached.total : '…';
-  const attended = cached ? cached.attended : '…';
+  return statsHtml(cached ? cached.total : '…', cached ? cached.attended : '…');
+}
+
+// The two numbers plus an attendance bar (empty until the numbers are in).
+function statsHtml(total, attended) {
+  const pct = typeof total === 'number' && total > 0 ? Math.round(attended * 100 / total) : 0;
   return `
     <div class="event-stat"><div class="n">${total}</div><div class="l">كل الضيوف</div></div>
     <div class="event-stat"><div class="n">${attended}</div><div class="l">حضروا</div></div>
+    <div class="att-bar"><div class="att-row"><span>نسبة الحضور</span><span class="att-pct">${pct}%</span></div><div class="att-track"><div class="att-fill" style="width:${pct}%"></div></div></div>
   `;
 }
 
@@ -384,7 +397,7 @@ function renderEvents(events, showOwner, changedIds) {
       <div class="event-card-top">
         <div>
           <div class="event-name">${escapeHtml(ev.name)} ${ev.paid ? '<span style="color:#4CAF50; font-size:11px;">✅ مفعّلة' + (typeof ev.guestLimit === 'number' ? ' (' + ev.guestLimit + ' ' + guestWord(ev.guestLimit) + ')' : '') + '</span>' : '<span style="color:#E5484D; font-size:11px;">🔒 غير مفعّلة</span>'}</div>
-          <div class="event-date">${formatEventDate(ev.date)}${ev.venue ? ' · ' + escapeHtml(ev.venue) : ''}</div>
+          <div class="event-date event-meta">${ev.date ? `<span>${ic('calendar', 13)} ${formatEventDate(ev.date)}</span>` : ''}${ev.venue ? `<span>${ic('map-pin', 13)} ${escapeHtml(ev.venue)}</span>` : ''}</div>
           ${showOwner ? `<div class="event-date">${ic('user', 12)} ${escapeHtml(ev.ownerEmail || ev.ownerUid || '')}</div>` : ''}
         </div>
       </div>
@@ -416,10 +429,7 @@ async function loadEventStats(ev) {
     const total = snap.size;
     const attended = snap.docs.filter(d => d.data().scanned).length;
     eventStatsCache[ev.id] = { total, attended };
-    box.innerHTML = `
-      <div class="event-stat"><div class="n">${total}</div><div class="l">كل الضيوف</div></div>
-      <div class="event-stat"><div class="n">${attended}</div><div class="l">حضروا</div></div>
-    `;
+    box.innerHTML = statsHtml(total, attended);
   } catch (e) {
     box.style.display = 'none';
   }

@@ -107,7 +107,7 @@ test('no page, script or manifest says "فريق الأمن" or "لوحة تحك
     }
   }
   expect(offenders).toEqual([]);
-  expect(read('event.html')).toContain('رابط السكانر — شاركه مع المشرفين');
+  expect(read('event.html')).toContain('رابط السكانر</div><div class="sc-sub">شاركه مع المشرفين');
   expect(read('event.html')).toContain('رقم دخول المشرفين');
   expect(read('scan.html')).toContain('<div class="sub">سكانر الدخول</div>');
   expect(read('app.html')).toContain('لوحة تحكم المنظّم — أنشئ دعوة رقمية لمناسبتك');
