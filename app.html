@@ -682,8 +682,12 @@ function renderAllAccounts(accounts) {
   section.style.display = 'block';
   document.getElementById('admin-accounts-badge').textContent = accounts.length > 99 ? '99+' : String(accounts.length);
   list.innerHTML = accounts.map(a => {
-    const dt = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate() : null;
-    const when = dt ? (dt.getDate() + ' ' + AR_MONTHS[dt.getMonth()] + ' ' + dt.getFullYear()) : '…';
+    const c = a.createdAt;
+    const dt = c ? (c.toDate ? c.toDate() : (c.seconds ? new Date(c.seconds * 1000) : null)) : null;
+    // Built by hand (12-hour, ص/م, Western digits) — toLocaleString('ar-SA') can give Arabic-Indic digits or Hijri dates.
+    const h = dt ? dt.getHours() : 0;
+    const time = dt ? ((h % 12 || 12) + ':' + String(dt.getMinutes()).padStart(2, '0') + ' ' + (h < 12 ? 'ص' : 'م')) : '';
+    const when = dt ? (dt.getDate() + ' ' + AR_MONTHS[dt.getMonth()] + ' ' + dt.getFullYear() + ' · ' + time) : '…';
     return `
     <div class="card event-card-top">
       <div>
