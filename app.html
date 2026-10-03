@@ -33,6 +33,8 @@
      the native appearance and declaring the color scheme lets our own
      border/background/padding fully control the box like any other input. */
   input[type="date"] { appearance:none; -webkit-appearance:none; color-scheme:dark; }
+  /* iOS Safari ignores placeholder on date inputs (an empty one shows blank), so the field gets a visible label. */
+  .date-label { display:block; font-size:12px; color:#B8B4AC; margin:0 4px 4px; }
   .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; margin-bottom:10px; }
   .btn.ghost { background:transparent; border:1px solid rgba(224,188,122,0.3); color:#E0BC7A; }
   .btn.small { width:auto; padding:8px 16px; font-size:13px; }
@@ -161,7 +163,8 @@ setTimeout(() => {
 
     <div class="card" id="create-form" style="display:none">
       <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: زفاف حسن وفاطمة)">
-      <input type="date" id="ev-date" placeholder="التاريخ">
+      <label for="ev-date" class="date-label">📅 تاريخ المناسبة</label>
+      <input type="date" id="ev-date">
       <input type="text" id="ev-venue" placeholder="مكان الحفل">
       <input type="text" id="ev-maps" placeholder="رابط الموقع على الخريطة (اختياري)">
       <div style="display:flex; gap:10px;">

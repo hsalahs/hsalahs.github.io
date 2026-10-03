@@ -93,6 +93,8 @@
      the native appearance and declaring the color scheme lets our own
      border/background/padding fully control the box like any other input. */
   input[type="date"] { appearance:none; -webkit-appearance:none; color-scheme:dark; }
+  /* iOS Safari ignores placeholder on date inputs (an empty one shows blank), so the field gets a visible label. */
+  .date-label { display:block; font-size:12px; color:var(--text-soft); margin:0 4px 4px; }
   .btn { padding:11px 16px; border:none; border-radius:10px; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; font-weight:700; font-size:13px; cursor:pointer; }
   .btn.ghost { background:transparent; border:1px solid rgba(var(--accent-rgb),0.3); color:var(--gold); }
   .btn.danger { background:transparent; border:1px solid rgba(255,120,120,0.4); color:#ff9d9d; }
@@ -265,6 +267,7 @@ setTimeout(() => {
 
     <div class="card" id="edit-event-card" style="display:none">
       <input type="text" id="edit-ev-name" placeholder="اسم المناسبة">
+      <label for="edit-ev-date" class="date-label">📅 تاريخ المناسبة</label>
       <input type="date" id="edit-ev-date">
       <input type="text" id="edit-ev-venue" placeholder="مكان الحفل">
       <input type="text" id="edit-ev-maps" placeholder="رابط الموقع على الخريطة (اختياري)">
@@ -941,21 +944,17 @@ async function bulkDeleteSelected() {
   // Sequential, not a single batched write: firestore.rules caps guestCount
   // at exactly -1 per write (see deleteGuest), so each guest is its own
   // delete+decrement transaction, same as deleting one at a time.
-  const { doc, runTransaction } = window._fsFns;
-  const eventRef = doc(window._db, 'events', eventId);
   let deleted = 0;
   showToast('⏳ جاري الحذف... 0 / ' + ids.length);
   for (const docId of ids) {
-    const gRef = doc(window._db, 'events', eventId, 'guests', docId);
     try {
-      await runTransaction(window._db, async (tx) => {
-        const evSnap = await tx.get(eventRef);
-        tx.delete(gRef);
-        tx.update(eventRef, { guestCount: Math.max(0, (evSnap.data().guestCount || 0) - 1) });
-      });
+      await removeGuestDoc(docId);
       deleted++;
       showToast('⏳ جاري الحذف... ' + deleted + ' / ' + ids.length);
-    } catch (e) { showErr(e); }
+    } catch (e) {
+      showErr(e);
+      if (window._isFirestoreTerminated(e)) return;
+    }
   }
   exitSelectionMode();
   showToast('✅ تم حذف ' + deleted + ' ' + guestWord(deleted));
@@ -1012,17 +1011,33 @@ async function deleteGuest(docId, name) {
   // mistaken entry can add a replacement right away instead of it counting
   // against their cap forever. firestore.rules caps this at exactly -1 per
   // write, floored at 0 — see the guestCount rule next to scannedCount's.
+  try {
+    await removeGuestDoc(docId);
+    showToast('✅ تم حذف الضيف');
+  } catch (e) { showErr(e); }
+}
+
+// Shared by deleteGuest and bulkDeleteSelected. A guest who already checked
+// in is first un-checked-in (scannedCount -1, same as undoGuestAttend), or
+// the door counter in scan.html would keep counting someone who no longer
+// exists. That has to be its own transaction: firestore.rules lets
+// guestCount drop only in a write that touches nothing else.
+async function removeGuestDoc(docId) {
   const { doc, runTransaction } = window._fsFns;
   const gRef = doc(window._db, 'events', eventId, 'guests', docId);
   const eventRef = doc(window._db, 'events', eventId);
-  try {
-    await runTransaction(window._db, async (tx) => {
-      const evSnap = await tx.get(eventRef);
-      tx.delete(gRef);
-      tx.update(eventRef, { guestCount: Math.max(0, (evSnap.data().guestCount || 0) - 1) });
-    });
-    showToast('✅ تم حذف الضيف');
-  } catch (e) { showErr(e); }
+  await runTransaction(window._db, async (tx) => {
+    const gSnap = await tx.get(gRef);
+    if (!gSnap.exists() || !gSnap.data().scanned) return;
+    const evSnap = await tx.get(eventRef);
+    tx.update(gRef, { scanned: false, scannedAt: null });
+    tx.update(eventRef, { scannedCount: Math.max(0, (evSnap.data().scannedCount || 0) - 1) });
+  });
+  await runTransaction(window._db, async (tx) => {
+    const evSnap = await tx.get(eventRef);
+    tx.delete(gRef);
+    tx.update(eventRef, { guestCount: Math.max(0, (evSnap.data().guestCount || 0) - 1) });
+  });
 }
 
 function hexToRgba(hex, alpha) {
@@ -1546,6 +1561,13 @@ function newGuestId() {
 }
 
 function showErr(e) {
+  // Safety net for the reload in firebase-init.js: never leave the customer
+  // on a page whose connection is gone for good.
+  if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
+    showToast('⏳ انقطع الاتصال — جاري تحديث الصفحة...');
+    setTimeout(() => location.reload(), 800);
+    return;
+  }
   alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
   console.error(e);
 }
