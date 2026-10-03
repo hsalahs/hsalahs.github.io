@@ -45,11 +45,11 @@
      them. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
-    font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4;
+    font-family:'IBM Plex Sans Arabic',sans-serif; background:#0A0A0A; color:#FAF8F4;
     min-height:100vh; overflow-x:hidden; position:relative;
   }
   body::before {
@@ -131,7 +131,7 @@
     .features { grid-template-columns:repeat(3, 1fr); width:880px; margin-inline:calc((100% - 880px) / 2); }
   }
   .feature { background:rgba(255,255,255,0.03); border:1px solid rgba(224,188,122,0.15); border-radius:14px; padding:18px 14px; text-align:center; }
-  .feature .f-icon { font-size:26px; margin-bottom:8px; }
+  .feature .f-icon { width:48px; height:48px; border-radius:14px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:10px; background:rgba(224,188,122,0.12); color:#E0BC7A; }
   .feature h4 { font-size:13px; margin-bottom:4px; color:#FAF8F4; }
   .feature p { font-size:11px; color:#8a857a; line-height:1.6; }
 
@@ -140,6 +140,7 @@
   .cta-final p { font-size:13px; color:#8a857a; margin-bottom:20px; }
 
   footer { text-align:center; margin-top:50px; color:#6f6a62; font-size:11px; }
+  svg.ic { flex-shrink:0; vertical-align:middle; }
 </style>
 </head>
 <body>
@@ -177,10 +178,10 @@ setTimeout(() => {
     <h1>دعوة <span>أنيقة</span> لكل ضيف<br>وباب <span>ذكي</span> لمناسبتك</h1>
     <p>أنشئ صفحة دعوة رقمية بدقيقتين، شارك الرابط مع ضيوفك، وامسح باركودهم عند الباب — بدون ورق، بدون تعقيد.</p>
     <a class="btn-primary" href="app.html">ابدأ الآن</a>
-    <div class="trial-note">🎁 أنشئ دعوتك وجرّب النظام مجانًا</div>
+    <div class="trial-note"><i data-ic="gift" data-size="14"></i> أنشئ دعوتك وجرّب النظام مجانًا</div>
     <div class="btn-row">
-      <a class="btn-outline" href="invite.html?demo=1">👀 جرّب نموذج حي</a>
-      <a class="btn-outline btn-wa" href="https://wa.me/966546664459?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A3%D8%A8%D8%BA%D9%89%20%D8%A3%D8%B9%D8%B1%D9%81%20%D8%A3%D9%83%D8%AB%D8%B1%20%D8%B9%D9%86%20%D8%AE%D8%AF%D9%85%D8%A9%20%D8%AF%D8%B9%D9%88%D8%A7%D8%AA%20%D9%88%D9%83%D9%8A%D9%81%20%D8%A3%D8%A8%D8%AF%D8%A3." target="_blank" rel="noopener" data-wa="general">💬 كلّمنا على واتساب</a>
+      <a class="btn-outline" href="invite.html?demo=1"><i data-ic="eye" data-size="17"></i> جرّب نموذج حي</a>
+      <a class="btn-outline btn-wa" href="https://wa.me/966546664459?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A3%D8%A8%D8%BA%D9%89%20%D8%A3%D8%B9%D8%B1%D9%81%20%D8%A3%D9%83%D8%AB%D8%B1%20%D8%B9%D9%86%20%D8%AE%D8%AF%D9%85%D8%A9%20%D8%AF%D8%B9%D9%88%D8%A7%D8%AA%20%D9%88%D9%83%D9%8A%D9%81%20%D8%A3%D8%A8%D8%AF%D8%A3." target="_blank" rel="noopener" data-wa="general"><i data-ic="message-circle" data-size="17"></i> كلّمنا على واتساب</a>
     </div>
     <a class="btn-secondary" href="app.html">لديك حساب؟ سجّل دخول</a>
 
@@ -225,32 +226,32 @@ setTimeout(() => {
   <div class="section-sub">كل اللي تحتاجه، بدون تطبيق أو طباعة</div>
   <div class="features">
     <div class="feature">
-      <div class="f-icon">⚡</div>
+      <div class="f-icon"><i data-ic="zap" data-size="24"></i></div>
       <h4>خدمة ذاتية وفورية</h4>
       <p>أنشئ مناسبتك، خصّص بطاقتك، وخذ رابط الدعوة خلال دقيقتين بدون انتظار رد خدمة العملاء.</p>
     </div>
     <div class="feature">
-      <div class="f-icon">📱</div>
+      <div class="f-icon"><i data-ic="smartphone" data-size="24"></i></div>
       <h4>بدون تطبيقات أو تحميل</h4>
       <p>المسح يتم عبر كاميرا الجوال مباشرة من المتصفح، لا تحتاج أنت أو ضيوفك لتنزيل أي تطبيق.</p>
     </div>
     <div class="feature">
-      <div class="f-icon">🎁</div>
+      <div class="f-icon"><i data-ic="gift" data-size="24"></i></div>
       <h4>تجربة مجانية بالكامل</h4>
       <p>جرّب النظام بجميع مميزاته حتى 5 ضيوف مجانًا، واختبر المسح بنفسك قبل دفع أي ريال.</p>
     </div>
     <div class="feature">
-      <div class="f-icon">🎟️</div>
+      <div class="f-icon"><i data-ic="ticket" data-size="24"></i></div>
       <h4>بطاقة مصممة لكل ضيف</h4>
       <p>بطاقة دعوة أنيقة ومخصصة مع باركود فردي، قابلة للحفظ والمشاركة.</p>
     </div>
     <div class="feature">
-      <div class="f-icon">📊</div>
+      <div class="f-icon"><i data-ic="chart-column" data-size="24"></i></div>
       <h4>تحديث وإحصائيات لحظية</h4>
       <p>تتابع عدد من حضر ومن لم يحضر لحظة بلحظة، ويُمنع الدخول المكرر تلقائيًا.</p>
     </div>
     <div class="feature">
-      <div class="f-icon">🔒</div>
+      <div class="f-icon"><i data-ic="lock" data-size="24"></i></div>
       <h4>بياناتك خاصة وآمنة</h4>
       <p>كل مناسبة معزولة تمامًا، ولا يطّلع على قائمة ضيوفك إلا أنت ومن تعطيه رمز الباب.</p>
     </div>
@@ -259,9 +260,9 @@ setTimeout(() => {
   <div class="section-title">كم السعر؟</div>
   <div class="section-sub">بسيط وواضح</div>
   <div class="price-card">
-    <p><b>🎁 أول 5 ضيوف مجانًا لكل مناسبة</b> — تجرّب كل شي بنفسك بدون دفع رسوم.</p>
+    <p><b><i data-ic="gift" data-size="15"></i> أول 5 ضيوف مجانًا لكل مناسبة</b> — تجرّب كل شي بنفسك بدون دفع رسوم.</p>
     <p>لما تكبر القائمة، نتفق معك على باقة تناسب عدد ضيوفك، ونفعّل مناسبتك.</p>
-    <a class="btn-outline btn-wa" href="https://wa.me/966546664459?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A3%D8%A8%D8%BA%D9%89%20%D8%A3%D8%B9%D8%B1%D9%81%20%D8%A3%D8%B3%D8%B9%D8%A7%D8%B1%20%D8%AE%D8%AF%D9%85%D8%A9%20%D8%AF%D8%B9%D9%88%D8%A7%D8%AA%20%D9%88%D8%A7%D9%84%D8%A8%D8%A7%D9%82%D8%A9%20%D8%A7%D9%84%D9%85%D9%86%D8%A7%D8%B3%D8%A8%D8%A9%20%D9%84%D9%85%D9%86%D8%A7%D8%B3%D8%A8%D8%AA%D9%8A." target="_blank" rel="noopener" data-wa="pricing">💬 اسأل عن الأسعار على واتساب</a>
+    <a class="btn-outline btn-wa" href="https://wa.me/966546664459?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A3%D8%A8%D8%BA%D9%89%20%D8%A3%D8%B9%D8%B1%D9%81%20%D8%A3%D8%B3%D8%B9%D8%A7%D8%B1%20%D8%AE%D8%AF%D9%85%D8%A9%20%D8%AF%D8%B9%D9%88%D8%A7%D8%AA%20%D9%88%D8%A7%D9%84%D8%A8%D8%A7%D9%82%D8%A9%20%D8%A7%D9%84%D9%85%D9%86%D8%A7%D8%B3%D8%A8%D8%A9%20%D9%84%D9%85%D9%86%D8%A7%D8%B3%D8%A8%D8%AA%D9%8A." target="_blank" rel="noopener" data-wa="pricing"><i data-ic="message-circle" data-size="17"></i> اسأل عن الأسعار على واتساب</a>
   </div>
 
   <div class="cta-final">
@@ -272,6 +273,7 @@ setTimeout(() => {
 
   <footer>دعوات — دعوات رقمية بباركود · <a href="guide.html" style="color:inherit; text-decoration:underline;">دليل الاستخدام</a></footer>
 </div>
+<script src="icons.js"></script>
 <script src="format.js"></script>
 <script>
 // The sample card's date: three weeks from today, so it never shows a date

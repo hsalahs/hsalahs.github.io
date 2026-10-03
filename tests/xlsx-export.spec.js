@@ -47,7 +47,7 @@ async function open(page, names, { withZip = true } = {}) {
 async function exportXlsx(page) {
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    (async () => { await page.getByRole('button', { name: '☰' }).click(); await page.getByRole('button', { name: '📊 تصدير قائمة الضيوف (Excel)' }).click(); })(),
+    (async () => { await page.getByRole('button', { name: 'القائمة' }).click(); await page.getByRole('button', { name: 'تصدير قائمة الضيوف (Excel)' }).click(); })(),
   ]);
   const file = await download.path();
   const zip = await JSZip.loadAsync(fs.readFileSync(file));
@@ -138,8 +138,8 @@ test('an empty list says so instead of downloading an empty workbook', async ({ 
   await open(page, []);
   let downloaded = false;
   page.on('download', () => { downloaded = true; });
-  await page.getByRole('button', { name: '☰' }).click();
-  await page.getByRole('button', { name: '📊 تصدير قائمة الضيوف (Excel)' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('button', { name: 'تصدير قائمة الضيوف (Excel)' }).click();
   await expect(page.locator('#toast')).toContainText('لا يوجد ضيوف بعد');
   await page.waitForTimeout(400);
   expect(downloaded).toBe(false);
@@ -155,8 +155,8 @@ test('a big list (1500 names) exports in one piece', async ({ page }) => {
 
 test('if the zip library could not be loaded, the customer is told to reload or use CSV', async ({ page }) => {
   const dialogs = await open(page, ['Ali'], { withZip: false });
-  await page.getByRole('button', { name: '☰' }).click();
-  await page.getByRole('button', { name: '📊 تصدير قائمة الضيوف (Excel)' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('button', { name: 'تصدير قائمة الضيوف (Excel)' }).click();
   await expect.poll(() => dialogs.length).toBe(1);
   expect(dialogs[0]).toContain('CSV');
 });
@@ -165,7 +165,7 @@ test('the CSV export neutralises names that would run as formulas in Excel', asy
   await open(page, ['=HYPERLINK("http://example.com","x")', '+966501234567', '-1+1', '@SUM(A1)', 'Normal Name', 'سارة']);
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    (async () => { await page.getByRole('button', { name: '☰' }).click(); await page.getByRole('button', { name: '📄 تصدير قائمة الضيوف (CSV)' }).click(); })(),
+    (async () => { await page.getByRole('button', { name: 'القائمة' }).click(); await page.getByRole('button', { name: 'تصدير قائمة الضيوف (CSV)' }).click(); })(),
   ]);
   const csv = fs.readFileSync(await download.path(), 'utf8');
   for (const dangerous of ['"=HYPERLINK', '"+966', '"-1+1', '"@SUM']) expect(csv).not.toContain(dangerous);

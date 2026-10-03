@@ -149,8 +149,8 @@ test('the same names already on the list are counted as duplicates, not added tw
 test('the file picker offers Excel files, and the menu says so', async ({ page }) => {
   await open(page);
   await expect(page.locator('#csv-import')).toHaveAttribute('accept', /\.xlsx/);
-  await page.getByRole('button', { name: '☰' }).click();
-  await expect(page.getByRole('button', { name: '📂 استيراد قائمة (Excel / CSV / أسماء)' })).toBeVisible();
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await expect(page.getByRole('button', { name: 'استيراد قائمة (Excel / CSV / أسماء)' })).toBeVisible();
 });
 
 test('a plain CSV still imports exactly as before', async ({ page }) => {

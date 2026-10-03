@@ -38,7 +38,7 @@
      at the actual venue, often on weak wifi. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   /* The event's colour theme, followed by the accents only. The page stays
@@ -49,7 +49,7 @@
   [data-theme="rose"] { --gold:#E8B4B8; --gold-deep:#C9879A; --accent-rgb:232,180,184; --bg-base:#14090C; }
   [data-theme="emerald"] { --gold:#D4AF7F; --gold-deep:#B08D57; --accent-rgb:212,175,127; --bg-base:#07120E; }
   [data-theme="sapphire"] { --gold:#B8C6E0; --gold-deep:#8A9DC9; --accent-rgb:184,198,224; --bg-base:#080C16; }
-  body { font-family:'Tajawal',sans-serif; background:var(--bg-base); color:#FAF8F4; min-height:100vh; }
+  body { font-family:'IBM Plex Sans Arabic',sans-serif; background:var(--bg-base); color:#FAF8F4; min-height:100vh; }
   .wrap { max-width:420px; margin:0 auto; padding:24px 18px 60px; }
   /* Installed with no browser chrome (Add to Home Screen) — no address bar,
      no pull-to-refresh to rely on. This is the one way to force a reload
@@ -109,6 +109,7 @@
   @keyframes splashFloat { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
   @keyframes splashLineGrow { from { width:0; } to { width:140px; } }
   @keyframes splashPulse { 0%,100% { transform:scale(0.9); opacity:0.5; } 50% { transform:scale(1.1); opacity:1; } }
+  svg.ic { flex-shrink:0; vertical-align:middle; }
 </style>
 </head>
 <body>
@@ -135,7 +136,7 @@ setTimeout(() => {
 </script>
 
 <div id="connection-banner">⚠️ انقطع الاتصال بقاعدة البيانات — القائمة قد لا تكون محدّثة. تحقق من الإنترنت.</div>
-<button id="refresh-btn" onclick="location.reload()" title="تحديث الصفحة">🔄</button>
+<button id="refresh-btn" onclick="location.reload()" title="تحديث الصفحة" aria-label="تحديث الصفحة"><i data-ic="refresh-cw" data-size="18"></i></button>
 <div class="wrap">
   <div id="loading-msg" class="msg">جاري التحميل...</div>
 
@@ -152,7 +153,7 @@ setTimeout(() => {
          security company's own phone, say) — a real sign-in with their
          actual account, not a shared code, so nothing worth leaking ever
          sits in this page's public source. -->
-    <div class="toggle-row" id="admin-login-toggle"><a onclick="showAdminLogin()">🔑 تسجيل دخول كأدمن</a></div>
+    <div class="toggle-row" id="admin-login-toggle"><a onclick="showAdminLogin()"><i data-ic="key-round" data-size="14"></i> تسجيل دخول كأدمن</a></div>
     <div class="card" id="admin-login-card" style="display:none; margin-top:12px;">
       <div class="err" id="admin-login-err"></div>
       <input type="email" class="text-input" id="admin-email" placeholder="البريد الإلكتروني" onkeydown="if(event.key==='Enter') document.getElementById('admin-pass').focus()">
@@ -168,7 +169,7 @@ setTimeout(() => {
     <div class="counter" id="scan-counter">تم الدخول: 0 من 0</div>
     <div class="card" style="text-align:center">
       <p class="camera-status" id="camera-status">اضغط لتشغيل الكاميرا</p>
-      <button class="btn" id="start-cam-btn" onclick="startCamera()" style="width:100%">📷 تشغيل الكاميرا</button>
+      <button class="btn" id="start-cam-btn" onclick="startCamera()" style="width:100%"><i data-ic="camera" data-size="18"></i> تشغيل الكاميرا</button>
 
       <div id="camera-wrapper" style="display:none">
         <video id="camera-video" autoplay playsinline muted></video>
@@ -201,7 +202,7 @@ setTimeout(() => {
       </div>
     </div>
 
-    <button class="btn ghost" id="new-scan-btn" style="margin-top:14px; display:none" onclick="resetScanState()">🔄 مسح جديد</button>
+    <button class="btn ghost" id="new-scan-btn" style="margin-top:14px; display:none" onclick="resetScanState()"><i data-ic="refresh-cw" data-size="16"></i> مسح جديد</button>
 
     <!-- Live check-in needs a connection (it's a transactional write, so
          it can't be trusted to work correctly offline), but staff still
@@ -209,11 +210,11 @@ setTimeout(() => {
          drops — reading off a name list doesn't need to be perfect, it
          just needs to exist. This shows the last successfully-synced
          copy, cached locally, entirely independent of the network. -->
-    <button class="btn ghost" id="offline-list-btn" style="margin-top:10px; display:none" onclick="toggleOfflineList()">📋 عرض الأسماء</button>
+    <button class="btn ghost" id="offline-list-btn" style="margin-top:10px; display:none" onclick="toggleOfflineList()"><i data-ic="list" data-size="16"></i> عرض الأسماء</button>
     <div id="offline-list-section" style="display:none; margin-top:14px; text-align:right;">
       <div class="sub" id="offline-list-meta"></div>
-      <button class="btn ghost" id="offline-refresh-btn" style="margin-top:4px; padding:8px; font-size:13px;" onclick="refreshOfflineList()">🔄 تحديث القائمة</button>
-      <input type="text" id="offline-search" class="text-input" placeholder="🔍 ابحث بالاسم" oninput="renderOfflineList()" style="margin-top:8px;">
+      <button class="btn ghost" id="offline-refresh-btn" style="margin-top:4px; padding:8px; font-size:13px;" onclick="refreshOfflineList()"><i data-ic="refresh-cw" data-size="14"></i> تحديث القائمة</button>
+      <input type="text" id="offline-search" class="text-input" placeholder="ابحث بالاسم" oninput="renderOfflineList()" style="margin-top:8px;">
       <div id="offline-list-results" style="max-height:320px; overflow-y:auto; margin-top:8px;"></div>
     </div>
 
@@ -222,7 +223,7 @@ setTimeout(() => {
          shift. This lets whoever is holding the device end their own
          session; it's not shown for an admin, since their access comes
          back automatically from their own account either way. -->
-    <button class="btn ghost" id="lock-device-btn" style="margin-top:16px; display:none; opacity:0.7; font-size:12px;" onclick="lockDevice()">🔒 تسجيل خروج من هذا الجهاز</button>
+    <button class="btn ghost" id="lock-device-btn" style="margin-top:16px; display:none; opacity:0.7; font-size:12px;" onclick="lockDevice()"><i data-ic="log-out" data-size="14"></i> تسجيل خروج من هذا الجهاز</button>
   </div>
 </div>
 
@@ -230,6 +231,7 @@ setTimeout(() => {
      screen) on a fetch to another CDN — nothing needs it until the script
      below runs. -->
 <script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+<script src="icons.js"></script>
 <script src="utils.js"></script>
 <script>
 const params = new URLSearchParams(window.location.search);
@@ -568,7 +570,7 @@ async function refreshOfflineList() {
   btn.textContent = '⏳ جاري التحديث...';
   await loadGuestsOnce(true);
   btn.disabled = false;
-  btn.textContent = '🔄 تحديث القائمة';
+  btn.innerHTML = ic('refresh-cw', 14) + ' تحديث القائمة';
   renderOfflineList();
 }
 
@@ -772,7 +774,7 @@ async function init() {
       const fallbackBtn = document.createElement('button');
       fallbackBtn.className = 'btn ghost';
       fallbackBtn.style.marginTop = '14px';
-      fallbackBtn.textContent = '📋 عرض آخر نسخة محفوظة بدون إنترنت';
+      fallbackBtn.innerHTML = ic('list', 16) + ' عرض آخر نسخة محفوظة بدون إنترنت';
       fallbackBtn.onclick = () => {
         document.getElementById('loading-msg').style.display = 'none';
         document.getElementById('scanner-view').style.display = 'block';

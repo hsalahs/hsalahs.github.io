@@ -21,10 +21,10 @@
      them. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:'Tajawal',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh; }
+  body { font-family:'IBM Plex Sans Arabic',sans-serif; background:#0A0A0A; color:#FAF8F4; min-height:100vh; }
   .wrap { max-width:480px; margin:0 auto; padding:32px 18px 60px; }
   h1 { font-family:'Playfair Display',serif; color:#E0BC7A; font-size:26px; text-align:center; margin-bottom:6px; }
   .sub { text-align:center; color:#B8B4AC; font-size:13px; margin-bottom:28px; }
@@ -42,6 +42,8 @@
   /* iOS Safari ignores placeholder on date inputs (an empty one shows blank), so the field gets a visible label. */
   .date-label { display:block; font-size:12px; color:#B8B4AC; margin:0 4px 4px; }
   .btn:disabled { opacity:0.7; cursor:default; }
+  svg.ic { flex-shrink:0; vertical-align:middle; }
+  .chip { width:28px; height:28px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; background:rgba(224,188,122,0.12); color:#E0BC7A; }
   .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; margin-bottom:10px; }
   .btn.ghost { background:transparent; border:1px solid rgba(224,188,122,0.3); color:#E0BC7A; }
   .btn.small { width:auto; padding:8px 16px; font-size:13px; }
@@ -132,25 +134,25 @@ setTimeout(() => {
     <div class="topbar">
       <h1 style="margin:0; font-size:20px;" id="events-heading">مناسباتي</h1>
       <div style="display:flex; gap:8px;">
-        <button class="btn ghost small" onclick="location.reload()" title="تحديث الصفحة" style="width:auto; padding:8px 12px;">🔄</button>
-        <button class="btn ghost small" onclick="doLogout()">🔓 خروج</button>
+        <button class="btn ghost small" onclick="location.reload()" title="تحديث الصفحة" aria-label="تحديث الصفحة" style="width:auto; padding:8px 12px;"><i data-ic="refresh-cw" data-size="16"></i></button>
+        <button class="btn ghost small" onclick="doLogout()"><i data-ic="log-out" data-size="15"></i> خروج</button>
       </div>
     </div>
     <div class="sub" style="margin-bottom:20px;">
       مسجّل دخول بحساب: <span id="current-email" style="color:#E0BC7A"></span>
-      · <a href="guide.html" style="color:#E0BC7A; text-decoration:underline;">📖 دليل الاستخدام</a>
+      · <a href="guide.html" style="color:#E0BC7A; text-decoration:underline;"><i data-ic="book-open" data-size="14"></i> دليل الاستخدام</a>
     </div>
 
     <div id="admin-unpaid-section" style="display:none; margin-bottom:16px;">
       <div class="card" onclick="document.getElementById('events-list').scrollIntoView({behavior:'smooth'})" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; padding:14px 18px; margin-bottom:0;">
-        <span class="sub" style="margin:0;">🔒 مناسبات غير مدفوعة بالقائمة تحت</span>
+        <span class="sub" style="margin:0; display:inline-flex; align-items:center; gap:8px;"><span class="chip"><i data-ic="lock" data-size="16"></i></span> مناسبات غير مدفوعة بالقائمة تحت</span>
         <span class="badge-count" id="admin-unpaid-badge">0</span>
       </div>
     </div>
 
     <div id="admin-requests-section" style="display:none; margin-bottom:16px;">
       <div class="sub" style="margin-bottom:8px; text-align:right; display:flex; align-items:center; justify-content:flex-end; gap:8px;">
-        🙋 طلبات مناسبات إضافية
+        <i data-ic="hand" data-size="15"></i> طلبات مناسبات إضافية
         <span class="badge-count" id="admin-requests-badge">0</span>
       </div>
       <div id="admin-requests-list"></div>
@@ -158,25 +160,25 @@ setTimeout(() => {
 
     <div id="admin-accounts-section" style="display:none; margin-bottom:16px;">
       <div class="card" id="admin-accounts-toggle" onclick="toggleAllAccounts()" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; padding:14px 18px; margin-bottom:0;">
-        <span class="sub" style="margin:0;">👥 كل الحسابات المسجّلة <span id="admin-accounts-arrow" style="color:#E0BC7A">▾</span></span>
+        <span class="sub" style="margin:0; display:inline-flex; align-items:center; gap:8px;"><span class="chip"><i data-ic="users" data-size="16"></i></span> كل الحسابات المسجّلة <span id="admin-accounts-arrow" style="color:#E0BC7A">▾</span></span>
         <span class="badge-count" id="admin-accounts-badge">0</span>
       </div>
       <div id="admin-accounts-body" style="display:none; margin-top:10px;">
-        <input type="text" id="admin-accounts-search" placeholder="🔍 ابحث بالإيميل" oninput="renderAllAccounts()" style="margin-bottom:10px;">
+        <input type="text" id="admin-accounts-search" placeholder="ابحث بالإيميل" oninput="renderAllAccounts()" style="margin-bottom:10px;">
         <div id="admin-accounts-list"></div>
       </div>
     </div>
 
-    <button class="btn" id="create-toggle-btn" onclick="showCreateForm()" style="display:none">➕ إنشاء مناسبة جديدة</button>
+    <button class="btn" id="create-toggle-btn" onclick="showCreateForm()" style="display:none"><i data-ic="plus" data-size="17"></i> إنشاء مناسبة جديدة</button>
     <div id="limit-box" style="display:none; margin-bottom:16px;">
       <div class="sub" id="limit-box-msg" style="margin-bottom:10px;">وصلت لحد مناسباتك الحالي.</div>
-      <button class="btn ghost" id="request-more-btn" style="width:100%;">🙋 اطلب مناسبة إضافية</button>
+      <button class="btn ghost" id="request-more-btn" style="width:100%;"><i data-ic="hand" data-size="16"></i> اطلب مناسبة إضافية</button>
       <div class="sub" id="pending-request-msg" style="display:none;">⏳ طلبك قيد المراجعة، بننبّهك أول ما يتم الرد.</div>
     </div>
 
     <form class="card" id="create-form" style="display:none" onsubmit="event.preventDefault(); createNewEvent();" novalidate>
       <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: زفاف حسن وفاطمة)" enterkeyhint="next">
-      <label for="ev-date" class="date-label">📅 تاريخ المناسبة</label>
+      <label for="ev-date" class="date-label"><i data-ic="calendar" data-size="14"></i> تاريخ المناسبة</label>
       <input type="date" id="ev-date">
       <input type="text" id="ev-venue" placeholder="مكان الحفل">
       <input type="text" id="ev-maps" placeholder="رابط الموقع على الخريطة (اختياري)">
@@ -195,6 +197,7 @@ setTimeout(() => {
      first use). As a plain script it held up everything after it, sign-in
      included, for as long as the CDN took to answer. -->
 <script async src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="icons.js"></script>
 <script src="utils.js"></script>
 <script src="format.js"></script>
 <script>
@@ -382,14 +385,14 @@ function renderEvents(events, showOwner, changedIds) {
         <div>
           <div class="event-name">${escapeHtml(ev.name)} ${ev.paid ? '<span style="color:#4CAF50; font-size:11px;">✅ مفعّلة' + (typeof ev.guestLimit === 'number' ? ' (' + ev.guestLimit + ' ' + guestWord(ev.guestLimit) + ')' : '') + '</span>' : '<span style="color:#E5484D; font-size:11px;">🔒 غير مفعّلة</span>'}</div>
           <div class="event-date">${formatEventDate(ev.date)}${ev.venue ? ' · ' + escapeHtml(ev.venue) : ''}</div>
-          ${showOwner ? `<div class="event-date">👤 ${escapeHtml(ev.ownerEmail || ev.ownerUid || '')}</div>` : ''}
+          ${showOwner ? `<div class="event-date">${ic('user', 12)} ${escapeHtml(ev.ownerEmail || ev.ownerUid || '')}</div>` : ''}
         </div>
       </div>
       <div class="event-stats" id="stats-${ev.id}">${statsBoxHtml(ev)}</div>
       <div class="event-actions">
-        ${showOwner && !ev.paid ? `<button class="btn small" style="margin:0; flex:1;" onclick="quickActivatePayment('${ev.id}')">✅ تفعيل</button>` : ''}
+        ${showOwner && !ev.paid ? `<button class="btn small" style="margin:0; flex:1;" onclick="quickActivatePayment('${ev.id}')">${ic('check', 14)} تفعيل</button>` : ''}
         <a class="btn ghost small" style="text-decoration:none; margin:0; flex:1; text-align:center;" href="event.html?id=${ev.id}">فتح</a>
-        <button class="btn ghost small" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteEvent('${ev.id}', '${escapeForJsAttr(ev.name)}', '${ev.ownerUid}')">🗑</button>
+        <button class="btn ghost small" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteEvent('${ev.id}', '${escapeForJsAttr(ev.name)}', '${ev.ownerUid}')" aria-label="حذف">${ic('trash-2', 15)}</button>
       </div>
     </div>
   `).join('');
@@ -524,11 +527,11 @@ function updateCreateGate(admin) {
       pendingMsg.style.display = 'none';
       if (myEventLimit < AUTO_APPROVE_CEILING) {
         msg.textContent = 'وصلت لحد مناسباتك الحالي (' + myEventLimit + ').';
-        reqBtn.textContent = '➕ فتح مناسبة إضافية';
+        reqBtn.innerHTML = ic('plus', 16) + ' فتح مناسبة إضافية';
         reqBtn.onclick = selfIncreaseLimit;
       } else {
         msg.textContent = 'وصلت للحد الأقصى المسموح ذاتيًا (' + AUTO_APPROVE_CEILING + '). لأي مناسبة زيادة لازم موافقة يدوية.';
-        reqBtn.textContent = '🙋 اطلب مناسبة إضافية';
+        reqBtn.innerHTML = ic('hand', 16) + ' اطلب مناسبة إضافية';
         reqBtn.onclick = requestExtraEvent;
       }
     }
@@ -685,8 +688,8 @@ function renderAdminRequests(reqs) {
         <div class="event-date">طلب مناسبة إضافية</div>
       </div>
       <div class="event-actions">
-        <button class="btn small" style="margin:0; width:auto; padding:8px 14px;" onclick="approveEventRequest('${r.id}','${r.uid}')">✅ قبول</button>
-        <button class="btn ghost small" style="margin:0; width:auto; padding:8px 14px;" onclick="rejectEventRequest('${r.id}')">❌ رفض</button>
+        <button class="btn small" style="margin:0; width:auto; padding:8px 14px;" onclick="approveEventRequest('${r.id}','${r.uid}')">${ic('check', 14)} قبول</button>
+        <button class="btn ghost small" style="margin:0; width:auto; padding:8px 14px;" onclick="rejectEventRequest('${r.id}')">${ic('x', 14)} رفض</button>
       </div>
     </div>
   `).join('');
@@ -755,7 +758,7 @@ function renderAllAccounts() {
         <div class="event-name">${escapeHtml(a.email || a.id)}</div>
         <div class="event-date">سجّل: ${when}</div>
       </div>
-      <button class="btn ghost small acc-del-btn" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteAccountRecord('${escapeForJsAttr(a.id)}', '${escapeForJsAttr(a.email || a.id)}')">🗑</button>
+      <button class="btn ghost small acc-del-btn" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteAccountRecord('${escapeForJsAttr(a.id)}', '${escapeForJsAttr(a.email || a.id)}')" aria-label="حذف">${ic('trash-2', 15)}</button>
     </div>
   `;
   }).join('');

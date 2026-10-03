@@ -383,7 +383,7 @@ test('a device that synced before offers the last saved guest list even when the
   });
   await page.goto('/scan.html?event=e1');
 
-  const fallbackBtn = page.getByRole('button', { name: '📋 عرض آخر نسخة محفوظة بدون إنترنت' });
+  const fallbackBtn = page.getByRole('button', { name: 'عرض آخر نسخة محفوظة بدون إنترنت' });
   await expect(fallbackBtn).toBeVisible();
   await fallbackBtn.click();
 
