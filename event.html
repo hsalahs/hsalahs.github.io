@@ -637,7 +637,9 @@ async function deleteThisEvent() {
     const requestsSnap = await getDocs(collection(window._db, 'events', eventId, 'requests'));
     await Promise.all([
       ...guestsSnap.docs.map(d => deleteDoc(d.ref)),
-      ...requestsSnap.docs.map(d => deleteDoc(d.ref))
+      ...requestsSnap.docs.map(d => deleteDoc(d.ref)),
+      // Before the event doc itself: the rules check ownership through it.
+      deleteDoc(doc(window._db, 'events', eventId, 'roster', 'list'))
     ]);
     await deleteDoc(doc(window._db, 'events', eventId));
 
@@ -811,12 +813,50 @@ function scheduleRenderGuests() {
   });
 }
 
+// The door scanner's "عرض الأسماء" list, kept as ONE document
+// (events/{id}/roster/list) instead of making every scanner open read every
+// guest document — 1 read instead of 5000 for a 5000-guest event. Written
+// from here, the only page that already holds the full list live, and only
+// while it's open. Each entry is "id|scanned|name" (id never contains "|";
+// the name may, so the reader splits on the first two only) — compact, so
+// even ~10,000 guests stay under Firestore's 1 MB document limit. Throttled:
+// a busy event day changes `scanned` every few seconds, and each roster
+// write is one write against the free plan's daily quota.
+const ROSTER_MIN_INTERVAL = 30 * 1000;
+const ROSTER_MAX_BYTES = 900 * 1000;
+let rosterTimer = null;
+let rosterLastWrite = 0;
+let rosterLastText = null;
+function scheduleRosterWrite() {
+  if (rosterTimer) return;
+  const wait = Math.max(3000, rosterLastWrite + ROSTER_MIN_INTERVAL - Date.now());
+  rosterTimer = setTimeout(writeRoster, wait);
+}
+async function writeRoster() {
+  rosterTimer = null;
+  const entries = guests.map(g => g.id + '|' + (g.scanned ? 1 : 0) + '|' + g.name);
+  const text = entries.join('\n');
+  if (text === rosterLastText) return;
+  // Too big for one document: scan.html falls back to reading the guests
+  // collection itself when there's no roster, so leave none behind.
+  if (new Blob([text]).size > ROSTER_MAX_BYTES) return;
+  const { doc, setDoc, serverTimestamp } = window._fsFns;
+  rosterLastWrite = Date.now();
+  try {
+    await setDoc(doc(window._db, 'events', eventId, 'roster', 'list'), { guests: entries, updatedAt: serverTimestamp() });
+    rosterLastText = text;
+  } catch (e) { console.error('roster write failed:', e); }
+}
+
 function startListeners() {
   const { collection, query, where, onSnapshot } = window._fsFns;
   onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     updateStats();
     scheduleRenderGuests();
+    // Only from the server's answer, never the local cache's first guess —
+    // a stale cached list must not overwrite a newer roster.
+    if (!(snap.metadata && snap.metadata.fromCache)) scheduleRosterWrite();
     guestsListenerOK = true;
     refreshConnectionBanner();
   }, (error) => {

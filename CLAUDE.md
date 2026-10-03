@@ -42,8 +42,8 @@ These are standing instructions the user gave in chat for how to respond, not pr
 6. **Firestore rules are published by the user by hand** in the Firebase Console (the deploy tool is blocked). After they publish, verify with `firebase_get_security_rules` / REST probes.
 
 ## Tests
-- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 6-7 minutes, 271 tests). Run a single file while developing, the full suite once before pushing.
-- Rules tests (real emulator): `npm run test:rules` (125 checks; `RULES_PATH` overrides the rules file).
+- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 6-7 minutes, 273 tests). Run a single file while developing, the full suite once before pushing.
+- Rules tests (real emulator): `npm run test:rules` (137 checks; `RULES_PATH` overrides the rules file).
 - Playwright uses in-memory Firebase stubs (`tests/mocks/*.stub.js`, `tests/helpers.js`: `stubFirebase`, `seedFakeFirebase`). The store resets on navigation. JSZip is served from `node_modules` via `page.route`. See `tests/README.md`.
 - Tool quirks: heredocs expand `\uXXXX` (use the Write tool for escapes); avoid `pkill -f`; foreground `sleep` is blocked (use until-loops).
 
@@ -68,7 +68,8 @@ These are standing instructions the user gave in chat for how to respond, not pr
 - **Done:** (1) persistent local cache in `firebase-init.js`. (2) the guest's barcode code is now its own Firestore document id (event.html's three guest-creation paths), so scan.html checks a guest in with one direct `doc()`/transaction, no collection read, no live listener on `guests` at all. (3) the scanner's "تم الدخول: X / Y" counter reads `events/{id}.guestCount` / `.scannedCount` via one cheap document listener (`startEventCounterWatch` in scan.html); `scannedCount` is bumped in the same transaction as the guest's `scanned` flip, and `firestore.rules` has a matching `hasScanSession`-only, +1-only rule for it.
 - (4) scan.html reuses the device's saved names list (localStorage, `loadedAt`) for 3 hours instead of `getDocs` on every open; "🔄 تحديث القائمة" forces a download.
 - **Read estimate (done, computed from the code + Firebase billing rules — the emulator doesn't count billed reads):** event day with 80% attendance, 4 door phones × 3 opens, 3 dashboard opens. Before (4): 1000 guests ≈ 26k reads, 5000 ≈ 131k. Biggest costs at 5000: scanner list loads 60k, check-ins ~8 reads each (incl. rules get()s) 32k, counter listener fan-out 20k, dashboard 19k. Told the user: don't promise more than ~2000 guests per event on Spark, and check before two big events on the same day.
-- **Proposed next (not built yet):** the scanner names list as ONE roster document written by the dashboard (1 read instead of N); the scanner counter polled every 30s instead of a live listener. With both, 1000 ≈ 13k and 5000 ≈ 54k (check-ins can't shrink without weakening security).
+- (5) **Roster document** `events/{id}/roster/list` = `{guests: ["id|scanned|name", ...], updatedAt}`, written by event.html (`writeRoster`, throttled 30s, only from server snapshots, skipped above 900 KB) and read by scan.html's `loadGuestsOnce` in 1 read; falls back to `getDocs(guests)` when missing or unreadable. Rules: read = admin/owner/scan session; write = admin/owner, doc id `list`, keys `guests`+`updatedAt`. Deleted with the event (before the event doc).
+- **Still proposed, not built:** the scanner counter polled every 30s instead of a live listener (recommended against for now: it slows the counter for every event to save reads only on big ones). Check-ins (~8 reads each) can't shrink without weakening security.
 - Known residual risks already told to the user: rules cannot count documents, so a crafted batch could exceed the cap; the 6-digit door code has no rate limit; saved or sent cards keep their old colours after a theme change; real invitations have no stored event type.
 
 ## Conventions

@@ -254,6 +254,18 @@ service cloud.firestore {
           request.resource.data.scanned == true;
       }
 
+      // The door scanner's names list as one document (see event.html's
+      // writeRoster): read by the same people who may read the guests
+      // themselves; written only by the owner's dashboard or the admin.
+      match /roster/{docId} {
+        allow read: if isAdmin() || isOwner(eventId) || hasScanSession(eventId);
+        allow create, update: if (isAdmin() || isOwner(eventId)) &&
+          docId == 'list' &&
+          request.resource.data.keys().hasOnly(['guests', 'updatedAt']) &&
+          request.resource.data.guests is list;
+        allow delete: if isAdmin() || isOwner(eventId);
+      }
+
       match /requests/{requestId} {
         // Guest RSVP submissions — public and unauthenticated by design, so
         // this is the one place a stranger can write without being the

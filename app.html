@@ -405,7 +405,9 @@ async function deleteEvent(eventId, name, ownerUid) {
     const requestsSnap = await getDocs(collection(window._db, 'events', eventId, 'requests'));
     await Promise.all([
       ...guestsSnap.docs.map(d => deleteDoc(d.ref)),
-      ...requestsSnap.docs.map(d => deleteDoc(d.ref))
+      ...requestsSnap.docs.map(d => deleteDoc(d.ref)),
+      // Before the event doc itself: the rules check ownership through it.
+      deleteDoc(doc(window._db, 'events', eventId, 'roster', 'list'))
     ]);
     await deleteDoc(doc(window._db, 'events', eventId));
 

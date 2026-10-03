@@ -250,6 +250,24 @@ await check('a customer cannot create an event that already has a guest limit', 
 await check('a customer cannot create an event with the counter already set back', () => assertFails(newEvent(user('nc4', 'n4@example.com'), 'nc4', 'ne4', { guestCount: 3 })));
 await check('the admin can create an event with a limit', () => assertSucceeds(admin().doc('events/ne5').set({ name: 'A', ownerUid: 'admin1', paid: true, guestLimit: 100, guestCount: 0 })));
 
+console.log('\nscanner roster (one document instead of reading every guest):');
+const roster = { guests: ['WD-1|0|A', 'WD-2|1|B'], updatedAt: 'x' };
+await check('the owner can write the roster', () => assertSucceeds(owner().doc('events/e1/roster/list').set(roster)));
+await check('the admin can write the roster', () => assertSucceeds(admin().doc('events/e1/roster/list').set(roster)));
+await check('only the "list" document', () => assertFails(owner().doc('events/e1/roster/other').set(roster)));
+await check('no extra fields on the roster', () => assertFails(owner().doc('events/e1/roster/list').set({ ...roster, paid: true })));
+await check('guests must be a list', () => assertFails(owner().doc('events/e1/roster/list').set({ guests: 'x', updatedAt: 'x' })));
+await check('another customer cannot write it', () => assertFails(user('other1', 'o@example.com').doc('events/e1/roster/list').set(roster)));
+await check('another customer cannot read it', () => assertFails(user('other1', 'o@example.com').doc('events/e1/roster/list').get()));
+await check('unauthenticated: cannot read it', () => assertFails(unauth().doc('events/e1/roster/list').get()));
+await check('anonymous device without a session: cannot read it', () => assertFails(anon('devR').doc('events/e1/roster/list').get()));
+await check('a door device with a session can read it (the code is 5678 by now, see above)', async () => {
+  await assertSucceeds(anon('devR').doc('events/e1/scanSessions/devR').set({ pin: '5678', createdAt: 'x' }));
+  await assertSucceeds(anon('devR').doc('events/e1/roster/list').get());
+});
+await check('a door device cannot write it', () => assertFails(anon('devR').doc('events/e1/roster/list').set(roster)));
+await check('the owner can delete it (event deletion)', () => assertSucceeds(owner().doc('events/e1/roster/list').delete()));
+
 await testEnv.cleanup();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

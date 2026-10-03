@@ -900,3 +900,19 @@ test('"تحديث القائمة" downloads the names list fresh even when the s
   await expect(page.locator('#offline-list-results')).not.toContainText('من النسخة المحفوظة');
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 1');
 });
+
+test('the names list comes from the dashboard\'s roster document when there is one (names with "|" included)', async ({ page }) => {
+  await stubFirebase(page);
+  const store = counterStore(serverGuest, 0);
+  store['events/e1/roster'] = { list: { guests: ['WD-R1|1|من القائمة | المجمّعة', 'WD-R2|0|ضيف ثاني'], updatedAt: 'x' } };
+  await seedFakeFirebase(page, { user: DEVICE, store });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.getByRole('button', { name: /عرض الأسماء/ }).click();
+  const list = page.locator('#offline-list-results');
+  await expect(list).toContainText('من القائمة | المجمّعة');
+  await expect(list).toContainText('ضيف ثاني');
+  await expect(list).not.toContainText('من الخادم');
+  await expect(list.locator('div', { hasText: 'من القائمة | المجمّعة' })).toContainText('✓ دخل');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 2');
+});
