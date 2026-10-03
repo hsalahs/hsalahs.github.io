@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Refuses to run inside another site's frame (clickjacking: a page that
+     overlays this one could trick a tap onto "delete" or "check in").
+     GitHub Pages can't send X-Frame-Options / CSP frame-ancestors headers,
+     and browsers ignore frame-ancestors in a <meta> tag, so this is the
+     page-level equivalent: hide everything, then try to break out. -->
+<script>if (window.top !== window.self) { document.documentElement.style.display = 'none'; try { window.top.location = window.self.location.href; } catch (e) {} }</script>
 <title>لوحة المنظّم | دعوات</title>
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
