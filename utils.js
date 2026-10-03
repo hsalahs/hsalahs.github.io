@@ -99,11 +99,14 @@ const EMAILJS_PUBLIC_KEY = 'GAr6CcOiDqo-Mc3m5';
 const EMAILJS_SERVICE_ID = 'service_j15srgf';
 const EMAILJS_TEMPLATE_ID = 'template_fm1b49y';
 const ADMIN_NOTIFY_EMAIL = 'hsallah@outlook.sa';
-if (window.emailjs) emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
 
 // Never blocks the calling flow — a failed notification just gets logged.
+// The EmailJS script now loads async (it used to hold up the whole page on a
+// slow connection), so it's initialised here, on first use, not at load.
+let emailjsReady = false;
 function notifyAdmin(name, message) {
   if (!window.emailjs) return;
+  if (!emailjsReady) { emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY }); emailjsReady = true; }
   emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
     name, message, to_email: ADMIN_NOTIFY_EMAIL,
     time: new Date().toLocaleString('ar-SA-u-nu-latn', { dateStyle: 'medium', timeStyle: 'short' })
