@@ -853,3 +853,50 @@ test('the offline name list is sorted (numbers by value, then Arabic alphabetica
   );
   expect(names).toEqual(['1', '2', '3', '4', '5']);
 });
+
+// A door phone reopens scan.html often (lock/unlock, the iOS reload in
+// firebase-init.js); each fresh list download costs one read per guest.
+function seedOfflineCache(page, ageMs) {
+  return page.addInitScript((ageMs) => {
+    const t = new Date(Date.now() - ageMs).toISOString();
+    localStorage.setItem('scan_offline_cache_e1', JSON.stringify({
+      eventName: 'x', guests: [{ name: 'من النسخة المحفوظة', id: 'WD-OLD', scanned: false }], savedAt: t, loadedAt: t,
+    }));
+  }, ageMs);
+}
+const serverGuest = { 'WD-NEW': { name: 'من الخادم', id: 'WD-NEW', scanned: false } };
+
+test('reopening the scanner within 3 hours reuses this device\'s saved names list instead of downloading every guest again', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: counterStore(serverGuest, 0) });
+  await seedOfflineCache(page, 60 * 60 * 1000);
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.getByRole('button', { name: /عرض الأسماء/ }).click();
+  await expect(page.locator('#offline-list-results')).toContainText('من النسخة المحفوظة');
+  await expect(page.locator('#offline-list-results')).not.toContainText('من الخادم');
+});
+
+test('a saved names list older than 3 hours is downloaded fresh', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: counterStore(serverGuest, 0) });
+  await seedOfflineCache(page, 4 * 60 * 60 * 1000);
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.getByRole('button', { name: /عرض الأسماء/ }).click();
+  await expect(page.locator('#offline-list-results')).toContainText('من الخادم');
+});
+
+test('"تحديث القائمة" downloads the names list fresh even when the saved copy is recent', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: counterStore(serverGuest, 0) });
+  await seedOfflineCache(page, 60 * 60 * 1000);
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.getByRole('button', { name: /عرض الأسماء/ }).click();
+  await expect(page.locator('#offline-list-results')).toContainText('من النسخة المحفوظة');
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect(page.locator('#offline-list-results')).toContainText('من الخادم');
+  await expect(page.locator('#offline-list-results')).not.toContainText('من النسخة المحفوظة');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 1');
+});
