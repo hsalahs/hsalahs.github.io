@@ -14,7 +14,7 @@
      them. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
 
@@ -56,7 +56,7 @@
   }
 
   body {
-    font-family:'Tajawal',sans-serif; background:var(--bg-base); color:var(--text-main); min-height:100vh;
+    font-family:'IBM Plex Sans Arabic',sans-serif; background:var(--bg-base); color:var(--text-main); min-height:100vh;
     display:flex; align-items:center; justify-content:center; padding:20px; position:relative; overflow-x:hidden;
     transition:background 0.4s ease, color 0.4s ease;
   }
@@ -102,6 +102,7 @@
   @keyframes splashRingsIn { from { opacity:0; transform:scale(0.7) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
   @keyframes splashLineGrow { from { width:0; } to { width:140px; } }
   @keyframes splashPulse { 0%,100% { transform:scale(0.9); opacity:0.5; } 50% { transform:scale(1.1); opacity:1; } }
+  svg.ic { flex-shrink:0; vertical-align:middle; }
 </style>
 </head>
 <body>
@@ -160,6 +161,7 @@
 <!-- Moved out of <head> so it doesn't block first paint on a fetch to
      another CDN — nothing needs it until the script below runs. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="icons.js"></script>
 <script src="utils.js"></script>
 <script src="format.js"></script>
 <script>
@@ -203,7 +205,7 @@ try { myReqId = localStorage.getItem('inv_reqid_' + eventId) || null; } catch (e
 // there's no per-event time field, so this matches the typical reception hour.
 function eventInfoHtml(eventData) {
   const mapsBtn = eventData.mapsLink
-    ? `<a class="maps-link" href="${escapeHtml(eventData.mapsLink)}" target="_blank" rel="noopener">📍 موقع القاعة على الخريطة</a>`
+    ? `<a class="maps-link" href="${escapeHtml(eventData.mapsLink)}" target="_blank" rel="noopener">${ic('map-pin', 16)} موقع القاعة على الخريطة</a>`
     : '';
   const countdown = eventData.date ? `<div class="countdown" id="countdown"></div>` : '';
   return mapsBtn + countdown;
@@ -477,12 +479,12 @@ function buildInviteCard(eventData, guest) {
       titleGrad.addColorStop(0.5, GOLD_LIGHT);
       titleGrad.addColorStop(1, GOLD);
       ctx.fillStyle = titleGrad;
-      ctx.font = 'bold 58px Tajawal, Arial';
+      ctx.font = 'bold 58px "IBM Plex Sans Arabic", Arial';
       ctx.textAlign = 'center';
       ctx.fillText(eventData.name, 500, 118);
 
       ctx.fillStyle = '#999';
-      ctx.font = '34px Tajawal, Arial';
+      ctx.font = '34px "IBM Plex Sans Arabic", Arial';
       ctx.fillText(formatEventDate(eventData.date), 500, 172);
 
       drawFadedLine(ctx, 280, 720, 205, GOLD);
@@ -509,7 +511,7 @@ function buildInviteCard(eventData, guest) {
       ctx.drawImage(qr, 220, 272, 560, 560);
 
       ctx.fillStyle = '#0A0A0A';
-      ctx.font = 'bold 54px Tajawal, Arial';
+      ctx.font = 'bold 54px "IBM Plex Sans Arabic", Arial';
       ctx.fillText(guest.name, 500, 940);
 
       ctx.fillStyle = '#B0AAA0';
@@ -529,10 +531,10 @@ function buildInviteCard(eventData, guest) {
       }
 
       ctx.fillStyle = '#888';
-      ctx.font = '26px Tajawal, Arial';
+      ctx.font = '26px "IBM Plex Sans Arabic", Arial';
       ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1148);
       ctx.fillStyle = '#666';
-      ctx.font = '24px Tajawal, Arial';
+      ctx.font = '24px "IBM Plex Sans Arabic", Arial';
       ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1200);
 
       drawSparkle(ctx, 92, 92, 16, GOLD);

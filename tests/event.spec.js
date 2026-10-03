@@ -110,7 +110,7 @@ test('the guest-card button is always labeled "حفظ", regardless of whether th
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
-  await expect(page.locator('.guest-item .dl-btn')).toHaveText('💾 حفظ');
+  await expect(page.locator('.guest-item .dl-btn')).toHaveText('حفظ');
 });
 
 test('marking a guest as attended from the list asks for confirmation first, so a stray tap can\'t check someone in', async ({ page }) => {
@@ -211,7 +211,7 @@ test('bulk-deleting checked-in and not-checked-in guests leaves both counters ri
   await expect(page.locator('#dashboard')).toBeVisible();
 
   page.on('dialog', d => d.accept());
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await page.getByRole('button', { name: /تحديد ضيوف للحذف/ }).click();
   for (const box of await page.locator('.gsel').all()) await box.check();
   await page.getByRole('button', { name: /حذف المحددين/ }).click();
@@ -250,7 +250,7 @@ test('the edit-event date field has a visible label (iOS Safari shows an empty d
   await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([]) });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
-  await expect(page.locator('label[for="edit-ev-date"]')).toHaveText('📅 تاريخ المناسبة');
+  await expect(page.locator('label[for="edit-ev-date"]')).toHaveText('تاريخ المناسبة');
 });
 
 test('adding sequential numbers creates that many numbered guests without needing a file', async ({ page }) => {
@@ -272,7 +272,7 @@ test('adding sequential numbers creates that many numbered guests without needin
     }
   });
 
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await page.getByRole('button', { name: /إضافة أرقام متسلسلة/ }).click();
 
   await expect(page.locator('.guest-item')).toHaveCount(5);
@@ -302,7 +302,7 @@ test('a small add still shows "جاري الإضافة" while it writes — not 
     if (d.type() === 'prompt') { promptCount++; await d.accept(promptCount === 1 ? '1' : '5'); }
     else await d.accept();
   });
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await page.getByRole('button', { name: /إضافة أرقام متسلسلة/ }).click();
   await expect(page.locator('.guest-item')).toHaveCount(5);
 
@@ -328,7 +328,7 @@ test('a large batch of sequential numbers shows progress instead of looking froz
     }
   });
 
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await page.getByRole('button', { name: /إضافة أرقام متسلسلة/ }).click();
 
   await expect(page.locator('.guest-item')).toHaveCount(120, { timeout: 10000 });
@@ -445,9 +445,9 @@ test('a fresh unpaid event shows no payment-gate banner and lets the owner add a
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#payment-gate')).toBeHidden();
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('باقي لك 5 ضيوف مجانًا');
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await page.locator('#new-guest-name').fill('ضيف جديد');
   await page.getByRole('button', { name: 'إضافة' }).click();
   await expect(page.locator('.guest-item')).toHaveCount(1);
@@ -548,10 +548,10 @@ test('the admin cannot activate an event without a number: cancelling the prompt
   await seedFakeFirebase(page, adminEvent({}));
   const seen = answerPrompt(page, null);
   await page.goto('/event.html?id=e1');
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('تفعيل (أدمن)');
   await page.locator('#payment-menu-item').click();
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('تفعيل (أدمن)');
   expect(seen.prompts).toHaveLength(1);
   const ev = await storedEvent(page);
@@ -564,9 +564,9 @@ test('the admin activates an event by typing the number of guests, and it is sav
   await seedFakeFirebase(page, adminEvent({}));
   answerPrompt(page, 150);
   await page.goto('/event.html?id=e1');
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await page.locator('#payment-menu-item').click();
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('مفعّلة (150 ضيف) — تعديل الحد');
   const ev = await storedEvent(page);
   expect(ev.paid).toBe(true);
@@ -578,7 +578,7 @@ test('the admin can type the number with Eastern Arabic digits', async ({ page }
   await seedFakeFirebase(page, adminEvent({}));
   answerPrompt(page, '١٢٠');
   await page.goto('/event.html?id=e1');
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await page.locator('#payment-menu-item').click();
   expect((await storedEvent(page)).guestLimit).toBe(120);
 });
@@ -589,7 +589,7 @@ for (const [label, answer] of [['text', 'كثير'], ['a decimal', '12.5'], ['a 
     await seedFakeFirebase(page, adminEvent({}));
     const seen = answerPrompt(page, answer);
     await page.goto('/event.html?id=e1');
-    await page.getByRole('button', { name: '☰' }).click();
+    await page.getByRole('button', { name: 'القائمة' }).click();
     await page.locator('#payment-menu-item').click();
     await expect.poll(() => seen.prompts.length).toBe(1);
     const ev = await storedEvent(page);
@@ -603,9 +603,9 @@ test('a very large number asks for confirmation, and declining it saves nothing'
   await seedFakeFirebase(page, adminEvent({}));
   page.on('dialog', d => d.type() === 'prompt' ? d.accept('1500') : d.dismiss());
   await page.goto('/event.html?id=e1');
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await page.locator('#payment-menu-item').click();
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('تفعيل (أدمن)');
   expect((await storedEvent(page)).guestLimit).toBeUndefined();
 });
@@ -616,16 +616,16 @@ test('the admin can change the number later, and 0 switches the event back to th
   let answer = '80';
   page.on('dialog', d => d.type() === 'prompt' ? d.accept(answer) : d.accept());
   await page.goto('/event.html?id=e1');
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('مفعّلة (50 ضيف) — تعديل الحد');
   await page.locator('#payment-menu-item').click();
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('مفعّلة (80 ضيف)');
   expect((await storedEvent(page)).guestLimit).toBe(80);
 
   answer = '0';
   await page.locator('#payment-menu-item').click();
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('تفعيل (أدمن)');
   const ev = await storedEvent(page);
   expect(ev.paid).toBe(false);
@@ -637,7 +637,7 @@ test('setting a limit below the current guest count warns the admin first', asyn
   await seedFakeFirebase(page, adminEvent({ guestCount: 30 }));
   const seen = answerPrompt(page, 10);
   await page.goto('/event.html?id=e1');
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await page.locator('#payment-menu-item').click();
   await expect.poll(() => seen.confirms.length).toBe(1);
   expect(seen.confirms[0]).toContain('30');
@@ -651,9 +651,9 @@ test('an activated event stops at the admin-set number: the owner is blocked, se
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#payment-gate')).toBeHidden();
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('2 من 3 ضيوف');
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
 
   await page.locator('#new-guest-name').fill('الثالث');
   await page.getByRole('button', { name: 'إضافة' }).click();
@@ -729,10 +729,10 @@ test('an unlimited older event shows the admin "no limit" and lets them give it 
   await seedFakeFirebase(page, adminEvent({ paid: true }));
   answerPrompt(page, 200);
   await page.goto('/event.html?id=e1');
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('مفعّلة (بلا حد)');
   await page.locator('#payment-menu-item').click();
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.locator('#payment-menu-item')).toContainText('مفعّلة (200 ضيف)');
 });
 
@@ -761,7 +761,7 @@ test('regenerating the scanner door code updates the display and the stored even
   await expect(page.locator('#scan-pin-display')).toHaveText('1234');
 
   page.on('dialog', d => d.accept());
-  await page.getByRole('button', { name: '🔄 كود جديد' }).click();
+  await page.getByRole('button', { name: 'كود جديد' }).click();
   await expect(page.locator('#toast')).toContainText('تم توليد كود جديد');
   await expect(page.locator('#scan-pin-display')).not.toHaveText('1234');
 
@@ -797,7 +797,7 @@ test('declining the "generate a new code" confirm leaves the old scanner code in
   await expect(page.locator('#dashboard')).toBeVisible();
 
   page.on('dialog', d => d.dismiss());
-  await page.getByRole('button', { name: '🔄 كود جديد' }).click();
+  await page.getByRole('button', { name: 'كود جديد' }).click();
   await expect(page.locator('#scan-pin-display')).toHaveText('1234');
 });
 
@@ -838,11 +838,11 @@ test('the owner can enable request notifications from the menu', async ({ page }
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
 
-  await page.getByRole('button', { name: '☰' }).click();
-  await page.getByRole('button', { name: '🔔 تفعيل إشعارات الطلبات' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('button', { name: 'تفعيل إشعارات الطلبات' }).click();
   await expect(page.locator('#toast')).toContainText('تم تفعيل إشعارات الطلبات');
 
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await expect(page.getByRole('button', { name: /إشعارات الطلبات مفعّلة/ })).toBeVisible();
 });
 
@@ -941,8 +941,8 @@ test('approving a guest request copies the new barcode id onto the request, for 
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
-  await page.getByRole('button', { name: '☰' }).click();
-  await page.getByRole('button', { name: /📥 الطلبات/ }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('button', { name: /^الطلبات/ }).click();
   await page.locator('.approve-btn').click();
   await expect(page.locator('#toast')).toContainText('تمت الموافقة');
   const state = await page.evaluate(() => {
@@ -991,9 +991,9 @@ test('the menu has a refresh button that forces a real reload — no address bar
   await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([]) });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
-  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
   await page.evaluate(() => { window.__beforeReload = true; });
-  await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: '🔄 تحديث الصفحة' }).click()]);
+  await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'تحديث الصفحة' }).click()]);
   expect(await page.evaluate(() => window.__beforeReload)).toBeUndefined();
 });
 

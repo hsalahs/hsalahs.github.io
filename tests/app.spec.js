@@ -34,7 +34,7 @@ test('a customer at their event limit sees the self-serve upgrade button, not th
   await page.goto('/app.html');
   await expect(page.locator('#create-toggle-btn')).toBeHidden();
   await expect(page.locator('#limit-box')).toBeVisible();
-  await expect(page.locator('#request-more-btn')).toHaveText('➕ فتح مناسبة إضافية');
+  await expect(page.locator('#request-more-btn')).toHaveText('فتح مناسبة إضافية');
 });
 
 test('a customer already at the auto-approve ceiling must request admin approval instead', async ({ page }) => {
@@ -51,7 +51,7 @@ test('a customer already at the auto-approve ceiling must request admin approval
     },
   });
   await page.goto('/app.html');
-  await expect(page.locator('#request-more-btn')).toHaveText('🙋 اطلب مناسبة إضافية');
+  await expect(page.locator('#request-more-btn')).toHaveText('اطلب مناسبة إضافية');
 });
 
 test('the admin account sees every event, not just their own, and bypasses the limit', async ({ page }) => {
@@ -128,13 +128,13 @@ test('the admin sees a counter banner for unpaid events, and each event has one 
   await expect(page.locator('#admin-unpaid-section')).not.toContainText('Zara Wedding');
 
   const unpaidCard = page.locator('.event-card', { hasText: 'Zara Wedding' });
-  await expect(unpaidCard.getByRole('button', { name: '✅ تفعيل' })).toBeVisible();
+  await expect(unpaidCard.getByRole('button', { name: 'تفعيل' })).toBeVisible();
   const paidCard = page.locator('.event-card', { hasText: 'Layla Wedding' });
-  await expect(paidCard.getByRole('button', { name: '✅ تفعيل' })).toHaveCount(0);
+  await expect(paidCard.getByRole('button', { name: 'تفعيل' })).toHaveCount(0);
 
-  await unpaidCard.getByRole('button', { name: '✅ تفعيل' }).click();
+  await unpaidCard.getByRole('button', { name: 'تفعيل' }).click();
   await expect(page.locator('#admin-unpaid-section')).toBeHidden();
-  await expect(unpaidCard.getByRole('button', { name: '✅ تفعيل' })).toHaveCount(0);
+  await expect(unpaidCard.getByRole('button', { name: 'تفعيل' })).toHaveCount(0);
   // Activating saved the number the admin typed, and the card shows it.
   await expect(unpaidCard).toContainText('مفعّلة (120 ضيف)');
   expect(await page.evaluate(() => window.__fakeFirebase.store.events.e1.guestLimit)).toBe(120);
@@ -278,7 +278,7 @@ test('cancelling the number prompt leaves the event unactivated', async ({ page 
   });
   page.on('dialog', d => d.dismiss());
   await page.goto('/app.html');
-  await page.locator('.event-card', { hasText: 'Zara Wedding' }).getByRole('button', { name: '✅ تفعيل' }).click();
+  await page.locator('.event-card', { hasText: 'Zara Wedding' }).getByRole('button', { name: 'تفعيل' }).click();
   await expect(page.locator('#admin-unpaid-badge')).toHaveText('1');
   expect(await page.evaluate(() => window.__fakeFirebase.store.events.e1.paid)).toBe(false);
 });
@@ -371,7 +371,7 @@ test('the new-event form has a cancel button that closes it and clears what was 
   await expect(page.locator('#create-cancel-btn')).toHaveText('إلغاء');
 
   await page.locator('#ev-name').fill('عرس تجريبي');
-  await expect(page.locator('label[for="ev-date"]')).toHaveText('📅 تاريخ المناسبة');
+  await expect(page.locator('label[for="ev-date"]')).toHaveText('تاريخ المناسبة');
   await page.locator('#ev-date').fill('2026-12-01');
   await page.locator('#ev-venue').fill('الرياض');
   await page.locator('#ev-maps').fill('https://maps.example.com/x');

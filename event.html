@@ -20,7 +20,7 @@
      them. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=Tajawal:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
 
@@ -61,7 +61,7 @@
     --glass-bg-1:rgba(255,255,255,0.55); --glass-bg-2:rgba(255,255,255,0.30); --glass-border:rgba(var(--accent-rgb),0.25);
   }
 
-  body { font-family:'Tajawal',sans-serif; background:var(--bg-base); color:var(--text-main); min-height:100vh; position:relative; transition:background 0.4s ease, color 0.4s ease; }
+  body { font-family:'IBM Plex Sans Arabic',sans-serif; background:var(--bg-base); color:var(--text-main); min-height:100vh; position:relative; transition:background 0.4s ease, color 0.4s ease; }
   body::before { content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
     background:
       radial-gradient(ellipse 80% 50% at 50% -10%, var(--glow-1), transparent 60%),
@@ -77,6 +77,20 @@
   .dropdown-menu { position:absolute; top:42px; right:0; min-width:200px; max-height:70vh; overflow-y:auto; background:linear-gradient(145deg,var(--glass-bg-1),var(--glass-bg-2)); border:1px solid var(--glass-border); border-radius:14px; padding:6px; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); z-index:200; box-shadow:0 10px 30px rgba(0,0,0,0.35); }
   .dropdown-menu button { display:block; width:100%; text-align:right; background:transparent; border:none; color:var(--text-main); padding:10px 12px; font-size:13px; font-family:inherit; cursor:pointer; border-radius:8px; }
   .dropdown-menu button:hover { background:rgba(var(--accent-rgb),0.1); }
+  #top-menu { min-width:260px; padding:8px; border-radius:16px; }
+  #top-menu > button { display:flex; align-items:center; gap:10px; padding:7px 10px; font-size:14px; border-radius:10px; }
+  #top-menu .badge-count { margin-right:auto; }
+  .menu-grp { font-size:11px; color:var(--text-soft); opacity:0.8; padding:10px 10px 4px; }
+  .menu-sep { height:1px; background:rgba(var(--accent-rgb),0.14); margin:6px; }
+  .chip { width:30px; height:30px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; background:rgba(var(--accent-rgb),0.12); color:var(--gold); }
+  .chip.ok { background:rgba(76,175,80,0.14); color:#7fd48a; }
+  .chip.warn { background:rgba(229,72,77,0.14); color:#ff8a8e; }
+  #top-menu .menu-danger { color:#ff9d9d; }
+  #top-menu .menu-danger .chip { background:rgba(255,120,120,0.12); color:#ff9d9d; }
+  svg.ic { flex-shrink:0; vertical-align:middle; }
+  .guest-item .attend-btn, .guest-item .undo-btn, .guest-item .dl-btn, .guest-item .more-btn, .guest-item .del-btn,
+  .approve-btn, .reject-btn, #requests-modal h3 { display:inline-flex; align-items:center; justify-content:center; gap:3px; }
+  .icon-btn svg.ic { color:var(--gold); }
   .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:500; display:none; align-items:center; justify-content:center; padding:20px; }
   .modal-overlay.active { display:flex; }
   .modal-box { background:linear-gradient(145deg,var(--glass-bg-1),var(--glass-bg-2)); background-color:var(--bg-1); border:1px solid var(--glass-border); border-radius:18px; padding:18px; max-width:460px; width:100%; max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5); }
@@ -219,25 +233,32 @@ setTimeout(() => {
 
   <div id="dashboard" style="display:none">
     <div class="toolbar">
-      <button class="icon-btn" onclick="toggleTopMenu()">☰<span class="nav-badge" id="top-menu-badge" style="display:none;"></span></button>
-      <button class="icon-btn" onclick="window.location.href='app.html';" title="كل مناسباتي">📋</button>
+      <button class="icon-btn" onclick="toggleTopMenu()" aria-label="القائمة"><i data-ic="menu" data-size="21"></i><span class="nav-badge" id="top-menu-badge" style="display:none;"></span></button>
+      <button class="icon-btn" onclick="window.location.href='app.html';" title="كل مناسباتي" aria-label="كل مناسباتي"><i data-ic="clipboard-list" data-size="21"></i></button>
+      <!-- Grouped, each icon in a soft chip; "خروج" last and in red so it isn't hit by mistake. -->
       <div class="dropdown-menu" id="top-menu" style="display:none;">
-        <button onclick="location.reload();">🔄 تحديث الصفحة</button>
-        <button onclick="closeTopMenu(); enterSelectionMode();">☑️ تحديد ضيوف للحذف</button>
-        <button onclick="closeTopMenu(); openRequestsModal();" style="display:flex; align-items:center; justify-content:space-between;">📥 الطلبات<span class="badge-count" id="requests-badge" style="display:none;">0</span></button>
-        <button id="notif-toggle-btn" onclick="closeTopMenu(); toggleRequestNotifications();">🔔 تفعيل إشعارات الطلبات</button>
-        <button onclick="closeTopMenu(); document.getElementById('csv-import').click();">📂 استيراد قائمة (Excel / CSV / أسماء)</button>
-        <button onclick="closeTopMenu(); addSequentialNumbers();">🔢 إضافة أرقام متسلسلة (مثال: 1–200)</button>
-        <button onclick="closeTopMenu(); downloadAllCards();">📦 تحميل كل الدعوات (ZIP)</button>
-        <button onclick="closeTopMenu(); askRangeDownload();">📥 تحميل نطاق معيّن (مثال: 1–100)</button>
-        <button onclick="closeTopMenu(); exportGuestsXlsx();">📊 تصدير قائمة الضيوف (Excel)</button>
-        <button onclick="closeTopMenu(); exportGuestsCSV();">📄 تصدير قائمة الضيوف (CSV)</button>
-        <button onclick="closeTopMenu(); openAttendanceReport();">🖨️ كشف الحضور (طباعة / PDF)</button>
-        <button onclick="window.location.href='app.html';">📋 كل مناسباتي</button>
-        <button onclick="closeTopMenu(); toggleEditEvent();">✏️ تعديل المناسبة</button>
-        <button id="payment-menu-item" onclick="handlePaymentMenuClick()" style="display:flex; align-items:center; justify-content:space-between;"></button>
-        <button onclick="window.location.href='guide.html';">📖 دليل الاستخدام</button>
-        <button onclick="closeTopMenu(); doLogout();">🔓 خروج</button>
+        <div class="menu-grp">الضيوف</div>
+        <button onclick="closeTopMenu(); enterSelectionMode();"><span class="chip"><i data-ic="square-check"></i></span><span>تحديد ضيوف للحذف</span></button>
+        <button onclick="closeTopMenu(); openRequestsModal();"><span class="chip"><i data-ic="inbox"></i></span><span>الطلبات</span><span class="badge-count" id="requests-badge" style="display:none;">0</span></button>
+        <button id="notif-toggle-btn" onclick="closeTopMenu(); toggleRequestNotifications();"><span class="chip"><i data-ic="bell"></i></span><span>تفعيل إشعارات الطلبات</span></button>
+        <button onclick="closeTopMenu(); document.getElementById('csv-import').click();"><span class="chip"><i data-ic="folder-open"></i></span><span>استيراد قائمة (Excel / CSV / أسماء)</span></button>
+        <button onclick="closeTopMenu(); addSequentialNumbers();"><span class="chip"><i data-ic="list-ordered"></i></span><span>إضافة أرقام متسلسلة (مثال: 1–200)</span></button>
+        <div class="menu-sep"></div>
+        <div class="menu-grp">الدعوات والتقارير</div>
+        <button onclick="closeTopMenu(); downloadAllCards();"><span class="chip"><i data-ic="package"></i></span><span>تحميل كل الدعوات (ZIP)</span></button>
+        <button onclick="closeTopMenu(); askRangeDownload();"><span class="chip"><i data-ic="download"></i></span><span>تحميل نطاق معيّن (مثال: 1–100)</span></button>
+        <button onclick="closeTopMenu(); exportGuestsXlsx();"><span class="chip"><i data-ic="file-spreadsheet"></i></span><span>تصدير قائمة الضيوف (Excel)</span></button>
+        <button onclick="closeTopMenu(); exportGuestsCSV();"><span class="chip"><i data-ic="file-text"></i></span><span>تصدير قائمة الضيوف (CSV)</span></button>
+        <button onclick="closeTopMenu(); openAttendanceReport();"><span class="chip"><i data-ic="printer"></i></span><span>كشف الحضور (طباعة / PDF)</span></button>
+        <div class="menu-sep"></div>
+        <div class="menu-grp">المناسبة</div>
+        <button onclick="closeTopMenu(); toggleEditEvent();"><span class="chip"><i data-ic="pencil"></i></span><span>تعديل المناسبة</span></button>
+        <button id="payment-menu-item" onclick="handlePaymentMenuClick()"></button>
+        <button onclick="window.location.href='app.html';"><span class="chip"><i data-ic="clipboard-list"></i></span><span>كل مناسباتي</span></button>
+        <button onclick="location.reload();"><span class="chip"><i data-ic="refresh-cw"></i></span><span>تحديث الصفحة</span></button>
+        <div class="menu-sep"></div>
+        <button onclick="window.location.href='guide.html';"><span class="chip"><i data-ic="book-open"></i></span><span>دليل الاستخدام</span></button>
+        <button class="menu-danger" onclick="closeTopMenu(); doLogout();"><span class="chip"><i data-ic="log-out"></i></span><span>خروج</span></button>
       </div>
     </div>
 
@@ -273,7 +294,7 @@ setTimeout(() => {
 
     <div class="card" id="edit-event-card" style="display:none">
       <input type="text" id="edit-ev-name" placeholder="اسم المناسبة">
-      <label for="edit-ev-date" class="date-label">📅 تاريخ المناسبة</label>
+      <label for="edit-ev-date" class="date-label"><i data-ic="calendar" data-size="14"></i> تاريخ المناسبة</label>
       <input type="date" id="edit-ev-date">
       <input type="text" id="edit-ev-venue" placeholder="مكان الحفل">
       <input type="text" id="edit-ev-maps" placeholder="رابط الموقع على الخريطة (اختياري)">
@@ -281,14 +302,14 @@ setTimeout(() => {
         <button class="btn" style="flex:1" onclick="saveEventEdit()">حفظ التعديل</button>
         <button class="btn ghost" style="flex:1" onclick="toggleEditEvent()">إلغاء</button>
       </div>
-      <button class="btn danger" style="width:100%; margin-top:12px;" onclick="deleteThisEvent()">🗑 حذف المناسبة نهائيًا</button>
+      <button class="btn danger" style="width:100%; margin-top:12px;" onclick="deleteThisEvent()"><i data-ic="trash-2" data-size="16"></i> حذف المناسبة نهائيًا</button>
     </div>
 
     <div id="rules-warning" style="display:none; background:rgba(229,72,77,0.10); border:1px solid rgba(229,72,77,0.35); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:12.5px; color:#ffb3b3; line-height:1.7;">⚠️ (للأدمن فقط) قواعد أمان Firestore الجديدة غير منشورة بعد — كود دخول السكانر لسه مكشوف لأي شخص معه رابط الدعوة. انشر ملف firestore.rules من Firebase.</div>
     <div id="payment-gate">
       <div class="pg-title" id="pg-title">🔒 الحد المجاني لعدد الضيوف</div>
       <div class="pg-sub" id="pg-sub">أضفت أول 5 ضيوف مجانًا — لإضافة المزيد تواصل معنا.</div>
-      <button class="btn wa" onclick="openPaymentWhatsapp()">💬 للتواصل عبر واتساب</button>
+      <button class="btn wa" onclick="openPaymentWhatsapp()"><i data-ic="message-circle" data-size="17"></i> للتواصل عبر واتساب</button>
     </div>
 
     <div class="card" id="invite-link-card">
@@ -307,7 +328,7 @@ setTimeout(() => {
       </div>
       <div style="font-size:12px; color:#B8B4AC; margin-top:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         رقم دخول المشرفين: <span id="scan-pin-display" style="color:#E0BC7A; font-weight:700; letter-spacing:2px;"></span>
-        <button class="btn ghost" style="width:auto; margin:0; padding:4px 10px; font-size:11px;" onclick="regenerateScanPin()">🔄 كود جديد</button>
+        <button class="btn ghost" style="width:auto; margin:0; padding:4px 10px; font-size:11px;" onclick="regenerateScanPin()"><i data-ic="refresh-cw" data-size="12"></i> كود جديد</button>
       </div>
     </div>
 
@@ -320,13 +341,13 @@ setTimeout(() => {
         <input type="file" id="csv-import" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="importCSV(event)">
       </div>
       <div class="card">
-        <input type="text" id="guest-search" placeholder="🔍 بحث بالاسم" oninput="searchGuests()" style="margin:0;">
+        <input type="text" id="guest-search" placeholder="بحث بالاسم" oninput="searchGuests()" style="margin:0;">
       </div>
       <div id="bulk-bar" style="display:none;">
         <span id="bulk-count"></span>
         <div style="display:flex; gap:8px;">
           <button class="btn ghost" style="width:auto; margin:0; padding:8px 14px; font-size:12px;" onclick="exitSelectionMode()">إلغاء</button>
-          <button class="btn danger" style="width:auto; margin:0; padding:8px 14px; font-size:12px;" onclick="bulkDeleteSelected()">🗑 حذف المحددين</button>
+          <button class="btn danger" style="width:auto; margin:0; padding:8px 14px; font-size:12px;" onclick="bulkDeleteSelected()"><i data-ic="trash-2" data-size="14"></i> حذف المحددين</button>
         </div>
       </div>
       <div class="guest-list" id="guests-list"></div>
@@ -337,8 +358,8 @@ setTimeout(() => {
   <div class="modal-overlay" id="requests-modal" onclick="if (event.target === this) closeRequestsModal();">
     <div class="modal-box">
       <div class="modal-header">
-        <h3>📥 الطلبات</h3>
-        <button class="icon-btn" onclick="closeRequestsModal()">✕</button>
+        <h3><i data-ic="inbox" data-size="18"></i> الطلبات</h3>
+        <button class="icon-btn" onclick="closeRequestsModal()" aria-label="إغلاق"><i data-ic="x" data-size="20"></i></button>
       </div>
       <div class="guest-list" id="requests-list"></div>
     </div>
@@ -353,6 +374,7 @@ setTimeout(() => {
      long as each CDN took to answer. -->
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script async src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="icons.js"></script>
 <script src="utils.js"></script>
 <script src="format.js"></script>
 <script src="guest-names.js"></script>
@@ -416,21 +438,24 @@ function renderPaymentGate() {
   gateWasActive = active;
 
   const menuItem = document.getElementById('payment-menu-item');
+  const payMenuItem = (tone, icon, color, text) => '<span class="chip ' + tone + '">' + ic(icon) + '</span><span style="color:' + color + ';">' + text + '</span>';
   if (eventData && eventData.paid) {
     const limited = Number.isFinite(cap);
     if (isAdmin(currentUser)) {
-      menuItem.innerHTML = '<span style="color:#4CAF50;">✅ مفعّلة (' + (limited ? cap + ' ' + guestWord(cap) : 'بلا حد') + ') — تعديل الحد</span>';
+      menuItem.innerHTML = payMenuItem('ok', 'check', '#7fd48a', 'مفعّلة (' + (limited ? cap + ' ' + guestWord(cap) : 'بلا حد') + ') — تعديل الحد');
     } else if (limited) {
-      menuItem.innerHTML = '<span style="color:' + (active ? '#E5484D' : '#4CAF50') + ';">' + (active ? '🔒 ' : '✅ ') + guestCount() + ' من ' + cap + ' ' + guestWord(cap) + '</span>';
+      menuItem.innerHTML = active
+        ? payMenuItem('warn', 'lock', '#ff8a8e', guestCount() + ' من ' + cap + ' ' + guestWord(cap))
+        : payMenuItem('ok', 'check', '#7fd48a', guestCount() + ' من ' + cap + ' ' + guestWord(cap));
     } else {
-      menuItem.innerHTML = '<span style="color:#4CAF50;">✅ المناسبة مفعّلة</span>';
+      menuItem.innerHTML = payMenuItem('ok', 'check', '#7fd48a', 'المناسبة مفعّلة');
     }
   } else if (isAdmin(currentUser)) {
-    menuItem.innerHTML = '<span style="color:#E5484D;">🔓 تفعيل (أدمن)</span>';
+    menuItem.innerHTML = payMenuItem('warn', 'lock-open', '#ff8a8e', 'تفعيل (أدمن)');
   } else if (active) {
-    menuItem.innerHTML = '<span style="color:#E5484D;">🔒 وصلت للحد المجاني</span>';
+    menuItem.innerHTML = payMenuItem('warn', 'lock', '#ff8a8e', 'وصلت للحد المجاني');
   } else {
-    menuItem.innerHTML = '<span style="color:var(--gold);">🎁 باقي لك ' + (FREE_GUEST_LIMIT - guestCount()) + ' ' + guestWord(FREE_GUEST_LIMIT - guestCount()) + ' مجانًا</span>';
+    menuItem.innerHTML = payMenuItem('', 'gift', 'var(--gold)', 'باقي لك ' + (FREE_GUEST_LIMIT - guestCount()) + ' ' + guestWord(FREE_GUEST_LIMIT - guestCount()) + ' مجانًا');
   }
 }
 
@@ -960,13 +985,13 @@ function renderGuests() {
         <div class="gid">${escapeHtml(g.id)}</div>
       </div>
       ${selectionMode ? '' : (g.scanned
-        ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">↩️ تراجع</button>`
-        : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">✓ حضر</button>`)}
-      ${selectionMode ? '' : `<button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">💾 حفظ</button>
+        ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">${ic('undo-2', 12)} تراجع</button>`
+        : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">${ic('check', 12)} حضر</button>`)}
+      ${selectionMode ? '' : `<button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">${ic('save', 12)} حفظ</button>
       <div class="more-wrap">
-        <button class="more-btn" onclick="toggleGuestMenu(event)">⋮</button>
+        <button class="more-btn" onclick="toggleGuestMenu(event)" aria-label="خيارات">${ic('more-vertical', 13)}</button>
         <div class="more-menu">
-          <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeForJsAttr(g.name)}')">🗑</button>
+          <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeForJsAttr(g.name)}')" aria-label="حذف">${ic('trash-2', 13)}</button>
         </div>
       </div>`}
     </div>
@@ -1142,7 +1167,7 @@ function drawFadedLine(ctx, x1, x2, y, color) {
 // the card at a fixed font size, running into the border or the QR code.
 // Shrinks the font until it fits maxWidth, down to a floor size, then draws
 // it centered at (x, y). fontSpec is a printf-style template with %d for
-// the size, e.g. 'bold %dpx Tajawal, Arial'.
+// the size, e.g. 'bold %dpx "IBM Plex Sans Arabic", Arial'.
 function fitText(ctx, text, x, y, maxWidth, startSize, minSize, fontSpec) {
   let size = startSize;
   while (size > minSize) {
@@ -1250,10 +1275,10 @@ function buildGuestCard(guest) {
       titleGrad.addColorStop(1, GOLD);
       ctx.fillStyle = titleGrad;
       ctx.textAlign = 'center';
-      fitText(ctx, eventData.name, 500, 118, 820, 58, 28, 'bold %dpx Tajawal, Arial');
+      fitText(ctx, eventData.name, 500, 118, 820, 58, 28, 'bold %dpx "IBM Plex Sans Arabic", Arial');
 
       ctx.fillStyle = '#999';
-      ctx.font = '34px Tajawal, Arial';
+      ctx.font = '34px "IBM Plex Sans Arabic", Arial';
       ctx.fillText(formatEventDate(eventData.date), 500, 172);
 
       drawFadedLine(ctx, 280, 720, 205, GOLD);
@@ -1280,7 +1305,7 @@ function buildGuestCard(guest) {
       ctx.drawImage(qr, 220, 272, 560, 560);
 
       ctx.fillStyle = '#0A0A0A';
-      fitText(ctx, guest.name, 500, 940, 820, 54, 24, 'bold %dpx Tajawal, Arial');
+      fitText(ctx, guest.name, 500, 940, 820, 54, 24, 'bold %dpx "IBM Plex Sans Arabic", Arial');
 
       ctx.fillStyle = '#B0AAA0';
       ctx.font = '28px "Playfair Display", Arial';
@@ -1298,10 +1323,10 @@ function buildGuestCard(guest) {
       }
 
       ctx.fillStyle = '#888';
-      ctx.font = '26px Tajawal, Arial';
+      ctx.font = '26px "IBM Plex Sans Arabic", Arial';
       ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1148);
       ctx.fillStyle = '#666';
-      ctx.font = '24px Tajawal, Arial';
+      ctx.font = '24px "IBM Plex Sans Arabic", Arial';
       ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1200);
 
       drawSparkle(ctx, 92, 92, 16, GOLD);
@@ -1574,10 +1599,11 @@ function notifyNewRequest(name) {
 
 function updateNotifButtonLabel() {
   const btn = document.getElementById('notif-toggle-btn');
-  if (typeof Notification === 'undefined') { btn.textContent = '🔕 الإشعارات غير مدعومة بهذا المتصفح'; return; }
-  if (Notification.permission === 'granted') btn.textContent = '🔔 إشعارات الطلبات مفعّلة ✓';
-  else if (Notification.permission === 'denied') btn.textContent = '🔕 الإشعارات مرفوضة — فعّلها من إعدادات المتصفح';
-  else btn.textContent = '🔔 تفعيل إشعارات الطلبات';
+  const set = (icon, text) => { btn.innerHTML = '<span class="chip">' + ic(icon) + '</span><span></span>'; btn.lastChild.textContent = text; };
+  if (typeof Notification === 'undefined') { set('bell-off', 'الإشعارات غير مدعومة بهذا المتصفح'); return; }
+  if (Notification.permission === 'granted') set('bell', 'إشعارات الطلبات مفعّلة ✓');
+  else if (Notification.permission === 'denied') set('bell-off', 'الإشعارات مرفوضة — فعّلها من إعدادات المتصفح');
+  else set('bell', 'تفعيل إشعارات الطلبات');
 }
 
 async function toggleRequestNotifications() {
@@ -1602,8 +1628,8 @@ function renderRequests() {
       <div class="pending-info">
         <div class="pname">${escapeHtml(r.name)}</div>
       </div>
-      <button class="approve-btn" onclick="approveRequest('${r.docId}')">✓ قبول</button>
-      <button class="reject-btn" onclick="rejectRequest('${r.docId}')">✕ رفض</button>
+      <button class="approve-btn" onclick="approveRequest('${r.docId}')">${ic('check', 13)} قبول</button>
+      <button class="reject-btn" onclick="rejectRequest('${r.docId}')">${ic('x', 13)} رفض</button>
     </div>
   `).join('');
 }

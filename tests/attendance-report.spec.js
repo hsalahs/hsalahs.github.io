@@ -22,7 +22,7 @@ async function open(page, list) {
 async function openReport(page) {
   const [report] = await Promise.all([
     page.context().waitForEvent('page'),
-    (async () => { await page.getByRole('button', { name: '☰' }).click(); await page.getByRole('button', { name: '🖨️ كشف الحضور (طباعة / PDF)' }).click(); })(),
+    (async () => { await page.getByRole('button', { name: 'القائمة' }).click(); await page.getByRole('button', { name: 'كشف الحضور (طباعة / PDF)' }).click(); })(),
   ]);
   await report.waitForLoadState('domcontentloaded');
   return report;
@@ -133,8 +133,8 @@ test('with no guests at all there is nothing to report: a toast, and no new tab'
   await open(page, []);
   let opened = false;
   page.context().on('page', () => { opened = true; });
-  await page.getByRole('button', { name: '☰' }).click();
-  await page.getByRole('button', { name: '🖨️ كشف الحضور (طباعة / PDF)' }).click();
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('button', { name: 'كشف الحضور (طباعة / PDF)' }).click();
   await expect(page.locator('#toast')).toContainText('لا يوجد ضيوف بعد');
   await page.waitForTimeout(400);
   expect(opened).toBe(false);

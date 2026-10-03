@@ -69,7 +69,7 @@ test('the free-tier reassurance says "no fees", never the ambiguous "no card", o
   }
   await page.goto('/index.html');
   // The hero badge is the invitation to try; the "no fees" wording lives in the price section, the link preview and the sign-up note.
-  await expect(page.locator('.trial-note')).toHaveText('🎁 أنشئ دعوتك وجرّب النظام مجانًا');
+  await expect(page.locator('.trial-note')).toHaveText('أنشئ دعوتك وجرّب النظام مجانًا');
   await expect(page.locator('.price-card')).toContainText('بدون دفع رسوم');
   expect(await page.locator('meta[property="og:description"]').getAttribute('content')).toContain('بدون دفع رسوم');
   await page.goto('/guide.html');
@@ -119,20 +119,21 @@ test('the steps are numbered 1, 2, 3 in Western digits', async ({ page }) => {
 
 // "ليش دعوات؟" — six cards; one column on phones, a 3x2 grid on large screens.
 const FEATURES = [
-  ['⚡', 'خدمة ذاتية وفورية'],
-  ['📱', 'بدون تطبيقات أو تحميل'],
-  ['🎁', 'تجربة مجانية بالكامل'],
-  ['🎟️', 'بطاقة مصممة لكل ضيف'],
-  ['📊', 'تحديث وإحصائيات لحظية'],
-  ['🔒', 'بياناتك خاصة وآمنة'],
+  ['zap', 'خدمة ذاتية وفورية'],
+  ['smartphone', 'بدون تطبيقات أو تحميل'],
+  ['gift', 'تجربة مجانية بالكامل'],
+  ['ticket', 'بطاقة مصممة لكل ضيف'],
+  ['chart-column', 'تحديث وإحصائيات لحظية'],
+  ['lock', 'بياناتك خاصة وآمنة'],
 ];
 
-test('"why Dawaat" has the six cards, each with its own icon and title, in order', async ({ page }) => {
+test('"why Dawaat" has the six cards, each with its own line icon and title, in order', async ({ page }) => {
   await page.goto('/index.html');
   const cards = page.locator('.features .feature');
   await expect(cards).toHaveCount(6);
   for (let i = 0; i < FEATURES.length; i++) {
-    await expect(cards.nth(i).locator('.f-icon')).toHaveText(FEATURES[i][0]);
+    const svg = await cards.nth(i).locator('.f-icon svg').innerHTML();
+    expect(svg).toBe(await page.evaluate((n) => { const d = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); d.innerHTML = ICON_PATHS[n]; return d.innerHTML; }, FEATURES[i][0]));
     await expect(cards.nth(i).locator('h4')).toHaveText(FEATURES[i][1]);
     expect((await cards.nth(i).locator('p').innerText()).length).toBeGreaterThan(30);
   }

@@ -33,9 +33,9 @@ test('every button and message the guide quotes still exists in the page it belo
   const quoted = {
     'app.html': ['إنشاء مناسبة جديدة'],
     'event.html': [
-      '✏️ تعديل المناسبة', '📂 استيراد قائمة (Excel / CSV / أسماء)', '🔢 إضافة أرقام متسلسلة (مثال: 1–200)',
-      '📦 تحميل كل الدعوات (ZIP)', '📥 تحميل نطاق معيّن (مثال: 1–100)', '📊 تصدير قائمة الضيوف (Excel)', '📄 تصدير قائمة الضيوف (CSV)', '🖨️ كشف الحضور (طباعة / PDF)',
-      '🔔 تفعيل إشعارات الطلبات', '📥 الطلبات', '🔄 كود جديد', 'رقم دخول المشرفين', 'اسم ضيف جديد',
+      'تعديل المناسبة', 'استيراد قائمة (Excel / CSV / أسماء)', 'إضافة أرقام متسلسلة (مثال: 1–200)',
+      'تحميل كل الدعوات (ZIP)', 'تحميل نطاق معيّن (مثال: 1–100)', 'تصدير قائمة الضيوف (Excel)', 'تصدير قائمة الضيوف (CSV)', 'كشف الحضور (طباعة / PDF)',
+      'تفعيل إشعارات الطلبات', 'الطلبات', 'كود جديد', 'رقم دخول المشرفين', 'اسم ضيف جديد',
     ],
     'scan.html': [
       'تشغيل الكاميرا', 'تحقق', 'عرض الأسماء', 'أو أدخل الكود يدويًا', 'مسموح بالدخول',
@@ -79,8 +79,8 @@ test('the event menu links to the guide', async ({ page }) => {
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
-  await page.locator('.toolbar .icon-btn', { hasText: '☰' }).click();
-  await expect(page.getByRole('button', { name: '📖 دليل الاستخدام' })).toBeVisible();
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await expect(page.getByRole('button', { name: 'دليل الاستخدام' })).toBeVisible();
 });
 
 // The service is self-service: the person at the door is whoever the organizer
