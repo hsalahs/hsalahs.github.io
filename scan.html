@@ -660,10 +660,25 @@ async function loadGuestsOnce(force) {
     updateScanCounter();
     return;
   }
-  const { collection, getDocs } = window._fsFns;
+  const { collection, getDocs, doc, getDoc } = window._fsFns;
   try {
-    const snap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
-    guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    // The roster event.html keeps (one document, one read). Events whose
+    // owner hasn't opened the dashboard since it existed — or too big for one
+    // document — have none, and fall back to reading every guest.
+    // A failed roster read (say, rules not yet allowing it) must not look
+    // like a revoked session — just fall back to the old way.
+    const roster = await getDoc(doc(window._db, 'events', eventId, 'roster', 'list')).catch(() => null);
+    if (roster && roster.exists() && Array.isArray(roster.data().guests)) {
+      guests = roster.data().guests.map(entry => {
+        const a = entry.indexOf('|');
+        const b = entry.indexOf('|', a + 1);
+        const id = entry.slice(0, a);
+        return { docId: id, id, scanned: entry.slice(a + 1, b) === '1', name: entry.slice(b + 1) };
+      });
+    } else {
+      const snap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
+      guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    }
     guestsLoadedAt = new Date().toISOString();
     updateScanCounter();
     refreshConnectionBanner(true);

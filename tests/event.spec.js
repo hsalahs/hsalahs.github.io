@@ -996,3 +996,18 @@ test('the menu has a refresh button that forces a real reload — no address bar
   await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: '🔄 تحديث الصفحة' }).click()]);
   expect(await page.evaluate(() => window.__beforeReload)).toBeUndefined();
 });
+
+test('the dashboard keeps the door scanner\'s names list as one roster document, so a scanner open is 1 read instead of one per guest', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: true }, { id: 'WD-2', name: 'سارة | الثانية', scanned: false }]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  const roster = () => page.evaluate(() => {
+    const r = (window.__fakeFirebase.store['events/e1/roster'] || {}).list;
+    return r ? r.guests.slice().sort() : null;
+  });
+  await expect.poll(roster, { timeout: 10000 }).toEqual(['WD-1|1|أحمد', 'WD-2|0|سارة | الثانية']);
+});
