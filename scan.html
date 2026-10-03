@@ -206,6 +206,7 @@ setTimeout(() => {
     <button class="btn ghost" id="offline-list-btn" style="margin-top:10px; display:none" onclick="toggleOfflineList()">📋 عرض الأسماء</button>
     <div id="offline-list-section" style="display:none; margin-top:14px; text-align:right;">
       <div class="sub" id="offline-list-meta"></div>
+      <button class="btn ghost" id="offline-refresh-btn" style="margin-top:4px; padding:8px; font-size:13px;" onclick="refreshOfflineList()">🔄 تحديث القائمة</button>
       <input type="text" id="offline-search" class="text-input" placeholder="🔍 ابحث بالاسم" oninput="renderOfflineList()" style="margin-top:8px;">
       <div id="offline-list-results" style="max-height:320px; overflow-y:auto; margin-top:8px;"></div>
     </div>
@@ -541,6 +542,9 @@ function cacheGuestsOffline() {
       eventName: eventData ? eventData.name : '',
       guests: guests.map(g => ({ name: g.name, id: g.id, scanned: !!g.scanned })),
       savedAt: new Date().toISOString(),
+      // When the list last came from the server — unlike savedAt, a scan on
+      // this device doesn't move it (see loadGuestsOnce).
+      loadedAt: guestsLoadedAt,
     }));
   } catch (e) {}
 }
@@ -550,6 +554,16 @@ function readOfflineCache() {
     const raw = localStorage.getItem(offlineCacheKey());
     return raw ? JSON.parse(raw) : null;
   } catch (e) { return null; }
+}
+
+async function refreshOfflineList() {
+  const btn = document.getElementById('offline-refresh-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ جاري التحديث...';
+  await loadGuestsOnce(true);
+  btn.disabled = false;
+  btn.textContent = '🔄 تحديث القائمة';
+  renderOfflineList();
 }
 
 function toggleOfflineList() {
@@ -630,11 +644,27 @@ function refreshConnectionBanner(ok) {
 // this list, so a guest scanned from another device between this load and
 // the next page open is still caught correctly, just not reflected in the
 // counter until reopened.
-async function loadGuestsOnce() {
+//
+// That one read is still one document read PER GUEST (5000 for a 5000-guest
+// event), and a door phone reopens this page often — locked and unlocked,
+// or reloaded by firebase-init.js after iOS Safari kills the connection.
+// So a copy this device downloaded less than OFFLINE_LIST_MAX_AGE ago is
+// reused as-is: zero reads. "🔄 تحديث القائمة" forces a fresh download.
+const OFFLINE_LIST_MAX_AGE = 3 * 60 * 60 * 1000;
+let guestsLoadedAt = null;
+async function loadGuestsOnce(force) {
+  const cached = readOfflineCache();
+  if (!force && cached && cached.loadedAt && Date.now() - new Date(cached.loadedAt).getTime() < OFFLINE_LIST_MAX_AGE) {
+    guests = cached.guests.map(g => ({ docId: g.id, ...g }));
+    guestsLoadedAt = cached.loadedAt;
+    updateScanCounter();
+    return;
+  }
   const { collection, getDocs } = window._fsFns;
   try {
     const snap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    guestsLoadedAt = new Date().toISOString();
     updateScanCounter();
     refreshConnectionBanner(true);
     cacheGuestsOffline();
