@@ -37,4 +37,18 @@ window._db = db;
 window._eventsCol = collection(db, 'events');
 window._authFns = { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, signOut, sendPasswordResetEmail };
 window._fsFns = { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, setDoc, getDoc, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc };
+// Firestore shuts its local cache down on every `pagehide`, and on iOS
+// Safari it also stops the whole client for good. If Safari then brings the
+// same page back (back button / back-forward cache, or the tab coming back
+// to the front), it looks normal but every read and write fails with
+// "The client has already been terminated". Reloading gives it a fresh,
+// working client — a second's wait instead of a dead page.
+let firestorePageHidden = false;
+window.addEventListener('pagehide', () => { firestorePageHidden = true; });
+window.addEventListener('pageshow', (e) => { if (e.persisted || firestorePageHidden) location.reload(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && firestorePageHidden) location.reload();
+});
+window._isFirestoreTerminated = (e) => !!(e && /already been terminated/i.test(e.message || ''));
+
 window.dispatchEvent(new Event('appDbReady'));

@@ -181,6 +181,78 @@ test('deleting a guest frees up their slot, so the customer can add a replacemen
   await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.guestCount)).toBe(0);
 });
 
+const attendedStore = () => ({
+  ...baseStore([{ id: 'WD-1', name: 'أحمد', scanned: true, scannedAt: '2026-01-01T10:00:00Z' }, { id: 'WD-2', name: 'سارة', scanned: false }]),
+  events: { e1: { ...EVENT, guestCount: 2, scannedCount: 1 } },
+});
+const counts = (page) => page.evaluate(() => {
+  const e = window.__fakeFirebase.store.events.e1;
+  return [e.guestCount, e.scannedCount];
+});
+
+test('deleting a guest who already checked in also takes them off the door counter (scannedCount)', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: attendedStore() });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  page.on('dialog', d => d.accept());
+  const row = page.locator('.guest-item', { hasText: 'أحمد' });
+  await row.locator('.more-btn').click();
+  await row.locator('.del-btn').click();
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+  await expect.poll(() => counts(page)).toEqual([1, 0]);
+});
+
+test('bulk-deleting checked-in and not-checked-in guests leaves both counters right', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: attendedStore() });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  page.on('dialog', d => d.accept());
+  await page.getByRole('button', { name: '☰' }).click();
+  await page.getByRole('button', { name: /تحديد ضيوف للحذف/ }).click();
+  for (const box of await page.locator('.gsel').all()) await box.check();
+  await page.getByRole('button', { name: /حذف المحددين/ }).click();
+  await expect(page.locator('.guest-item')).toHaveCount(0);
+  await expect.poll(() => counts(page)).toEqual([0, 0]);
+});
+
+test('if the connection was shut down for good ("client has already been terminated"), the page reloads instead of showing the raw error', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([]) });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  const alerts = [];
+  page.on('dialog', d => { alerts.push(d.message()); d.dismiss(); });
+  const reloaded = page.waitForEvent('load');
+  await page.evaluate(() => showErr(Object.assign(new Error('The client has already been terminated.'), { code: 'failed-precondition' })));
+  await expect(page.locator('#toast')).toContainText('انقطع الاتصال');
+  await reloaded;
+  expect(alerts).toEqual([]);
+});
+
+test('a page Safari brings back from its back-forward cache reloads, so it never runs on a dead connection', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([]) });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+
+  const reloaded = page.waitForEvent('load');
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+  await reloaded;
+});
+
+test('the edit-event date field has a visible label (iOS Safari shows an empty date field as blank)', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([]) });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await expect(page.locator('label[for="edit-ev-date"]')).toHaveText('📅 تاريخ المناسبة');
+});
+
 test('adding sequential numbers creates that many numbered guests without needing a file', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {

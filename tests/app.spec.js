@@ -293,6 +293,7 @@ test('the new-event form has a cancel button that closes it and clears what was 
   await expect(page.locator('#create-cancel-btn')).toHaveText('إلغاء');
 
   await page.locator('#ev-name').fill('عرس تجريبي');
+  await expect(page.locator('label[for="ev-date"]')).toHaveText('📅 تاريخ المناسبة');
   await page.locator('#ev-date').fill('2026-12-01');
   await page.locator('#ev-venue').fill('الرياض');
   await page.locator('#ev-maps').fill('https://maps.example.com/x');

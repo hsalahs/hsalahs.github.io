@@ -738,12 +738,12 @@ test('a successful scan updates the counter and the offline cache right away', a
   });
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
-  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 2');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 2');
 
   await page.locator('#manual-code').fill('WD-A');
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
   await expect(page.locator('#result-allowed')).toBeVisible();
-  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 / 2');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 من 2');
   const ev = await page.evaluate(() => window.__fakeFirebase.store.events.e1);
   expect(ev.scannedCount).toBe(1);
 
@@ -751,11 +751,37 @@ test('a successful scan updates the counter and the offline cache right away', a
   await expect(page.locator('#offline-list-results')).toContainText('✓ دخل');
 });
 
+test('the names list, if already open, shows a scan from this device straight away — no reload, no extra read', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: DEVICE,
+    store: counterStore({ 'WD-A': { name: 'أ', id: 'WD-A', scanned: false } }, 0),
+  });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.getByRole('button', { name: /عرض الأسماء/ }).click();
+  await expect(page.locator('#offline-list-results')).toContainText('لسه');
+
+  await page.locator('#manual-code').fill('WD-A');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+  await expect(page.locator('#result-allowed')).toBeVisible();
+  await expect(page.locator('#offline-list-results')).toContainText('✓ دخل');
+});
+
+test('the names-list search box uses normal text spacing (Arabic letters stay joined)', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: counterStore({}, 0) });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.getByRole('button', { name: /عرض الأسماء/ }).click();
+  expect(await page.locator('#offline-search').evaluate(el => getComputedStyle(el).letterSpacing)).toBe('normal');
+});
+
 test('the scanned count is a live document listener: a check-in from another device updates it here too', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { user: DEVICE, store: counterStore({ 'WD-A': { name: 'أ', id: 'WD-A', scanned: false } }, 0) });
   await page.goto('/scan.html?event=e1');
-  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 1');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 1');
 
   // Another supervisor's device checks WD-A in — same shape as handleScan's
   // own transaction, bumping both fields together.
@@ -764,7 +790,7 @@ test('the scanned count is a live document listener: a check-in from another dev
     window.__fakeFirebase.store['events/e1/guests']['WD-A'].scanned = true;
     await updateDoc(doc(window._db, 'events', 'e1'), { scannedCount: 1 });
   });
-  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 / 1');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 من 1');
 });
 
 test('the total ignores events/{id}.guestCount — that field only ever goes up (it survives guest deletes) and would overstate a real event\'s guest count', async ({ page }) => {
@@ -780,20 +806,20 @@ test('the total ignores events/{id}.guestCount — that field only ever goes up 
   store.events.e1.guestCount = 8;
   await seedFakeFirebase(page, { user: DEVICE, store });
   await page.goto('/scan.html?event=e1');
-  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 3');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 3');
 });
 
 test('the total is read once, on open — a guest the organizer adds afterward does not change it until this scanner reopens', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { user: DEVICE, store: counterStore({ 'WD-A': { name: 'أ', id: 'WD-A', scanned: false } }, 0) });
   await page.goto('/scan.html?event=e1');
-  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 1');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 1');
 
   await page.evaluate(() => {
     window.__fakeFirebase.store['events/e1/guests']['WD-C'] = { name: 'ج', id: 'WD-C', scanned: false };
   });
   await page.waitForTimeout(300);
-  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 / 1');
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 1');
 });
 
 test('a refresh button is pinned on screen at all times — loading, the code screen, and the scanner — for a PWA with no address bar', async ({ page }) => {
