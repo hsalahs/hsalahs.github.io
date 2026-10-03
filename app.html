@@ -35,6 +35,7 @@
   input[type="date"] { appearance:none; -webkit-appearance:none; color-scheme:dark; }
   /* iOS Safari ignores placeholder on date inputs (an empty one shows blank), so the field gets a visible label. */
   .date-label { display:block; font-size:12px; color:#B8B4AC; margin:0 4px 4px; }
+  .btn:disabled { opacity:0.7; cursor:default; }
   .btn { width:100%; padding:13px; border:none; border-radius:10px; background:linear-gradient(135deg,#C99B4A,#E0BC7A); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; margin-bottom:10px; }
   .btn.ghost { background:transparent; border:1px solid rgba(224,188,122,0.3); color:#E0BC7A; }
   .btn.small { width:auto; padding:8px 16px; font-size:13px; }
@@ -110,9 +111,12 @@ setTimeout(() => {
     <div class="sub">لوحة تحكم المنظّم — أنشئ دعوة رقمية لمناسبتك</div>
     <div class="card">
       <div id="auth-err" class="err" style="display:none"></div>
-      <input type="email" id="auth-email" placeholder="البريد الإلكتروني">
-      <input type="password" id="auth-pass" placeholder="كلمة المرور">
-      <button class="btn" id="auth-submit-btn" onclick="submitAuth()">دخول</button>
+      <!-- A real form, so the phone keyboard's "Go" key submits it. -->
+      <form id="auth-form" onsubmit="event.preventDefault(); submitAuth();" novalidate>
+        <input type="email" id="auth-email" placeholder="البريد الإلكتروني" autocomplete="email" inputmode="email" autocapitalize="off" enterkeyhint="next">
+        <input type="password" id="auth-pass" placeholder="كلمة المرور" autocomplete="current-password" enterkeyhint="go">
+        <button type="submit" class="btn" id="auth-submit-btn">دخول</button>
+      </form>
       <div class="toggle-row" id="auth-toggle">ليس لديك حساب؟ <a onclick="toggleAuthMode()">أنشئ حساب</a></div>
       <div class="toggle-row" id="forgot-pass-row"><a onclick="sendResetEmail()">نسيت كلمة المرور؟</a></div>
     </div>
@@ -164,17 +168,17 @@ setTimeout(() => {
       <div class="sub" id="pending-request-msg" style="display:none;">⏳ طلبك قيد المراجعة، بننبّهك أول ما يتم الرد.</div>
     </div>
 
-    <div class="card" id="create-form" style="display:none">
-      <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: زفاف حسن وفاطمة)">
+    <form class="card" id="create-form" style="display:none" onsubmit="event.preventDefault(); createNewEvent();" novalidate>
+      <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: زفاف حسن وفاطمة)" enterkeyhint="next">
       <label for="ev-date" class="date-label">📅 تاريخ المناسبة</label>
       <input type="date" id="ev-date">
       <input type="text" id="ev-venue" placeholder="مكان الحفل">
       <input type="text" id="ev-maps" placeholder="رابط الموقع على الخريطة (اختياري)">
       <div style="display:flex; gap:10px;">
-        <button class="btn" style="flex:2" onclick="createNewEvent()">إنشاء</button>
-        <button class="btn ghost" id="create-cancel-btn" style="flex:1" onclick="cancelCreateForm()">إلغاء</button>
+        <button type="submit" class="btn" id="create-submit-btn" style="flex:2">إنشاء</button>
+        <button type="button" class="btn ghost" id="create-cancel-btn" style="flex:1" onclick="cancelCreateForm()">إلغاء</button>
       </div>
-    </div>
+    </form>
 
     <div id="events-list"></div>
   </div>
@@ -195,6 +199,7 @@ let authMode = 'login'; // or 'signup'
 function toggleAuthMode() {
   authMode = authMode === 'login' ? 'signup' : 'login';
   document.getElementById('auth-submit-btn').textContent = authMode === 'login' ? 'دخول' : 'إنشاء حساب';
+  document.getElementById('auth-pass').autocomplete = authMode === 'login' ? 'current-password' : 'new-password';
   document.getElementById('auth-toggle').innerHTML = authMode === 'login'
     ? 'ليس لديك حساب؟ <a onclick="toggleAuthMode()">أنشئ حساب</a>'
     : 'لديك حساب؟ <a onclick="toggleAuthMode()">سجّل دخول</a>';
@@ -231,6 +236,9 @@ async function submitAuth() {
   if (!email || !pass) { showAuthError('عبّي البريد وكلمة المرور'); return; }
 
   const { createUserWithEmailAndPassword, signInWithEmailAndPassword } = window._authFns;
+  const btn = document.getElementById('auth-submit-btn');
+  if (btn.disabled) return;
+  const restore = setButtonBusy(btn, authMode === 'signup' ? 'جاري إنشاء الحساب...' : 'جاري الدخول...');
   try {
     if (authMode === 'signup') {
       const cred = await createUserWithEmailAndPassword(window._auth, email, pass);
@@ -252,6 +260,8 @@ async function submitAuth() {
       'auth/invalid-email': 'صيغة البريد غير صحيحة'
     };
     showAuthError(map[e.code] || ('خطأ: ' + e.message));
+  } finally {
+    restore();
   }
 }
 
@@ -292,6 +302,9 @@ async function createNewEvent() {
   const admin = isAdmin(user);
   const eventRef = doc(window._db, 'events', eventId);
   const limitRef = doc(window._db, 'accountLimits', user.uid);
+  const btn = document.getElementById('create-submit-btn');
+  if (btn.disabled) return;
+  const restore = setButtonBusy(btn, 'جاري الإنشاء...');
 
   try {
     await runTransaction(window._db, async (tx) => {
@@ -322,7 +335,9 @@ async function createNewEvent() {
       notifyAdmin('مناسبة جديدة 🎉', 'عميل جديد سوى مناسبة: "' + name + '" — الإيميل: ' + (user.email || user.uid));
     }
     window.location.href = 'event.html?id=' + eventId;
+    // Left busy on purpose: the page is on its way to the dashboard.
   } catch (e) {
+    restore();
     if (e.message === 'LIMIT_REACHED') {
       alert('عندك مناسبة وحدة مفعّلة على حسابك حاليًا. اطلب مناسبة إضافية من لوحتك.');
     } else {
@@ -801,6 +816,22 @@ if (window._auth) {
   }, 8000);
   window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); initAuthWatcher(); });
 }
+
+// Last safety net for "stuck on جاري التحميل..." with no way out (a real
+// report: an iPhone sat on it for about a minute and a half after creating
+// an event, though the event itself had saved fine). Whatever step is slow
+// — sign-in, the first database read — after STUCK_LOADING_MS the message
+// turns into a tap-to-retry instead of hanging silently.
+const STUCK_LOADING_MS = 12000;
+setTimeout(() => {
+  const el = document.getElementById('auth-loading');
+  // Only the plain loading text: an error or "invalid link" message already
+  // shown there is the real answer, not a hang.
+  if (!el || el.style.display === 'none' || el.onclick || el.textContent.trim() !== 'جاري التحميل...') return;
+  el.textContent = '⚠️ التحميل تأخر — اضغط هنا للمحاولة مرة ثانية';
+  el.style.cursor = 'pointer';
+  el.onclick = () => location.reload();
+}, STUCK_LOADING_MS);
 </script>
 </body>
 </html>
