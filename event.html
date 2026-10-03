@@ -929,7 +929,18 @@ function searchGuests() {
 function renderGuests() {
   const el = document.getElementById('guests-list');
   const list = visibleGuests();
-  if (list.length === 0) { el.innerHTML = '<div class="empty">لا يوجد ضيف للآن</div>'; return; }
+  if (list.length === 0) {
+    // Say why the list is empty — "no guests yet" under a search that just
+    // didn't match reads as if the guests were gone.
+    let msg = 'لا يوجد ضيف للآن';
+    if (guests.length > 0) {
+      if (searchQuery.trim()) msg = 'لا يوجد ضيف بهذا الاسم';
+      else if (statusFilter === 'attended') msg = 'ما حضر أحد للآن';
+      else if (statusFilter === 'pending') msg = 'كل الضيوف حضروا';
+    }
+    el.innerHTML = '<div class="empty">' + msg + '</div>';
+    return;
+  }
   el.innerHTML = list.map((g, i) => `
     <div class="guest-item">
       ${selectionMode

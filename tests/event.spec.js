@@ -1011,3 +1011,31 @@ test('the dashboard keeps the door scanner\'s names list as one roster document,
   });
   await expect.poll(roster, { timeout: 10000 }).toEqual(['WD-1|1|أحمد', 'WD-2|0|سارة | الثانية']);
 });
+
+test('an empty guest list says why: no match for the search, nobody attended yet, or everyone attended', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+  const empty = page.locator('#guests-list .empty');
+
+  await page.locator('#guest-search').fill('حسن');
+  await expect(empty).toHaveText('لا يوجد ضيف بهذا الاسم');
+  await page.locator('#guest-search').fill('');
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+
+  await page.locator('#box-attended').click();
+  await expect(empty).toHaveText('ما حضر أحد للآن');
+  await page.locator('#box-pending').click();
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+});
+
+test('a brand-new event with no guests still says "لا يوجد ضيف للآن"', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([]) });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#guests-list .empty')).toHaveText('لا يوجد ضيف للآن');
+});
