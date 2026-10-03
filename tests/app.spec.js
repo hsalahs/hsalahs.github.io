@@ -155,6 +155,28 @@ test('the admin sees every account that ever registered, even one with no event'
   await expect(page.locator('#admin-accounts-list')).toContainText('noevent@example.com');
 });
 
+test.describe('in Riyadh time', () => {
+  test.use({ timezoneId: 'Asia/Riyadh' });
+  test('each account shows the time it registered, 12-hour with ص/م and Western digits', async ({ page }) => {
+    await stubFirebase(page);
+    await seedFakeFirebase(page, {
+      user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+      store: {
+        events: {},
+        users: {
+          u1: { email: 'night@example.com', createdAt: { seconds: 1700000000 } }, // 2023-11-15 01:13 Riyadh
+          u2: { email: 'noon@example.com', createdAt: { seconds: 1700042400 } },  // 2023-11-15 13:00 Riyadh
+        },
+      },
+    });
+    await page.goto('/app.html');
+    const list = page.locator('#admin-accounts-list');
+    await expect(list).toContainText('سجّل: 15 نوفمبر 2023 · 1:13 ص');
+    await expect(list).toContainText('سجّل: 15 نوفمبر 2023 · 1:00 م');
+    expect(await list.innerText()).not.toMatch(/[\u0660-\u0669]/);
+  });
+});
+
 test('signing up writes a record the admin can see later, even if the account never creates an event', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { user: null });
