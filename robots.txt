@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+# Signed-in tools and personal guest invitation links: nothing to index.
+Disallow: /app.html
+Disallow: /event.html
+Disallow: /scan.html
+Disallow: /invite.html
+
+Sitemap: https://da3wt.com/sitemap.xml
