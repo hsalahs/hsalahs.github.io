@@ -144,12 +144,36 @@ function slugProblem(s) {
 // runs before this file loads). Events saved before this existed have no
 // `type` and are treated as weddings, as they always were.
 const EVENT_TYPES = {
-  wedding:    { label: 'زفاف',   example: 'زفاف حسن وفاطمة',          theme: 'gold' },
-  graduation: { label: 'تخرج',   example: 'حفل تخرج دفعة 2026',        theme: 'sapphire' },
-  event:      { label: 'فعالية', example: 'ملتقى ريادة الأعمال 2026', theme: 'emerald' },
+  wedding:    { label: 'زفاف',   example: 'زفاف حسن وفاطمة',          theme: 'gold',
+                title: 'دعوة زفاف', icon: '💌', nameLabel: 'الحفل', welcome: 'يسعدنا حضوركم ومشاركتنا فرحتنا 🤍' },
+  graduation: { label: 'تخرج',   example: 'حفل تخرج دفعة 2026',        theme: 'sapphire',
+                title: 'دعوة حفل تخرج', icon: '🎓', nameLabel: 'الحفل', welcome: 'يسعدنا حضوركم ومشاركتنا فرحة التخرج 🎓' },
+  event:      { label: 'فعالية', example: 'ملتقى ريادة الأعمال 2026', theme: 'emerald',
+                title: 'دعوة فعالية', icon: '🎟️', nameLabel: 'الفعالية', welcome: 'يسعدنا حضوركم ومشاركتنا في هذه الفعالية 🌟' },
 };
 function eventTypeOf(ev) {
   return ev && Object.prototype.hasOwnProperty.call(EVENT_TYPES, ev.type) ? ev.type : 'wedding';
+}
+
+// The invitation message the owner shares on WhatsApp (event.html's share
+// window) — the same welcome line shows on the guest's invitation page.
+// The owner's own welcome (`welcomeMessage` on the event) or the kind's
+// default. Capped so the whole message still fits in a wa.me link on every
+// phone. *…* is WhatsApp's bold.
+const WELCOME_MAX = 400;
+function welcomeOf(ev) {
+  const own = ev && typeof ev.welcomeMessage === 'string' ? ev.welcomeMessage.trim() : '';
+  return own || EVENT_TYPES[eventTypeOf(ev)].welcome;
+}
+function buildShareMessage(ev, link) {
+  const k = EVENT_TYPES[eventTypeOf(ev)];
+  const lines = ['*' + k.icon + ' ' + k.title + ' ✨*', ''];
+  if (ev.name) lines.push((k.nameLabel === 'الفعالية' ? '📌' : '🎉') + ' *' + k.nameLabel + ':* ' + ev.name);
+  if (ev.date) lines.push('📅 *التاريخ:* ' + formatEventDate(ev.date));
+  if (ev.venue) lines.push('📍 *المكان:* ' + ev.venue);
+  if (ev.mapsLink) lines.push('🗺️ *الموقع:* ' + ev.mapsLink);
+  lines.push('', welcomeOf(ev), '', '🔗 أكّد حضورك واستلم بطاقة دخولك (QR):', link);
+  return lines.join('\n');
 }
 
 // A link name from the event's own name, so every event gets a readable link

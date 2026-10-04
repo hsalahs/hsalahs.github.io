@@ -216,6 +216,15 @@
   .approve-btn { background:rgba(76,175,80,0.15); border:1px solid rgba(76,175,80,0.55); color:#4CAF50; font-size:13px; padding:6px 12px; border-radius:8px; cursor:pointer; white-space:nowrap; }
   .reject-btn { background:rgba(229,72,77,0.12); border:1px solid rgba(229,72,77,0.45); color:#E5484D; font-size:13px; padding:6px 10px; border-radius:8px; cursor:pointer; }
   .link-box { display:flex; gap:8px; align-items:center; }
+  /* The WhatsApp share window: a preview drawn like a WhatsApp bubble. */
+  .sh-label { font-size:12px; color:var(--text-soft); margin:0 2px 6px; }
+  .sh-bubble { background:#0b3d33; color:#e9edef; border-radius:12px 12px 2px 12px; padding:12px 14px; font-size:14px; line-height:1.75; text-align:right; margin:0 0 14px; box-shadow:0 2px 8px rgba(0,0,0,0.3); overflow-wrap:anywhere; }
+  .sh-bubble b { color:#fff; }
+  .sh-edit { width:100%; min-height:72px; resize:vertical; background:rgba(255,255,255,0.04); border:1px solid rgba(var(--accent-rgb),0.25); border-radius:10px; color:var(--text-main); font-family:inherit; font-size:14px; line-height:1.7; padding:10px 12px; margin:0; }
+  .sh-edit:focus { outline:none; border-color:var(--gold); }
+  .sh-count { font-size:11px; color:var(--text-soft); text-align:left; margin:4px 2px 12px; direction:ltr; }
+  .sh-wa { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:14px; border:none; border-radius:12px; background:#25D366; color:#06301b; font-family:inherit; font-size:16px; font-weight:700; cursor:pointer; }
+  .sh-other { display:block; width:100%; margin-top:10px; background:none; border:none; color:var(--gold); font-family:inherit; font-size:13px; text-decoration:underline; cursor:pointer; }
   .type-picker { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
   .type-btn { display:flex; flex-direction:column; align-items:center; gap:5px; padding:10px 6px 8px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(var(--accent-rgb),0.2); color:var(--text-soft); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s ease; }
   .type-btn img { height:30px; width:auto; opacity:0.55; }
@@ -464,6 +473,22 @@ setTimeout(() => {
     </div>
   </div>
 
+  <div class="modal-overlay" id="share-modal" onclick="if (event.target === this) closeShareModal();">
+    <div class="modal-box" style="max-height:92vh">
+      <div class="modal-header">
+        <h3>معاينة رسالة الواتساب</h3>
+        <button class="icon-btn" onclick="closeShareModal()" aria-label="إغلاق"><i data-ic="x" data-size="20"></i></button>
+      </div>
+      <div class="sh-label">هكذا تظهر الرسالة لضيوفك:</div>
+      <div class="sh-bubble" id="share-preview" dir="rtl"></div>
+      <label class="sh-label" for="share-welcome" style="display:block">جملة الترحيب (تقدر تعدّلها — تظهر كمان في صفحة الدعوة):</label>
+      <textarea class="sh-edit" id="share-welcome" maxlength="400" oninput="renderSharePreview()"></textarea>
+      <div class="sh-count" id="share-count"></div>
+      <button class="sh-wa" onclick="shareOnWhatsapp()"><i data-ic="message-circle" data-size="19"></i> مشاركة عبر الواتساب</button>
+      <button class="sh-other" onclick="shareOtherWay()">مشاركة بطريقة ثانية</button>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="requests-modal" onclick="if (event.target === this) closeRequestsModal();">
     <div class="modal-box">
       <div class="modal-header">
@@ -631,8 +656,49 @@ function shareLink(inputId, title, copyFn) {
   copyFn();
   showToast('✅ تم نسخ الرابط');
 }
+// The share button next to the invite link opens a preview of a ready
+// WhatsApp message built from the event (kind, name, date, place, map, link)
+// plus the owner's welcome line, which is saved on the event and also shown
+// on the guest's invitation page. Sending goes through wa.me, so it opens the
+// owner's own WhatsApp — nothing paid, nothing sent by us.
 function shareInviteLink() {
   if (paymentGateActive()) { openPaymentWhatsapp(); return; }
+  document.getElementById('share-welcome').value = welcomeOf(eventData);
+  renderSharePreview();
+  document.getElementById('share-modal').classList.add('active');
+}
+function shareDraft() {
+  const welcome = document.getElementById('share-welcome').value.trim();
+  return { ...eventData, welcomeMessage: welcome };
+}
+function renderSharePreview() {
+  const msg = buildShareMessage(shareDraft(), document.getElementById('invite-link').value);
+  document.getElementById('share-preview').innerHTML = escapeHtml(msg)
+    .replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+  document.getElementById('share-count').textContent = document.getElementById('share-welcome').value.length + ' / ' + WELCOME_MAX;
+}
+// Saves the welcome line when it changed. '' means "the kind's default".
+async function saveShareWelcome() {
+  const welcome = document.getElementById('share-welcome').value.trim().slice(0, WELCOME_MAX);
+  const value = welcome === EVENT_TYPES[eventTypeOf(eventData)].welcome ? '' : welcome;
+  if (value === (eventData.welcomeMessage || '')) return;
+  const { doc, updateDoc } = window._fsFns;
+  try {
+    await updateDoc(doc(window._db, 'events', eventId), { welcomeMessage: value });
+    eventData.welcomeMessage = value;
+  } catch (e) { console.error('welcome save failed:', e); }
+}
+function closeShareModal() {
+  document.getElementById('share-modal').classList.remove('active');
+  saveShareWelcome();
+}
+function shareOnWhatsapp() {
+  const msg = buildShareMessage(shareDraft(), document.getElementById('invite-link').value);
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+  saveShareWelcome();
+}
+function shareOtherWay() {
+  closeShareModal();
   shareLink('invite-link', eventData ? eventData.name : 'دعوة', copyInviteLink);
 }
 function shareScanLink() { shareLink('scan-link', 'سكانر الدخول', copyScanLink); }
@@ -1691,6 +1757,7 @@ function sheetDeleteGuest() {
 }
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('guest-sheet').classList.contains('active')) closeGuestSheet();
+  if (e.key === 'Escape' && document.getElementById('share-modal').classList.contains('active')) closeShareModal();
 });
 
 function openRequestsModal() {
