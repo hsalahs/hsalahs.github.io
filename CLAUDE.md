@@ -20,6 +20,7 @@ A non-technical founder on a tight budget who **writes Arabic** (answer in Arabi
 - Check changes **on the live site** after merging.
 - **Western digits (0-9) everywhere**, never Arabic-Indic digits (٠-٩). The guard in `utils.js` keeps the `٠-٩` escape; don't replace it with literal characters.
 - Keep their token budget in mind: short replies, targeted tests, avoid re-reading big files.
+- **Always send a push notification (PushNotification tool) when you finish a piece of work or need their answer** (a decision, "ادمج", rules to publish, CI failed) — they asked for this so they know to come back and reply. One short Arabic line: what's ready / what you need.
 
 ## Interaction modes (skills the user defined — keep these across sessions)
 These are standing instructions the user gave in chat for how to respond, not project facts. Re-apply them every session; don't let a context-compaction summary drop them.
