@@ -474,14 +474,21 @@ test('creating an event needs its kind; the kind and its starting colour are sav
   await page.getByRole('radio', { name: 'تخرج' }).click();
   await expect(page.getByRole('radio', { name: 'تخرج' })).toHaveAttribute('aria-checked', 'true');
   await expect(page.locator('#ev-name')).toHaveAttribute('placeholder', 'اسم المناسبة (مثال: حفل تخرج دفعة 2026)');
-  const saved = page.evaluate(() => new Promise(resolve => {
-    const t = setInterval(() => {
-      const evs = Object.values(window.__fakeFirebase.store.events || {});
-      if (evs.length) { clearInterval(t); resolve({ type: evs[0].type, theme: evs[0].theme }); }
-    }, 20);
-  }));
+  // The page moves on to the new dashboard (and the fake store resets) as soon
+  // as the event is saved, so the saved event is copied into sessionStorage,
+  // which survives that move.
+  await page.evaluate(() => {
+    const orig = window._fsFns.runTransaction;
+    window._fsFns.runTransaction = async (...args) => {
+      const r = await orig(...args);
+      sessionStorage.setItem('__savedEvents', JSON.stringify(Object.values(window.__fakeFirebase.store.events || {})));
+      return r;
+    };
+  });
   await page.getByRole('button', { name: 'إنشاء', exact: true }).click();
-  expect(await saved).toEqual({ type: 'graduation', theme: 'sapphire' });
+  await page.waitForURL(/event\.html\?id=/);
+  const saved = JSON.parse(await page.evaluate(() => sessionStorage.getItem('__savedEvents')));
+  expect(saved.map(e => ({ type: e.type, theme: e.theme }))).toEqual([{ type: 'graduation', theme: 'sapphire' }]);
 });
 
 test('a refresh button forces a real reload — no address bar to pull down on, installed as a PWA', async ({ page }) => {
