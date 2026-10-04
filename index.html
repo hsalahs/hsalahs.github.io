@@ -7,9 +7,6 @@
 <meta name="description" content="أنشئ دعوة رقمية أنيقة لكل ضيف، وامسح باركودهم عند الباب من جوالك — بدون ورق وبدون تعقيد. حتى 5 ضيوف مجانًا لكل مناسبة.">
 <meta name="theme-color" content="#0A0A0A">
 <link rel="canonical" href="https://da3wt.com/">
-<!-- What WhatsApp, X, Telegram and search results show when this link is
-     shared: a card with the picture, title and description instead of a bare
-     address. The image must be an absolute address. -->
 <meta property="og:type" content="website">
 <meta property="og:locale" content="ar_SA">
 <meta property="og:site_name" content="دعوات">
@@ -27,22 +24,9 @@
 <meta name="twitter:image" content="https://da3wt.com/icons/og-image.jpg">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<!-- Deliberately no <link rel="manifest"> here (same reasoning as scan.html):
-     with one, "Add to Home Screen" saves the manifest's start_url — the
-     organizer panel, app.html — instead of the page you're actually on, so a
-     visitor who saves this landing page gets a login form when they open the
-     icon. Without it iOS saves this page's own address; these meta tags are
-     enough for the full-screen app look and the name under the icon. The
-     organizer panel (app.html) keeps the manifest, so saving THAT page still
-     opens the panel. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="دعوات">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<!-- A <link> here (discovered by the browser's preloader while it's still
-     parsing <head>) starts the font fetch far earlier than an @import
-     buried inside <style> (which isn't seen until the CSS itself is being
-     parsed) — same fonts, just not stalling first paint on discovering
-     them. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap">
@@ -123,9 +107,6 @@
   .step-text h3 { font-size:14.5px; margin-bottom:3px; color:#FAF8F4; }
   .step-text p { font-size:12.5px; color:#8a857a; line-height:1.7; }
 
-  /* One column on phones and tablets; three columns (3x2) on large screens, where
-     the grid steps out of the 520px page column to give each card room. The
-     equal negative side margins centre it in both text directions. */
   .features { display:grid; grid-template-columns:1fr; gap:12px; margin-top:10px; }
   @media (min-width:900px) {
     .features { grid-template-columns:repeat(3, 1fr); width:880px; margin-inline:calc((100% - 880px) / 2); }
@@ -142,18 +123,6 @@
   footer { text-align:center; margin-top:50px; color:#6f6a62; font-size:11px; }
   svg.ic { flex-shrink:0; vertical-align:middle; }
 </style>
-<!-- Notes live in HTML comments here, not inside the scripts: tools that
-     read the page as plain text (search engines, link previews, audits)
-     keep script contents but drop HTML comments, and showed these notes as
-     the first words of the page.
-
-     Splash hider (in <head> so plain-text readers don't see code before the
-     page's own title): isolated on purpose, and NOT gated on window.load — if
-     this lived inside the big application script below and something
-     earlier in that script threw (a slow/failed CDN script, a bug, a bad
-     connection), the splash would never get hidden and would block the real
-     page forever. This one line is all this tiny script does, so nothing
-     else on the page can prevent it from running. -->
 <script>
 setTimeout(() => {
   const splash = document.getElementById('splash');
@@ -192,8 +161,6 @@ setTimeout(() => {
 
     <div class="card-preview">
       <div class="cp-title">دعوة زفاف</div>
-      <!-- Refreshed to "three weeks from today" by the script at the bottom, so
-           the sample never shows a date that has already passed. -->
       <div class="cp-date" id="cp-date">الخميس 22 أكتوبر 2026</div>
       <div class="cp-qr"></div>
       <div class="cp-name">اسم الضيف</div>
@@ -282,16 +249,6 @@ setTimeout(() => {
 </div>
 <script src="icons.js"></script>
 <script src="format.js"></script>
-<!-- The sample card's date: three weeks from today, so it never shows a date
-     that has already passed (the markup keeps a fixed fallback in case this
-     script can't run). Formatted by format.js — Western digits, whatever the
-     visitor's device would have chosen.
-
-     The sample card's title rotates through the kinds of event the service
-     is for, so a visitor who isn't planning a wedding sees themselves in it.
-     The wedding comes first and is what the markup says. Skipped for
-     visitors whose device asks for reduced motion — they just keep the first
-     title. -->
 <script>
 (function () {
   try {
