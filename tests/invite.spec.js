@@ -102,7 +102,7 @@ test('registering creates the request under its own secret id — and works when
   await page.goto('/invite.html?event=e1');
   await page.locator('#g-name').fill('سارة');
   await page.getByRole('button', { name: 'تأكيد الحضور' }).click();
-  await expect(page.locator('#card')).toContainText('بانتظار موافقة المنظّم');
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة صاحب الدعوة');
 
   const state = await page.evaluate(() => ({
     stored: localStorage.getItem('inv_reqid_e1'),
@@ -125,7 +125,7 @@ test('two registrations never get the same id', async ({ browser }) => {
     await page.goto('/invite.html?event=e1');
     await page.locator('#g-name').fill('ضيف ' + i);
     await page.getByRole('button', { name: 'تأكيد الحضور' }).click();
-    await expect(page.locator('#card')).toContainText('بانتظار موافقة المنظّم');
+    await expect(page.locator('#card')).toContainText('بانتظار موافقة صاحب الدعوة');
     ids.push(await page.evaluate(() => localStorage.getItem('inv_reqid_e1')));
     await context.close();
   }
@@ -148,7 +148,7 @@ test('a guest only ever sees their own request — another request in the same e
     window.__fakeFirebase.denyLists = ['events/e1/requests'];
   });
   await page.goto('/invite.html?event=e1');
-  await expect(page.locator('#card')).toContainText('بانتظار موافقة المنظّم');
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة صاحب الدعوة');
   await expect(page.locator('body')).not.toContainText('خالد');
   await expect(page.locator('body')).not.toContainText('WD-SECRET');
 });
@@ -175,7 +175,7 @@ test('after a rejection, trying again creates a fresh request under a new id', a
   await page.getByRole('button', { name: 'حاول مرة ثانية' }).click();
   await page.locator('#g-name').fill('سارة');
   await page.getByRole('button', { name: 'تأكيد الحضور' }).click();
-  await expect(page.locator('#card')).toContainText('بانتظار موافقة المنظّم');
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة صاحب الدعوة');
   const ids = await page.evaluate(() => Object.keys(window.__fakeFirebase.store['events/e1/requests']));
   expect(ids).toHaveLength(2);
   expect(ids.filter(i => i !== 'REQ-OLD')[0]).toMatch(/^REQ-[0-9A-F]{32}$/);
@@ -192,7 +192,7 @@ test('the sample invitation (?demo=1) walks through registration and approval wi
   await expect(page.locator('#card')).toContainText('حفل زفاف أحمد وسارة');
   await page.locator('#g-name').fill('خالد');
   await page.getByRole('button', { name: 'تأكيد الحضور' }).click();
-  await expect(page.locator('#card')).toContainText('بانتظار موافقة المنظّم');
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة صاحب الدعوة');
   await expect(page.locator('#card')).toContainText('يوافق المنظّم', { timeout: 3000 });
   await expect(page.locator('#card')).toContainText('تم تأكيد حضورك', { timeout: 5000 });
   // The demo can't simulate the door camera itself, only the card a real
@@ -357,6 +357,18 @@ test('the invitation shows the kind of event above its name and the owner\'s wel
   await page.goto('/invite.html?event=e2');
   await expect(page.locator('#card .inv-kind')).toHaveText('دعوة زفاف');
   await expect(page.locator('#card .inv-msg')).toHaveText('يسعدنا حضوركم ومشاركتنا فرحتنا 🤍');
+});
+
+test('the guest is told a request waits for approval, by whoever approves for that kind of event', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: { name: 'تخرج نورة', type: 'graduation', date: '2026-10-29', venue: 'الدمام', theme: 'sapphire' } } } });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card .rsvp-note')).toContainText('تتم مراجعة طلبك من منظّمي الحفل');
+  await expect(page.locator('#card .rsvp-note')).toContainText('بطاقة الدخول (الباركود)');
+  await page.locator('#g-name').fill('سارة');
+  await page.getByRole('button', { name: 'تأكيد الحضور' }).click();
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة منظّمي الحفل');
+  await expect(page.locator('#card .pend-note')).toContainText('نفس الجوال');
 });
 
 test('the sample graduation invitation shows the graduation title and welcome', async ({ page }) => {

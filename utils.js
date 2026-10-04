@@ -139,17 +139,18 @@ function slugProblem(s) {
 // The kinds of event an organizer picks when creating one: drives the
 // invitation's opening picture/title, the example in the name field, and the
 // colour a new event starts with (the same ones as the sample invitation —
-// the owner can change it).
+// the owner can change it). `approver` is who approves a guest's request, as
+// the invitation page names them ("بانتظار موافقة …").
 // invite.html's inline splash script keeps its own copy of the titles (it
 // runs before this file loads). Events saved before this existed have no
 // `type` and are treated as weddings, as they always were.
 const EVENT_TYPES = {
   wedding:    { label: 'زفاف',   example: 'زفاف حسن وفاطمة',          theme: 'gold',
-                title: 'دعوة زفاف', icon: '💌', nameLabel: 'الحفل', welcome: 'يسعدنا حضوركم ومشاركتنا فرحتنا 🤍' },
+                title: 'دعوة زفاف', icon: '💌', nameLabel: 'الحفل', welcome: 'يسعدنا حضوركم ومشاركتنا فرحتنا 🤍', approver: 'صاحب الدعوة' },
   graduation: { label: 'تخرج',   example: 'حفل تخرج دفعة 2026',        theme: 'sapphire',
-                title: 'دعوة حفل تخرج', icon: '🎓', nameLabel: 'الحفل', welcome: 'يسعدنا حضوركم ومشاركتنا فرحة التخرج 🎓' },
+                title: 'دعوة حفل تخرج', icon: '🎓', nameLabel: 'الحفل', welcome: 'يسعدنا حضوركم ومشاركتنا فرحة التخرج 🎓', approver: 'منظّمي الحفل' },
   event:      { label: 'فعالية', example: 'ملتقى ريادة الأعمال 2026', theme: 'emerald',
-                title: 'دعوة فعالية', icon: '🎟️', nameLabel: 'الفعالية', welcome: 'يسعدنا حضوركم ومشاركتنا في هذه الفعالية 🌟' },
+                title: 'دعوة فعالية', icon: '🎟️', nameLabel: 'الفعالية', welcome: 'يسعدنا حضوركم ومشاركتنا في هذه الفعالية 🌟', approver: 'منظّمي الفعالية' },
 };
 function eventTypeOf(ev) {
   return ev && Object.prototype.hasOwnProperty.call(EVENT_TYPES, ev.type) ? ev.type : 'wedding';

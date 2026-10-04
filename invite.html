@@ -116,6 +116,11 @@
   .inv-kind { font-size:12px; letter-spacing:1px; color:var(--gold); opacity:0.85; margin-bottom:6px; }
   .inv-msg { margin:18px 4px 4px; padding:16px 16px 14px; border-radius:14px; background:rgba(var(--accent-rgb),0.06); border:1px solid rgba(var(--accent-rgb),0.18); color:var(--text-main); font-size:14.5px; line-height:1.9; white-space:pre-line; overflow-wrap:anywhere; position:relative; }
   .inv-msg::before { content:'❝'; position:absolute; top:-11px; right:14px; font-size:18px; line-height:1; color:var(--gold); }
+  /* What happens after "تأكيد الحضور": the request waits for approval, then the
+     barcode card appears on this same link. Named per kind (EVENT_TYPES.approver). */
+  .rsvp-note { display:flex; gap:8px; align-items:flex-start; text-align:right; margin-top:14px; padding:11px 13px; border-radius:12px; background:rgba(var(--accent-rgb),0.06); border:1px dashed rgba(var(--accent-rgb),0.3); color:var(--text-soft); font-size:12.5px; line-height:1.8; }
+  .rsvp-note b, .pend-note b { color:var(--gold); }
+  .pend-note { margin-top:14px; color:var(--text-soft); font-size:13px; line-height:1.9; }
   .gold-line { width:56px; height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent); margin:22px auto; }
   .maps-link { display:inline-block; color:var(--gold); font-size:12.5px; text-decoration:none; border:1px solid rgba(var(--accent-rgb),0.4); border-radius:20px; padding:7px 16px; margin-bottom:16px; }
   .countdown { font-size:12.5px; color:var(--gold); margin-bottom:16px; letter-spacing:0.3px; }
@@ -324,6 +329,7 @@ function renderForm(eventData) {
     <div class="gold-line"></div>
     <input type="text" id="g-name" placeholder="الاسم الكامل" onkeydown="if(event.key==='Enter') submitRequest()">
     <button class="btn" onclick="submitRequest()">تأكيد الحضور</button>
+    <div class="rsvp-note"><span>ℹ️</span><span>بعد تأكيد حضورك، تتم مراجعة طلبك من ${escapeHtml(EVENT_TYPES[eventTypeOf(eventData)].approver)}. بعد الموافقة تظهر لك <b>بطاقة الدخول (الباركود)</b> هنا في نفس الرابط.</span></div>
   `;
   startCountdown(eventData);
 }
@@ -396,7 +402,8 @@ async function submitRequest() {
 function renderPending() {
   card.innerHTML = `
     <div class="status-icon">⏳</div>
-    <div class="status-msg">تم إرسال طلبك، بانتظار موافقة المنظّم</div>
+    <div class="status-msg">تم إرسال طلبك ✅<br>بانتظار موافقة ${escapeHtml(EVENT_TYPES[eventTypeOf(currentEvent)].approver)}</div>
+    <div class="pend-note">بعد الموافقة تظهر بطاقة دخولك (الباركود) هنا.<br>افتح نفس الرابط من <b>نفس الجوال</b> للرجوع لها.</div>
   `;
 }
 
