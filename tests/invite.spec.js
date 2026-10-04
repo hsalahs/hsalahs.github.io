@@ -383,3 +383,15 @@ test('404.html forwards a readable link like /hala-turki to the invitation page,
   await page.goto('/some/deep.path');
   await expect(page.locator('h1')).toHaveText('الصفحة غير موجودة');
 });
+
+// A shared invitation link (either form) shows a card in WhatsApp and other
+// apps instead of a bare address — the same card for every event, since the
+// files are static.
+test('invitation links carry a share card: invite.html and the readable-link page', () => {
+  const fs = require('fs'); const path = require('path');
+  for (const f of ['invite.html', '404.html']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+    expect(src, f).toContain('<meta property="og:title" content="لديك دعوة خاصة 💌">');
+    expect(src, f).toContain('<meta property="og:image" content="https://da3wt.com/icons/og-image.jpg">');
+  }
+});
