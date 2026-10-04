@@ -130,3 +130,13 @@ test('the guide explains what changing the colour changes, and the code really b
     expect(src, f).toContain("colorLight: '#FAFAF8'");
   }
 });
+
+// The guide is the only page besides the landing page that search engines
+// index: it needs its own description, canonical address and share card.
+test('the guide has a description, a canonical address and a share card', async ({ page }) => {
+  await page.goto('/guide.html');
+  expect(await page.locator('meta[name="description"]').getAttribute('content')).toContain('خطوة بخطوة');
+  expect(await page.locator('link[rel="canonical"]').getAttribute('href')).toBe('https://da3wt.com/guide.html');
+  expect(await page.locator('meta[property="og:title"]').getAttribute('content')).toBe('دليل الاستخدام — دعوات');
+  expect(await page.locator('meta[property="og:image"]').getAttribute('content')).toBe('https://da3wt.com/icons/og-image.jpg');
+});
