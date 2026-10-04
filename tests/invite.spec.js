@@ -528,3 +528,14 @@ test('every page that talks to Firestore preconnects to it; the service worker g
   }
   expect(fs.readFileSync('sw.js', 'utf8')).toContain("reject(new Error('timeout')), 1500)");
 });
+
+test('every Firestore function invite.html pulls from _fsFns is exported by the lite bootstrap', async () => {
+  const fs = require('fs');
+  const page = fs.readFileSync('invite.html', 'utf8');
+  const lite = fs.readFileSync('firebase-init-lite.js', 'utf8');
+  const exported = lite.match(/window\._fsFns\s*=\s*\{([^}]*)\}/)[1].split(',').map((s) => s.trim()).filter(Boolean);
+  const used = [...page.matchAll(/const\s*\{([^}]*)\}\s*=\s*window\._fsFns/g)]
+    .flatMap((m) => m[1].split(',').map((s) => s.trim()).filter(Boolean));
+  expect(used.length).toBeGreaterThan(0);
+  for (const name of used) expect(exported).toContain(name);
+});

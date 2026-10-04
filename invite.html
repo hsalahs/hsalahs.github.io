@@ -814,7 +814,7 @@ if (isDemo) {
   init();
 } else {
   // Same "trapped forever" failure other pages' init guards close: a slow
-  // or dropped connection while firebase-init.js's own CDN imports load
+  // or dropped connection while firebase-init-lite.js's own CDN imports load
   // means appDbReady never fires, leaving this stuck on "جاري التحميل..."
   // forever with no way out.
   const appDbTimeout = setTimeout(() => {
