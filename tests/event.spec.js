@@ -1114,3 +1114,45 @@ test('a VIP guest\'s card is drawn in the dark VIP design with a gold badge; a n
   expect(vip.badge[0]).toBeGreaterThan(150);             // gold badge (reddish-yellow)
   expect(vip.badge[2]).toBeLessThan(vip.badge[0]);
 });
+
+test('a readable link: the owner picks a name, it is claimed in slugs/, and the invite link shows it', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]), slugs: { 'taken-name': { eventId: 'other', ownerUid: 'u9', createdAt: 'x' } } } });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  const alerts = [];
+  page.on('dialog', d => { alerts.push(d.message()); d.accept(); });
+  const store = () => page.evaluate(() => ({ slugs: window.__fakeFirebase.store.slugs || {}, slug: window.__fakeFirebase.store.events.e1.slug }));
+  const openEdit = async () => { await page.getByRole('button', { name: 'القائمة' }).click(); await page.getByRole('button', { name: /تعديل المناسبة/ }).click(); };
+
+  // Arabic / bad characters are refused before anything is written.
+  await openEdit();
+  await page.locator('#edit-ev-slug').fill('حلا تركي');
+  await page.getByRole('button', { name: 'حفظ التعديل' }).click();
+  await expect.poll(() => alerts.length).toBe(1);
+  expect(alerts[0]).toContain('بالإنجليزي');
+  expect((await store()).slug).toBeUndefined();
+
+  // A name someone else holds is refused.
+  await page.locator('#edit-ev-slug').fill('taken-name');
+  await page.getByRole('button', { name: 'حفظ التعديل' }).click();
+  await expect.poll(() => alerts.length).toBe(2);
+  expect(alerts[1]).toContain('مستخدم');
+
+  // A free name: claimed, saved on the event, and the invite link uses it.
+  await page.locator('#edit-ev-slug').fill('Hala Turki');
+  await page.getByRole('button', { name: 'حفظ التعديل' }).click();
+  await expect.poll(async () => (await store()).slug).toBe('hala-turki');
+  expect((await store()).slugs['hala-turki']).toMatchObject({ eventId: 'e1', ownerUid: 'u1' });
+  await expect(page.locator('#invite-link')).toHaveValue(/\/hala-turki$/);
+
+  // Changing it releases the old name.
+  await openEdit();
+  await expect(page.locator('#edit-ev-slug')).toHaveValue('hala-turki');
+  await page.locator('#edit-ev-slug').fill('hala-2026');
+  await page.getByRole('button', { name: 'حفظ التعديل' }).click();
+  await expect.poll(async () => (await store()).slug).toBe('hala-2026');
+  const s = (await store()).slugs;
+  expect(s['hala-turki']).toBeUndefined();
+  expect(s['hala-2026']).toMatchObject({ eventId: 'e1' });
+});
