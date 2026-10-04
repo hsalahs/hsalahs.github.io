@@ -211,3 +211,14 @@ test('read as plain text, the page starts with the product, with no code or code
   expect(text.slice(0, text.indexOf('دعوة أنيقة لكل ضيف'))).not.toMatch(/[{}();=]|\/\//);
   for (const m of body.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)) expect(m[1]).not.toMatch(/^\s*\/\//m);
 });
+
+// Pricing is agreed per customer (and per country) on WhatsApp, so the page
+// must say so plainly and show the steps — not call an unshown price "clear".
+test('the pricing section says the price depends on the guest count and lists the three steps', async ({ page }) => {
+  await page.goto('/index.html');
+  const card = page.locator('.price-card');
+  await expect(page.locator('.section-sub', { hasText: 'السعر حسب عدد ضيوفك' })).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('بسيط وواضح');
+  await expect(card.locator('p b')).toHaveText(['أول 5 ضيوف مجانًا لكل مناسبة', '1. جرّب مجانًا:', '2. اطلب عرضك:', '3. ادفع ونفعّل:']);
+  await expect(card.locator('a[data-wa="pricing"]')).toContainText('اسأل عن الأسعار على واتساب');
+});
