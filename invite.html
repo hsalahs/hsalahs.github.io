@@ -3,6 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- If one of this page's own script files fails to download (a weak phone
+     signal), the page would open half-working with no message — a dashboard
+     with no invite link, a login button that does nothing. Offer a reload. -->
+<script>window.addEventListener('error', function (e) {
+  var t = e.target;
+  if (!t || t.tagName !== 'SCRIPT' || !t.src || t.src.indexOf(location.origin + '/') !== 0) return;
+  function show() {
+    if (document.getElementById('load-fail')) return;
+    var d = document.createElement('div');
+    d.id = 'load-fail'; d.setAttribute('role', 'alert');
+    d.textContent = '⚠️ ما اكتمل تحميل الصفحة بسبب ضعف الإنترنت — اضغط هنا لإعادة التحميل';
+    d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:100000;background:#b3261e;color:#fff;padding:14px 16px;text-align:center;font:600 15px/1.6 sans-serif;cursor:pointer;';
+    d.onclick = function () { location.reload(); };
+    document.body.appendChild(d);
+  }
+  if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
+}, true);</script>
 <title>دعوة | دعوات</title>
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
