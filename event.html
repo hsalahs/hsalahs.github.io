@@ -1342,6 +1342,8 @@ function buildGuestCard(guest) {
       // VIP guests get a dark card with a double gold frame and a ★ VIP
       // badge; the QR box stays black on white so it always scans.
       const vip = !!guest.vip;
+      // VIP: the ★ VIP pill sits under the date, and everything below it moves down by dy.
+      const dy = vip ? 56 : 0;
       ctx.fillStyle = vip ? '#0E0C08' : '#FAFAF8';
       ctx.fillRect(0, 0, 1000, 1400);
 
@@ -1378,9 +1380,29 @@ function buildGuestCard(guest) {
       ctx.font = '34px "IBM Plex Sans Arabic", Arial';
       ctx.fillText(formatEventDate(eventData.date), 500, 172);
 
-      drawFadedLine(ctx, 280, 720, 205, GOLD);
+      if (vip) {
+        const bw = 170, bh = 48, bx = 500 - bw / 2, by = 196;
+        const badge = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+        badge.addColorStop(0, GOLD);
+        badge.addColorStop(0.5, GOLD_LIGHT);
+        badge.addColorStop(1, GOLD);
+        ctx.fillStyle = badge;
+        ctx.beginPath();
+        ctx.moveTo(bx + bh / 2, by);
+        ctx.arcTo(bx + bw, by, bx + bw, by + bh, bh / 2);
+        ctx.arcTo(bx + bw, by + bh, bx, by + bh, bh / 2);
+        ctx.arcTo(bx, by + bh, bx, by, bh / 2);
+        ctx.arcTo(bx, by, bx + bw, by, bh / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#1a1400';
+        ctx.font = 'bold 30px "Playfair Display", Arial';
+        ctx.fillText('★ VIP', 500, by + 35);
+      }
 
-      const qx = 180, qy = 232, qw = 640, qh = 640, rr = 28;
+      drawFadedLine(ctx, 280, 720, 205 + dy, GOLD);
+
+      const qx = 180, qy = 232 + dy, qw = 640, qh = 640, rr = 28;
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(qx + rr, qy);
@@ -1399,52 +1421,32 @@ function buildGuestCard(guest) {
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      ctx.drawImage(qr, 220, 272, 560, 560);
+      ctx.drawImage(qr, 220, 272 + dy, 560, 560);
 
       ctx.fillStyle = vip ? GOLD_LIGHT : '#0A0A0A';
-      fitText(ctx, guest.name, 500, 940, 820, 54, 24, 'bold %dpx "IBM Plex Sans Arabic", Arial');
+      fitText(ctx, guest.name, 500, 940 + dy, 820, 54, 24, 'bold %dpx "IBM Plex Sans Arabic", Arial');
 
       ctx.fillStyle = '#B0AAA0';
       ctx.font = '28px "Playfair Display", Arial';
-      ctx.fillText(guest.id, 500, 992);
+      ctx.fillText(guest.id, 500, 992 + dy);
 
-      drawFadedLine(ctx, 220, 780, 1028, vip ? hexToRgba(GOLD, 0.5) : 'rgba(0,0,0,0.18)');
+      drawFadedLine(ctx, 220, 780, 1028 + dy, vip ? hexToRgba(GOLD, 0.5) : 'rgba(0,0,0,0.18)');
 
       if (eventData.venue) {
         ctx.fillStyle = GOLD;
-        fitText(ctx, eventData.venue, 500, 1088, 820, 38, 20, 'bold %dpx "Playfair Display", Arial');
+        fitText(ctx, eventData.venue, 500, 1088 + dy, 820, 38, 20, 'bold %dpx "Playfair Display", Arial');
         ctx.strokeStyle = hexToRgba(GOLD, 0.55);
         ctx.lineWidth = 1.2;
-        ctx.beginPath(); ctx.moveTo(300, 1076); ctx.lineTo(360, 1076); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(640, 1076); ctx.lineTo(700, 1076); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(300, 1076 + dy); ctx.lineTo(360, 1076 + dy); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(640, 1076 + dy); ctx.lineTo(700, 1076 + dy); ctx.stroke();
       }
 
       ctx.fillStyle = vip ? '#B8B4AC' : '#888';
       ctx.font = '26px "IBM Plex Sans Arabic", Arial';
-      ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1148);
+      ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1148 + dy);
       ctx.fillStyle = vip ? '#8a857a' : '#666';
       ctx.font = '24px "IBM Plex Sans Arabic", Arial';
-      ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1200);
-
-      if (vip) {
-        const bw = 190, bh = 58, bx = 500 - bw / 2, by = 1236;
-        const badge = ctx.createLinearGradient(bx, 0, bx + bw, 0);
-        badge.addColorStop(0, GOLD);
-        badge.addColorStop(0.5, GOLD_LIGHT);
-        badge.addColorStop(1, GOLD);
-        ctx.fillStyle = badge;
-        ctx.beginPath();
-        ctx.moveTo(bx + bh / 2, by);
-        ctx.arcTo(bx + bw, by, bx + bw, by + bh, bh / 2);
-        ctx.arcTo(bx + bw, by + bh, bx, by + bh, bh / 2);
-        ctx.arcTo(bx, by + bh, bx, by, bh / 2);
-        ctx.arcTo(bx, by, bx + bw, by, bh / 2);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = '#1a1400';
-        ctx.font = 'bold 34px "Playfair Display", Arial';
-        ctx.fillText('★ VIP', 500, by + 41);
-      }
+      ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1200 + dy);
 
       drawSparkle(ctx, 92, 92, 16, GOLD);
       drawSparkle(ctx, 908, 92, 16, GOLD);

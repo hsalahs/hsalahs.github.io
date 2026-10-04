@@ -1105,7 +1105,7 @@ test('a VIP guest\'s card is drawn in the dark VIP design with a gold badge; a n
   const sample = (id) => page.evaluate(async (id) => {
     const c = await buildGuestCard(guests.find(g => g.id === id));
     const px = (x, y) => Array.from(c.getContext('2d').getImageData(x, y, 1, 1).data.slice(0, 3));
-    return { bg: px(60, 700), badge: px(500, 1250) };
+    return { bg: px(60, 700), badge: px(440, 206) };
   }, id);
   const normal = await sample('WD-1');
   const vip = await sample('WD-2');
