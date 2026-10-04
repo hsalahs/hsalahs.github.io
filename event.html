@@ -794,6 +794,41 @@ async function setEventSlug(slug) {
   return true;
 }
 
+// Every event gets a readable link without the owner typing one: the first
+// time its owner opens the dashboard (no `slug` field yet — a deliberately
+// cleared link is '' and stays cleared), claim a name made from the event's
+// name, adding -2, -3… while one is taken. Silent: if it can't, the event
+// simply keeps its id link and the owner can still pick a name by hand.
+async function autoClaimSlug() {
+  if (!eventData || eventData.slug !== undefined || eventData.ownerUid !== currentUser.uid) return;
+  const { doc, runTransaction } = window._fsFns;
+  const eventRef = doc(window._db, 'events', eventId);
+  const base = slugFromName(eventData.name);
+  const tries = [base, base + '-2', base + '-3', base + '-4', base + '-' + Math.random().toString(36).slice(2, 6)];
+  for (const slug of tries) {
+    try {
+      const claimed = await runTransaction(window._db, async (tx) => {
+        const ev = await tx.get(eventRef);
+        // Another tab or device got there first: keep its name.
+        if (ev.data().slug !== undefined) return ev.data().slug;
+        const ref = doc(window._db, 'slugs', slug);
+        if ((await tx.get(ref)).exists()) return null;
+        tx.set(ref, { eventId, ownerUid: currentUser.uid, createdAt: new Date().toISOString() });
+        tx.update(eventRef, { slug });
+        return slug;
+      });
+      if (claimed !== null) {
+        eventData.slug = claimed;
+        updateInviteLink();
+        return;
+      }
+    } catch (e) {
+      console.error('autoClaimSlug failed:', e);
+      return;
+    }
+  }
+}
+
 // The readable link when the event has one, the id link otherwise.
 function updateInviteLink() {
   const base = window.location.origin + window.location.pathname.replace(/event\.html$/, '');
@@ -902,6 +937,7 @@ async function init() {
     startListeners();
     watchPaymentStatus();
     backfillRequestGuestIds();
+    autoClaimSlug();
   });
 }
 

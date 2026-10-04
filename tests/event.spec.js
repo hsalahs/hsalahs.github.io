@@ -1151,9 +1151,34 @@ test('a VIP guest\'s card is drawn in the dark VIP design with a gold badge; a n
   expect(vip.badge[2]).toBeLessThan(vip.badge[0]);
 });
 
+test('an event with no link yet gets one from its name when the owner opens it, skipping a taken name', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]), slugs: { 'hfl-tjreebi': { eventId: 'other', ownerUid: 'u9', createdAt: 'x' } } } });
+  await page.goto('/event.html?id=e1');
+  const store = () => page.evaluate(() => ({ slugs: window.__fakeFirebase.store.slugs, slug: window.__fakeFirebase.store.events.e1.slug }));
+  await expect.poll(async () => (await store()).slug).toBe('hfl-tjreebi-2');
+  expect((await store()).slugs['hfl-tjreebi-2']).toMatchObject({ eventId: 'e1', ownerUid: 'u1' });
+  expect((await store()).slugs['hfl-tjreebi']).toMatchObject({ eventId: 'other' });
+  await expect(page.locator('#invite-link')).toHaveValue(/\/hfl-tjreebi-2$/);
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('button', { name: /تعديل المناسبة/ }).click();
+  await expect(page.locator('#edit-ev-slug')).toHaveValue('hfl-tjreebi-2');
+});
+
+test('the admin opening a customer\'s event does not pick a link for it', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'admin1', email: 'hsallah@outlook.sa' }, store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]) });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.__fakeFirebase.store.events.e1.slug)).toBeUndefined();
+  await expect(page.locator('#invite-link')).toHaveValue(/invite\.html\?event=e1$/);
+});
+
 test('a readable link: the owner picks a name, it is claimed in slugs/, and the invite link shows it', async ({ page }) => {
   await stubFirebase(page);
-  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]), slugs: { 'taken-name': { eventId: 'other', ownerUid: 'u9', createdAt: 'x' } } } });
+  // slug '' = the owner cleared the link, so no name is picked automatically.
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]), events: { e1: { ...EVENT, slug: '' } }, slugs: { 'taken-name': { eventId: 'other', ownerUid: 'u9', createdAt: 'x' } } } });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
   const alerts = [];
@@ -1167,7 +1192,7 @@ test('a readable link: the owner picks a name, it is claimed in slugs/, and the 
   await page.getByRole('button', { name: 'حفظ التعديل' }).click();
   await expect.poll(() => alerts.length).toBe(1);
   expect(alerts[0]).toContain('بالإنجليزي');
-  expect((await store()).slug).toBeUndefined();
+  expect((await store()).slug).toBe('');
 
   // A name someone else holds is refused.
   await page.locator('#edit-ev-slug').fill('taken-name');
