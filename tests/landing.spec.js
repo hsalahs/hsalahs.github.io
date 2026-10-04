@@ -212,6 +212,16 @@ test('read as plain text, the page starts with the product, with no code or code
   for (const m of body.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)) expect(m[1]).not.toMatch(/^\s*\/\//m);
 });
 
+// Some audits read the raw source, HTML comments included, so the landing page
+// carries no developer notes at all (HTML, CSS or script comments).
+test('the landing page source carries no developer comments', async () => {
+  const fs = require('fs'); const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  expect(src).not.toMatch(/<!--/);
+  expect(src).not.toMatch(/\/\*/);
+  for (const m of src.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)) expect(m[1]).not.toMatch(/(^|[\s;{}])\/\/ /m);
+});
+
 // Pricing is agreed per customer (and per country) on WhatsApp, so the page
 // must say so plainly and show the steps — not call an unshown price "clear".
 test('the pricing section says the price depends on the guest count and lists the three steps', async ({ page }) => {
