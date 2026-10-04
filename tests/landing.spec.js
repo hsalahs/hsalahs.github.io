@@ -68,8 +68,13 @@ test('the free-tier reassurance says "no fees", never the ambiguous "no card", o
     expect(src, f + ' should not say "بدون بطاقة"').not.toContain('بدون بطاقة');
   }
   await page.goto('/index.html');
-  // The hero badge is the invitation to try; the "no fees" wording lives in the price section, the link preview and the sign-up note.
-  await expect(page.locator('.trial-note')).toHaveText('أنشئ دعوتك وجرّب النظام مجانًا');
+  // The hero note says what's free and what comes after; the "no fees" wording lives in the price section, the link preview and the sign-up note.
+  await expect(page.locator('.trial-note')).toHaveText('أول 5 ضيوف مجانًا — وأكثر من كذا نرسل لك عرض سعر، ونفعّل مناسبتك بعد الدفع');
+  // Next to the start button, the way to buy is spelled out: a quote request,
+  // not just a general "talk to us".
+  const quote = page.locator('.hero a[data-wa="quote"]');
+  await expect(quote).toContainText('اطلب سعر مناسبتك');
+  expect(decodeURIComponent((await quote.getAttribute('href')).split('text=')[1])).toBe('السلام عليكم، أبغى عرض سعر من دعوات لمناسبتي. عدد الضيوف تقريبًا: ');
   await expect(page.locator('.price-card')).toContainText('بدون دفع رسوم');
   expect(await page.locator('meta[property="og:description"]').getAttribute('content')).toContain('بدون دفع رسوم');
   await page.goto('/guide.html');
