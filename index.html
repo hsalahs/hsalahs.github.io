@@ -142,6 +142,24 @@
   footer { text-align:center; margin-top:50px; color:#6f6a62; font-size:11px; }
   svg.ic { flex-shrink:0; vertical-align:middle; }
 </style>
+<!-- Notes live in HTML comments here, not inside the scripts: tools that
+     read the page as plain text (search engines, link previews, audits)
+     keep script contents but drop HTML comments, and showed these notes as
+     the first words of the page.
+
+     Splash hider (in <head> so plain-text readers don't see code before the
+     page's own title): isolated on purpose, and NOT gated on window.load — if
+     this lived inside the big application script below and something
+     earlier in that script threw (a slow/failed CDN script, a bug, a bad
+     connection), the splash would never get hidden and would block the real
+     page forever. This one line is all this tiny script does, so nothing
+     else on the page can prevent it from running. -->
+<script>
+setTimeout(() => {
+  const splash = document.getElementById('splash');
+  if (splash) splash.classList.add('hide');
+}, 2200);
+</script>
 </head>
 <body>
 
@@ -153,19 +171,6 @@
     <div class="splash-line"></div>
   </div>
 </div>
-<script>
-// Isolated on purpose, and NOT gated on window.load — if this lived inside
-// the big application script below and something earlier in that script
-// threw (a slow/failed CDN script, a bug, a bad connection), the splash
-// would never get hidden and would block the real page forever. This one
-// line is all this tiny script does, so nothing else on the page can
-// prevent it from running.
-setTimeout(() => {
-  const splash = document.getElementById('splash');
-  if (splash) splash.classList.add('hide');
-}, 2200);
-</script>
-
 <div class="wrap">
 
   <nav>
@@ -258,10 +263,12 @@ setTimeout(() => {
   </div>
 
   <div class="section-title">كم السعر؟</div>
-  <div class="section-sub">بسيط وواضح</div>
+  <div class="section-sub">السعر حسب عدد ضيوفك</div>
   <div class="price-card">
-    <p><b><i data-ic="gift" data-size="15"></i> أول 5 ضيوف مجانًا لكل مناسبة</b> — تجرّب كل شي بنفسك بدون دفع رسوم.</p>
-    <p>لما تكبر القائمة، نتفق معك على باقة تناسب عدد ضيوفك، ونفعّل مناسبتك.</p>
+    <p><b><i data-ic="gift" data-size="15"></i> أول 5 ضيوف مجانًا لكل مناسبة</b> — بدون دفع رسوم.</p>
+    <p><b>1. جرّب مجانًا:</b> أنشئ مناسبتك وأضف حتى 5 ضيوف، وجرّب كل شي بنفسك.</p>
+    <p><b>2. اطلب عرضك:</b> راسلنا على واتساب بعدد ضيوفك، ونرسل لك السعر.</p>
+    <p><b>3. ادفع ونفعّل:</b> بعد الدفع نفعّل مناسبتك بالعدد المتفق عليه، وتكمل إضافة ضيوفك من نفس اللوحة بدون ما تعيد أي شي.</p>
     <a class="btn-outline btn-wa" href="https://wa.me/966546664459?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A3%D8%A8%D8%BA%D9%89%20%D8%A3%D8%B9%D8%B1%D9%81%20%D8%A3%D8%B3%D8%B9%D8%A7%D8%B1%20%D8%AE%D8%AF%D9%85%D8%A9%20%D8%AF%D8%B9%D9%88%D8%A7%D8%AA%20%D9%88%D8%A7%D9%84%D8%A8%D8%A7%D9%82%D8%A9%20%D8%A7%D9%84%D9%85%D9%86%D8%A7%D8%B3%D8%A8%D8%A9%20%D9%84%D9%85%D9%86%D8%A7%D8%B3%D8%A8%D8%AA%D9%8A." target="_blank" rel="noopener" data-wa="pricing"><i data-ic="message-circle" data-size="17"></i> اسأل عن الأسعار على واتساب</a>
   </div>
 
@@ -275,11 +282,17 @@ setTimeout(() => {
 </div>
 <script src="icons.js"></script>
 <script src="format.js"></script>
+<!-- The sample card's date: three weeks from today, so it never shows a date
+     that has already passed (the markup keeps a fixed fallback in case this
+     script can't run). Formatted by format.js — Western digits, whatever the
+     visitor's device would have chosen.
+
+     The sample card's title rotates through the kinds of event the service
+     is for, so a visitor who isn't planning a wedding sees themselves in it.
+     The wedding comes first and is what the markup says. Skipped for
+     visitors whose device asks for reduced motion — they just keep the first
+     title. -->
 <script>
-// The sample card's date: three weeks from today, so it never shows a date
-// that has already passed (the markup keeps a fixed fallback in case this
-// script can't run). Formatted by format.js — Western digits, whatever the
-// visitor's device would have chosen.
 (function () {
   try {
     const d = new Date(Date.now() + 21 * 86400000);
@@ -290,10 +303,6 @@ setTimeout(() => {
   } catch (e) {}
 })();
 
-// The sample card's title rotates through the kinds of event the service is
-// for, so a visitor who isn't planning a wedding sees themselves in it. The
-// wedding comes first and is what the markup says. Skipped for visitors whose
-// device asks for reduced motion — they just keep the first title.
 (function () {
   try {
     const title = document.querySelector('.cp-title');
