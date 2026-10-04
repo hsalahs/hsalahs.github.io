@@ -1270,3 +1270,65 @@ test('a readable link: the owner picks a name, it is claimed in slugs/, and the 
   expect(s['hala-turki']).toBeUndefined();
   expect(s['hala-2026']).toMatchObject({ eventId: 'e1' });
 });
+
+test('the name, venue and map link inputs limit typing to 80, 100 and 300 characters', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([]) });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#edit-ev-name')).toHaveAttribute('maxlength', '80');
+  await expect(page.locator('#edit-ev-venue')).toHaveAttribute('maxlength', '100');
+  await expect(page.locator('#edit-ev-maps')).toHaveAttribute('maxlength', '300');
+});
+
+const SHARE_BTN = (page) => page.locator('#invite-link').locator('xpath=..').getByRole('button', { name: 'مشاركة' });
+
+test('a welcome line equal to the kind\'s default is stored as an empty string', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]),
+    events: { e1: { ...EVENT, slug: 'x-ev', welcomeMessage: 'نص خاص' } } } });
+  await page.goto('/event.html?id=e1');
+  await SHARE_BTN(page).click();
+  await page.locator('#share-welcome').fill('يسعدنا حضوركم ومشاركتنا فرحتنا 🤍');
+  await page.keyboard.press('Escape');
+  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.welcomeMessage)).toBe('');
+});
+
+test('HTML in the welcome line and the event name is shown as text in the share preview', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]),
+    events: { e1: { ...EVENT, slug: 'x-ev', name: '<img id="xn" src=x onerror="window.__x=1">' } } } });
+  await page.goto('/event.html?id=e1');
+  await SHARE_BTN(page).click();
+  await page.locator('#share-welcome').fill('<img id="xw" src=x onerror="window.__x=1">');
+  const preview = page.locator('#share-preview');
+  await expect(preview).toContainText('<img id="xw"');
+  await expect(preview).toContainText('<img id="xn"');
+  await expect(preview.locator('img')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__x)).toBeUndefined();
+});
+
+test('the share button opens the payment WhatsApp, not the preview, when the free limit is reached', async ({ page }) => {
+  await page.addInitScript(() => { window.__opened = []; window.open = (u) => { window.__opened.push(u); return null; }; });
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]),
+    events: { e1: { ...EVENT, slug: 'x-ev', paid: false, guestCount: 5 } } } });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#payment-gate')).toBeVisible();
+  await SHARE_BTN(page).click();
+  await expect(page.locator('#share-modal')).toBeHidden();
+  const opened = await page.evaluate(() => window.__opened);
+  expect(opened).toHaveLength(1);
+  expect(decodeURIComponent(opened[0])).toContain('أبي أفعّل مناسبة');
+});
+
+test('a failed welcome save tells the owner and still closes the modal', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]), events: { e1: { ...EVENT, slug: 'x-ev' } } } });
+  await page.goto('/event.html?id=e1');
+  await SHARE_BTN(page).click();
+  await page.evaluate(() => { window._fsFns.updateDoc = () => Promise.reject(new Error('offline')); });
+  await page.locator('#share-welcome').fill('رسالة جديدة');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#share-modal')).toBeHidden();
+  await expect(page.locator('#toast')).toContainText('ما انحفظت رسالة الترحيب');
+});

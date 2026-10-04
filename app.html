@@ -235,11 +235,11 @@ setTimeout(() => {
         <button type="button" class="type-btn" data-type="graduation" role="radio" aria-checked="false" onclick="pickEventType('graduation')"><img src="icons/kind-graduation.svg" alt="">تخرج</button>
         <button type="button" class="type-btn" data-type="event" role="radio" aria-checked="false" onclick="pickEventType('event')"><img src="icons/kind-event.svg" alt="">فعالية</button>
       </div>
-      <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: زفاف حسن وفاطمة)" enterkeyhint="next">
+      <input type="text" id="ev-name" maxlength="80" placeholder="اسم المناسبة (مثال: زفاف حسن وفاطمة)" enterkeyhint="next">
       <label for="ev-date" class="date-label"><i data-ic="calendar" data-size="14"></i> تاريخ المناسبة</label>
       <input type="date" id="ev-date">
-      <input type="text" id="ev-venue" placeholder="مكان الحفل">
-      <input type="text" id="ev-maps" placeholder="رابط الموقع على الخريطة (اختياري)">
+      <input type="text" id="ev-venue" maxlength="100" placeholder="مكان الحفل">
+      <input type="text" id="ev-maps" maxlength="300" placeholder="رابط الموقع على الخريطة (اختياري)">
       <div style="display:flex; gap:10px;">
         <button type="submit" class="btn" id="create-submit-btn" style="flex:2">إنشاء</button>
         <button type="button" class="btn ghost" id="create-cancel-btn" style="flex:1" onclick="cancelCreateForm()">إلغاء</button>
