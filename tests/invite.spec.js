@@ -313,7 +313,7 @@ test('a made-up ?type= (or an inherited property name) falls back to the choice 
   }
 });
 
-test('a real invitation still opens with the wedding splash, and its date reads as words with Western digits', async ({ page }) => {
+test('a real invitation saved before kinds existed opens with the wedding splash, and its date reads as words with Western digits', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     store: { events: { e1: { name: 'حفل تجريبي', date: '2026-10-29', venue: 'الرياض', theme: 'gold' } } },
@@ -322,6 +322,27 @@ test('a real invitation still opens with the wedding splash, and its date reads 
   await expect(page.locator('#card .sub')).toContainText('الخميس 29 أكتوبر 2026');
   await expect(page.locator('#splash .splash-title')).toHaveText('دعوة زفاف');
   await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/kind-wedding.svg');
+});
+
+test('a real invitation opens with its own kind: a graduation shows the graduation splash, and this device remembers it', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: { name: 'حفل تخرج نورة', type: 'graduation', date: '2026-10-29', venue: 'الدمام', theme: 'sapphire' } } } });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#splash .splash-title')).toHaveText('دعوة حفل تخرج');
+  await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/kind-graduation.svg');
+  expect(await page.evaluate(() => localStorage.getItem('inv_kind_e1'))).toBe('graduation');
+});
+
+test('before the event loads, a real invitation shows the kind this device saw last time, or the neutral logo', async ({ page }) => {
+  await stubFirebase(page);
+  await page.addInitScript(() => { try { localStorage.setItem('inv_kind_seen', 'event'); } catch (e) {} });
+  // Neither event exists, so nothing replaces what the splash starts with.
+  await seedFakeFirebase(page, { store: { events: {} } });
+  await page.goto('/invite.html?event=seen');
+  await expect(page.locator('#splash .splash-title')).toHaveText('دعوة فعالية');
+  await page.goto('/invite.html?event=never');
+  await expect(page.locator('#splash .splash-title')).toHaveText('دعوات');
+  await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/logo.svg');
 });
 
 test('a date an organizer typed as free text is shown as typed, never dropped', async ({ page }) => {

@@ -136,6 +136,22 @@ function slugProblem(s) {
   return '';
 }
 
+// The kinds of event an organizer picks when creating one: drives the
+// invitation's opening picture/title, the example in the name field, and the
+// colour a new event starts with (the same ones as the sample invitation —
+// the owner can change it).
+// invite.html's inline splash script keeps its own copy of the titles (it
+// runs before this file loads). Events saved before this existed have no
+// `type` and are treated as weddings, as they always were.
+const EVENT_TYPES = {
+  wedding:    { label: 'زفاف',   example: 'زفاف حسن وفاطمة',          theme: 'gold' },
+  graduation: { label: 'تخرج',   example: 'حفل تخرج دفعة 2026',        theme: 'sapphire' },
+  event:      { label: 'فعالية', example: 'ملتقى ريادة الأعمال 2026', theme: 'emerald' },
+};
+function eventTypeOf(ev) {
+  return ev && Object.prototype.hasOwnProperty.call(EVENT_TYPES, ev.type) ? ev.type : 'wedding';
+}
+
 // A link name from the event's own name, so every event gets a readable link
 // without the owner typing one: Arabic letters spelled in English (Arabic has
 // no written short vowels, so "حلا" becomes "hla" — the owner can change it),

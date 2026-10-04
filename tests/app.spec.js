@@ -417,6 +417,7 @@ test('the new-event form has a cancel button that closes it and clears what was 
   await expect(page.getByRole('button', { name: 'إنشاء', exact: true })).toBeVisible();
   await expect(page.locator('#create-cancel-btn')).toHaveText('إلغاء');
 
+  await page.getByRole('radio', { name: 'زفاف' }).click();
   await page.locator('#ev-name').fill('عرس تجريبي');
   await expect(page.locator('label[for="ev-date"]')).toHaveText('تاريخ المناسبة');
   await page.locator('#ev-date').fill('2026-12-01');
@@ -446,10 +447,48 @@ test('cancelling an untouched form just closes it, and creating an event still w
   await expect(page.locator('#create-form')).toBeHidden();
 
   await page.locator('#create-toggle-btn').click();
+  await page.getByRole('radio', { name: 'زفاف' }).click();
   await page.locator('#ev-name').fill('عرس حقيقي');
   await page.getByRole('button', { name: 'إنشاء', exact: true }).click();
   // A created event opens its own dashboard.
   await expect(page).toHaveURL(/event\.html\?id=/);
+});
+
+test('creating an event needs its kind; the kind and its starting colour are saved, and the name example follows it', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: {} } });
+  const alerts = [];
+  page.on('dialog', (d) => { alerts.push(d.message()); d.accept(); });
+  await page.goto('/app.html');
+  await page.locator('#create-toggle-btn').click();
+  await expect(page.locator('#ev-type-picker .type-btn.on')).toHaveCount(0);
+  // Until a kind is picked, the example cycles through the kinds.
+  await expect(page.locator('#ev-name')).toHaveAttribute('placeholder', /حفل تخرج دفعة 2026/, { timeout: 6000 });
+
+  await page.locator('#ev-name').fill('تخرج نورة');
+  await page.getByRole('button', { name: 'إنشاء', exact: true }).click();
+  await expect.poll(() => alerts.length).toBe(1);
+  expect(alerts[0]).toContain('اختر نوع المناسبة');
+  await expect(page).toHaveURL(/app\.html/);
+
+  await page.getByRole('radio', { name: 'تخرج' }).click();
+  await expect(page.getByRole('radio', { name: 'تخرج' })).toHaveAttribute('aria-checked', 'true');
+  await expect(page.locator('#ev-name')).toHaveAttribute('placeholder', 'اسم المناسبة (مثال: حفل تخرج دفعة 2026)');
+  // The page moves on to the new dashboard (and the fake store resets) as soon
+  // as the event is saved, so the saved event is copied into sessionStorage,
+  // which survives that move.
+  await page.evaluate(() => {
+    const orig = window._fsFns.runTransaction;
+    window._fsFns.runTransaction = async (...args) => {
+      const r = await orig(...args);
+      sessionStorage.setItem('__savedEvents', JSON.stringify(Object.values(window.__fakeFirebase.store.events || {})));
+      return r;
+    };
+  });
+  await page.getByRole('button', { name: 'إنشاء', exact: true }).click();
+  await page.waitForURL(/event\.html\?id=/);
+  const saved = JSON.parse(await page.evaluate(() => sessionStorage.getItem('__savedEvents')));
+  expect(saved.map(e => ({ type: e.type, theme: e.theme }))).toEqual([{ type: 'graduation', theme: 'sapphire' }]);
 });
 
 test('a refresh button forces a real reload — no address bar to pull down on, installed as a PWA', async ({ page }) => {
@@ -502,6 +541,7 @@ test('the create-event button shows it is working, and Enter on the keyboard sub
   await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: {} } });
   await page.goto('/app.html');
   await page.locator('#create-toggle-btn').click();
+  await page.getByRole('radio', { name: 'زفاف' }).click();
   await page.locator('#ev-name').fill('زفاف تجريبي');
   const state = await page.evaluate(() => {
     createNewEvent();
@@ -513,6 +553,7 @@ test('the create-event button shows it is working, and Enter on the keyboard sub
 
   await page.goto('/app.html');
   await page.locator('#create-toggle-btn').click();
+  await page.getByRole('radio', { name: 'زفاف' }).click();
   await page.locator('#ev-name').fill('زفاف ثاني');
   await page.locator('#ev-venue').fill('الرياض');
   await page.locator('#ev-venue').press('Enter');
