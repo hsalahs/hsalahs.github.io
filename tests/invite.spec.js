@@ -345,6 +345,28 @@ test('before the event loads, a real invitation shows the kind this device saw l
   await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/logo.svg');
 });
 
+test('the invitation shows the kind of event above its name and the owner\'s welcome line (or the kind\'s default)', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: {
+    e1: { name: 'ملتقى الرواد', type: 'event', date: '2026-10-29', venue: 'الرياض', theme: 'emerald', welcomeMessage: 'نتشرف بحضوركم\nفي ملتقى الرواد' },
+    e2: { name: 'زفاف قديم', date: '2026-10-29', venue: 'جدة', theme: 'gold' },
+  } } });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card .inv-kind')).toHaveText('دعوة فعالية');
+  await expect(page.locator('#card .inv-msg')).toHaveText('نتشرف بحضوركم\nفي ملتقى الرواد');
+  await page.goto('/invite.html?event=e2');
+  await expect(page.locator('#card .inv-kind')).toHaveText('دعوة زفاف');
+  await expect(page.locator('#card .inv-msg')).toHaveText('يسعدنا حضوركم ومشاركتنا فرحتنا 🤍');
+});
+
+test('the sample graduation invitation shows the graduation title and welcome', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: {} } });
+  await page.goto('/invite.html?demo=1&type=graduation');
+  await expect(page.locator('#card .inv-kind')).toHaveText('دعوة حفل تخرج');
+  await expect(page.locator('#card .inv-msg')).toContainText('فرحة التخرج');
+});
+
 test('a date an organizer typed as free text is shown as typed, never dropped', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { store: { events: { e1: { name: 'حفل', date: 'قريبًا', venue: 'الرياض', theme: 'gold' } } } });

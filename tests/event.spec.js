@@ -1151,6 +1151,44 @@ test('a VIP guest\'s card is drawn in the dark VIP design with a gold badge; a n
   expect(vip.badge[2]).toBeLessThan(vip.badge[0]);
 });
 
+test('the invite link\'s share button opens a WhatsApp preview built from the event; the welcome line is editable, saved and sent via wa.me', async ({ page }) => {
+  await page.addInitScript(() => { window.__opened = []; window.open = (u) => { window.__opened.push(u); return null; }; });
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]),
+    events: { e1: { ...EVENT, name: 'حفل تخرج نورة', type: 'graduation', date: '2026-12-20', venue: 'الدمام', mapsLink: 'https://maps.example/x', slug: 'noura-grad' } } } });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#invite-link')).toHaveValue(/\/noura-grad$/);
+  await page.locator('#invite-link').locator('xpath=..').getByRole('button', { name: 'مشاركة' }).click();
+  const modal = page.locator('#share-modal');
+  await expect(modal).toBeVisible();
+  const preview = modal.locator('#share-preview');
+  await expect(preview).toContainText('🎓 دعوة حفل تخرج ✨');
+  await expect(preview.locator('b').first()).toHaveText('🎓 دعوة حفل تخرج ✨');   // *…* drawn bold
+  await expect(preview).toContainText('الحفل: حفل تخرج نورة');
+  await expect(preview).toContainText('التاريخ: الأحد 20 ديسمبر 2026');
+  await expect(preview).toContainText('المكان: الدمام');
+  await expect(preview).toContainText('الموقع: https://maps.example/x');
+  await expect(preview).toContainText('يسعدنا حضوركم ومشاركتنا فرحة التخرج');
+  await expect(preview).toContainText('/noura-grad');
+  await expect(modal.locator('#share-welcome')).toHaveAttribute('maxlength', '400');
+
+  await modal.locator('#share-welcome').fill('حياكم الله في حفل تخرج نورة');
+  await expect(preview).toContainText('حياكم الله في حفل تخرج نورة');
+  await expect(modal.locator('#share-count')).toHaveText('27 / 400');
+  await modal.getByRole('button', { name: /مشاركة عبر الواتساب/ }).click();
+  const opened = await page.evaluate(() => window.__opened);
+  expect(opened).toHaveLength(1);
+  expect(opened[0].startsWith('https://wa.me/?text=')).toBe(true);
+  const text = decodeURIComponent(opened[0].split('text=')[1]);
+  expect(text.split('\n')[0]).toBe('*🎓 دعوة حفل تخرج ✨*');
+  expect(text).toContain('حياكم الله في حفل تخرج نورة');
+  expect(text.trim().endsWith('/noura-grad')).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.welcomeMessage)).toBe('حياكم الله في حفل تخرج نورة');
+
+  await page.keyboard.press('Escape');
+  await expect(modal).toBeHidden();
+});
+
 test('the owner can change the event\'s kind in the edit card; an event saved before kinds existed shows as a wedding', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]), events: { e1: { ...EVENT, slug: '' } } } });

@@ -111,6 +111,11 @@
   @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
   h1 { font-family:'Playfair Display',serif; color:var(--gold); font-size:24px; font-weight:700; margin-bottom:6px; letter-spacing:0.3px; }
   .sub { color:var(--text-soft); font-size:12.5px; margin-bottom:24px; }
+  /* The kind of event above its name, and the owner's welcome line (the same
+     one they share on WhatsApp) under the date. */
+  .inv-kind { font-size:12px; letter-spacing:1px; color:var(--gold); opacity:0.85; margin-bottom:6px; }
+  .inv-msg { margin:18px 4px 4px; padding:16px 16px 14px; border-radius:14px; background:rgba(var(--accent-rgb),0.06); border:1px solid rgba(var(--accent-rgb),0.18); color:var(--text-main); font-size:14.5px; line-height:1.9; white-space:pre-line; overflow-wrap:anywhere; position:relative; }
+  .inv-msg::before { content:'❝'; position:absolute; top:-11px; right:14px; font-size:18px; line-height:1; color:var(--gold); }
   .gold-line { width:56px; height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent); margin:22px auto; }
   .maps-link { display:inline-block; color:var(--gold); font-size:12.5px; text-decoration:none; border:1px solid rgba(var(--accent-rgb),0.4); border-radius:20px; padding:7px 16px; margin-bottom:16px; }
   .countdown { font-size:12.5px; color:var(--gold); margin-bottom:16px; letter-spacing:0.3px; }
@@ -254,6 +259,7 @@ const DEMO_EVENT = demoKind ? {
   date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
   venue: DEMO_KINDS[demoKind].venue,
   theme: DEMO_KINDS[demoKind].theme,
+  type: demoKind,
 } : null;
 // localStorage can throw (Safari private browsing, or a browser policy
 // blocking storage entirely) — this runs as the very first thing in this
@@ -310,9 +316,11 @@ function startCountdown(eventData) {
 function renderForm(eventData) {
   card.innerHTML = `
     <div class="ornament">✦</div>
+    <div class="inv-kind">${escapeHtml(EVENT_TYPES[eventTypeOf(eventData)].title)}</div>
     <h1>${escapeHtml(eventData.name)}</h1>
     <div class="sub">${[formatEventDate(eventData.date), eventData.venue].filter(Boolean).map(escapeHtml).join(' · ')}</div>
     ${eventInfoHtml(eventData)}
+    <div class="inv-msg">${escapeHtml(welcomeOf(eventData))}</div>
     <div class="gold-line"></div>
     <input type="text" id="g-name" placeholder="الاسم الكامل" onkeydown="if(event.key==='Enter') submitRequest()">
     <button class="btn" onclick="submitRequest()">تأكيد الحضور</button>
