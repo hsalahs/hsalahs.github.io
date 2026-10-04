@@ -136,6 +136,36 @@ function slugProblem(s) {
   return '';
 }
 
+// A link name from the event's own name, so every event gets a readable link
+// without the owner typing one: Arabic letters spelled in English (Arabic has
+// no written short vowels, so "حلا" becomes "hla" — the owner can change it),
+// English letters and digits kept, everything else a dash. Always passes
+// slugProblem().
+const SLUG_LETTERS = {
+  'ا': 'a', 'أ': 'a', 'إ': 'e', 'آ': 'a', 'ب': 'b', 'ت': 't', 'ث': 'th', 'ج': 'j', 'ح': 'h', 'خ': 'kh',
+  'د': 'd', 'ذ': 'th', 'ر': 'r', 'ز': 'z', 'س': 's', 'ش': 'sh', 'ص': 's', 'ض': 'd', 'ط': 't', 'ظ': 'z',
+  'ع': 'a', 'غ': 'gh', 'ف': 'f', 'ق': 'q', 'ك': 'k', 'ل': 'l', 'م': 'm', 'ن': 'n', 'ه': 'h', 'ة': 'a',
+  'و': 'w', 'ي': 'y', 'ى': 'a', 'ء': '', 'ئ': 'e', 'ؤ': 'o',
+};
+function slugFromName(name) {
+  const words = String(name || '').toLowerCase().split(/\s+/).map(w => {
+    const chars = [...w];
+    return chars.map((c, i) => {
+      const code = c.charCodeAt(0);
+      if (code >= 0x660 && code <= 0x669) return String(code - 0x660);   // Arabic-Indic digits
+      if (/[a-z0-9]/.test(c)) return c;
+      // Inside a word, waw and yaa are usually the long vowels.
+      if (c === 'و' && i > 0) return 'o';
+      if (c === 'ي' && i > 0) return i === chars.length - 1 ? 'i' : 'ee';
+      return c in SLUG_LETTERS ? SLUG_LETTERS[c] : '-';
+    }).join('');
+  });
+  let s = words.join('-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 34).replace(/-$/, '');
+  if (s.length < 3) s = s ? s + '-event' : 'my-event';
+  if (RESERVED_SLUGS.includes(s)) s += '-event';
+  return s;
+}
+
 // Shared bottom toast — the calling page needs its own #toast element and
 // matching CSS (each page's dark theme sets slightly different colors).
 function showToast(msg) {
