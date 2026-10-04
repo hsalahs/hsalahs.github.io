@@ -156,6 +156,53 @@ test('the admin sees every account that ever registered, even one with no event'
   await expect(page.locator('#admin-accounts-list')).toContainText('noevent@example.com');
 });
 
+test('each account shows what it has done; the filters narrow the list; tapping one shows only its events', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
+    store: {
+      events: {
+        e1: { name: 'حفل تجربة', ownerUid: 'u1', ownerEmail: 'trial@example.com', paid: false, guestCount: 1, createdAt: { seconds: 3 } },
+        e2: { name: 'حفل مدفوع', ownerUid: 'u2', ownerEmail: 'paid@example.com', paid: true, guestLimit: 100, guestCount: 0, createdAt: { seconds: 2 } },
+      },
+      users: {
+        u1: { email: 'trial@example.com', createdAt: { seconds: 1700000003 } },
+        u2: { email: 'paid@example.com', createdAt: { seconds: 1700000002 } },
+        u3: { email: 'none@example.com', createdAt: { seconds: 1700000001 } },
+      },
+    },
+  });
+  await page.goto('/app.html');
+  await page.locator('#admin-accounts-toggle').click();
+  const row = (email) => page.locator('#admin-accounts-list .acc-row', { hasText: email });
+  await expect(row('trial@example.com').locator('.acc-tag')).toHaveText(['1 مناسبة', 'يجرّب مجانًا']);
+  await expect(row('paid@example.com').locator('.acc-tag')).toHaveText(['1 مناسبة', '✓ مفعّلة (100 ضيف)']);
+  await expect(row('none@example.com').locator('.acc-tag')).toHaveText(['بدون مناسبة']);
+
+  const rows = page.locator('#admin-accounts-list .acc-row');
+  await page.getByRole('button', { name: 'عندهم مناسبة مفعّلة' }).click();
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText('paid@example.com');
+  await page.getByRole('button', { name: 'يجرّبون' }).click();
+  await expect(rows).toContainText('trial@example.com');
+  await page.getByRole('button', { name: 'بدون مناسبة' }).click();
+  await expect(rows).toContainText('none@example.com');
+  await page.getByRole('button', { name: 'الكل', exact: true }).click();
+  await expect(rows).toHaveCount(3);
+
+  await expect(page.locator('#events-list .event-card')).toHaveCount(2);
+  await row('paid@example.com').locator('.event-name').click();
+  await expect(page.locator('#owner-filter-bar')).toBeVisible();
+  await expect(page.locator('#owner-filter-email')).toHaveText('paid@example.com');
+  await expect(page.locator('#events-list .event-card')).toHaveCount(1);
+  await expect(page.locator('#events-list')).toContainText('حفل مدفوع');
+  await row('none@example.com').locator('.event-name').click();
+  await expect(page.locator('#events-list')).toContainText('هذا الحساب ما عنده مناسبات');
+  await page.locator('#owner-filter-bar').getByRole('button', { name: 'عرض الكل' }).click();
+  await expect(page.locator('#owner-filter-bar')).toBeHidden();
+  await expect(page.locator('#events-list .event-card')).toHaveCount(2);
+});
+
 test('the accounts list is collapsed by default and only read when opened — the badge comes from a cheap count', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
