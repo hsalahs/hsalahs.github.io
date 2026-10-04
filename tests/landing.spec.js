@@ -198,3 +198,16 @@ test('the link-preview image is 1200x630 and small enough for WhatsApp', () => {
   }
   expect([w, h]).toEqual([1200, 630]);
 });
+
+// Tools that read the page as plain text (search engines, link previews,
+// audits) keep <script> contents but drop HTML comments — a code comment at
+// the top of <body> became the first words they saw.
+test('read as plain text, the page starts with the product, with no code or code comments before it', async () => {
+  const fs = require('fs'); const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const body = src.slice(src.indexOf('<body')).replace(/<!--[\s\S]*?-->/g, '');
+  const text = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  expect(text.indexOf('دعوة أنيقة لكل ضيف')).toBeGreaterThan(-1);
+  expect(text.slice(0, text.indexOf('دعوة أنيقة لكل ضيف'))).not.toMatch(/[{}();=]|\/\//);
+  for (const m of body.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)) expect(m[1]).not.toMatch(/^\s*\/\//m);
+});
