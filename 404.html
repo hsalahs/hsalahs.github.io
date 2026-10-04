@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>دعوات</title>
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32">
+<!-- GitHub Pages serves this for any path that isn't a real file. A readable
+     invitation link (da3wt.com/hala-turki) has no file of its own, so it
+     lands here and is forwarded to the invitation page, which looks the name
+     up in slugs/{name}. Same name pattern as SLUG_RE in utils.js and the
+     slugs rule in firestore.rules. Anything else gets a plain "not found". -->
+<script>
+(function () {
+  var name = decodeURIComponent(location.pathname).replace(/^\/+|\/+$/g, '').toLowerCase();
+  if (/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(name)) location.replace('/invite.html?s=' + encodeURIComponent(name));
+  else document.documentElement.className = 'show';
+})();
+</script>
+<style>
+  html:not(.show) body { visibility:hidden; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:#0A0A0A; color:#FAF8F4; font-family:system-ui, sans-serif; text-align:center; }
+  h1 { color:#E0BC7A; font-size:22px; margin:0 0 10px; }
+  p { color:#B8B4AC; font-size:14px; margin:0 0 18px; }
+  a { color:#1a1400; background:linear-gradient(135deg,#C99B4A,#E0BC7A); padding:10px 22px; border-radius:10px; text-decoration:none; font-weight:700; }
+</style>
+</head>
+<body>
+  <div>
+    <h1>الصفحة غير موجودة</h1>
+    <p>تأكد من الرابط، أو ارجع للصفحة الرئيسية.</p>
+    <a href="/">الصفحة الرئيسية</a>
+  </div>
+</body>
+</html>

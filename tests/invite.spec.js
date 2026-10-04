@@ -330,3 +330,35 @@ test('a date an organizer typed as free text is shown as typed, never dropped', 
   await page.goto('/invite.html?event=e1');
   await expect(page.locator('#card .sub')).toContainText('قريبًا');
 });
+
+test('a readable link (?s=name) finds its event through slugs/ and keeps the short address', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: {
+    events: { e1: { name: 'زواج حلا وتركي', ownerUid: 'u1', date: '2026-12-01', venue: 'الرياض', theme: 'gold' } },
+    slugs: { 'hala-turki': { eventId: 'e1', ownerUid: 'u1', createdAt: 'x' } },
+  } });
+  await page.goto('/invite.html?s=hala-turki');
+  await expect(page.locator('body')).toContainText('زواج حلا وتركي');
+  await expect(page).toHaveURL(/\/hala-turki$/);
+});
+
+test('an unknown readable link says so', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: {}, slugs: {} } });
+  await page.goto('/invite.html?s=no-such-name');
+  await expect(page.locator('body')).toContainText('هذا الرابط غير موجود');
+});
+
+// GitHub Pages serves 404.html for any path without a file; the local test
+// server doesn't, so the route hands the page 404.html for the short path.
+test('404.html forwards a readable link like /hala-turki to the invitation page, and shows "not found" for anything else', async ({ page }) => {
+  const fs = require('fs'); const path = require('path');
+  const body = fs.readFileSync(path.join(__dirname, '..', '404.html'), 'utf8');
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: {}, slugs: {} } });
+  await page.route(/\/(hala-turki|some\/deep\.path)$/, (r) => r.fulfill({ status: 404, contentType: 'text/html', body }));
+  await page.goto('/hala-turki');
+  await page.waitForURL(/invite\.html\?s=hala-turki/);
+  await page.goto('/some/deep.path');
+  await expect(page.locator('h1')).toHaveText('الصفحة غير موجودة');
+});

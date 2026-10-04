@@ -166,7 +166,11 @@
 <script src="format.js"></script>
 <script>
 const params = new URLSearchParams(window.location.search);
-const eventId = params.get('event');
+// ?event=<id> is the original link; ?s=<name> comes from a readable link like
+// da3wt.com/hala-turki (404.html forwards it here) and is looked up in
+// slugs/{name} in init().
+let eventId = params.get('event');
+const slugParam = (params.get('s') || '').toLowerCase();
 const card = document.getElementById('card');
 // ?demo=1 — a sample invitation for prospective customers, opened from the
 // landing page. It is the real invitation page with a made-up event: nothing
@@ -654,8 +658,23 @@ function watchStatus() {
 }
 
 async function init() {
-  if (!eventId) { card.innerHTML = '<div class="status-msg">⚠️ رابط غير صحيح</div>'; return; }
   const { doc, getDoc } = window._fsFns;
+  if (!eventId && slugParam) {
+    try {
+      const s = await getDoc(doc(window._db, 'slugs', slugParam));
+      if (!s.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذا الرابط غير موجود</div>'; return; }
+      eventId = s.data().eventId;
+      try { myReqId = localStorage.getItem('inv_reqid_' + eventId) || null; } catch (e) {}
+      // Keep the readable link in the address bar (a reload goes through 404.html again).
+      try { history.replaceState(null, '', '/' + slugParam); } catch (e) {}
+    } catch (e) {
+      console.error(e);
+      card.innerHTML = '<div class="status-msg" id="retry-msg" style="cursor:pointer">⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية</div>';
+      document.getElementById('retry-msg').onclick = init;
+      return;
+    }
+  }
+  if (!eventId) { card.innerHTML = '<div class="status-msg">⚠️ رابط غير صحيح</div>'; return; }
   let snap;
   try {
     snap = await getDoc(doc(window._db, 'events', eventId));

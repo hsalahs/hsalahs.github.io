@@ -271,6 +271,30 @@ await check('a door device with a session can read it (the code is 5678 by now, 
 await check('a door device cannot write it', () => assertFails(anon('devR').doc('events/e1/roster/list').set(roster)));
 await check('the owner can delete it (event deletion)', () => assertSucceeds(owner().doc('events/e1/roster/list').delete()));
 
+console.log('\nreadable invitation links (slugs):');
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  await ctx.firestore().doc('events/sl1').set({ name: 'S', ownerUid: 'owner1', paid: false, guestCount: 0 });
+  await ctx.firestore().doc('events/sl2').set({ name: 'T', ownerUid: 'other9', paid: false, guestCount: 0 });
+});
+const slug = (eventId, uid = 'owner1') => ({ eventId, ownerUid: uid, createdAt: 'x' });
+await check('the owner can claim a free name for their own event', () => assertSucceeds(owner().doc('slugs/hala-turki').set(slug('sl1'))));
+await check('anyone can read a name (the invite page resolves it before sign-in)', () => assertSucceeds(unauth().doc('slugs/hala-turki').get()));
+await check('nobody can list the names', () => assertFails(unauth().collection('slugs').get()));
+await check('a name already held cannot be taken over', () => assertFails(user('other9', 'o9@example.com').doc('slugs/hala-turki').set(slug('sl2', 'other9'))));
+await check('...not even by the same owner re-writing it', () => assertFails(owner().doc('slugs/hala-turki').set(slug('sl1'))));
+await check('a name cannot point at someone else\'s event', () => assertFails(owner().doc('slugs/stolen-name').set(slug('sl2'))));
+await check('ownerUid must be the signed-in user', () => assertFails(owner().doc('slugs/fake-owner').set(slug('sl1', 'other9'))));
+await check('capital letters are rejected', () => assertFails(owner().doc('slugs/Hala').set(slug('sl1'))));
+await check('Arabic is rejected', () => assertFails(owner().doc('slugs/حلا-تركي').set(slug('sl1'))));
+await check('too short is rejected', () => assertFails(owner().doc('slugs/ab').set(slug('sl1'))));
+await check('a leading dash is rejected', () => assertFails(owner().doc('slugs/-hala').set(slug('sl1'))));
+await check('reserved words are rejected', () => assertFails(owner().doc('slugs/app').set(slug('sl1'))));
+await check('extra fields are rejected', () => assertFails(owner().doc('slugs/extra-field').set({ ...slug('sl1'), paid: true })));
+await check('unauthenticated: cannot claim', () => assertFails(unauth().doc('slugs/no-auth').set(slug('sl1'))));
+await check('another user cannot delete it', () => assertFails(user('other9', 'o9@example.com').doc('slugs/hala-turki').delete()));
+await check('the owner can release it', () => assertSucceeds(owner().doc('slugs/hala-turki').delete()));
+await check('...and then it can be claimed again', () => assertSucceeds(owner().doc('slugs/hala-turki').set(slug('sl1'))));
+
 await testEnv.cleanup();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -138,6 +138,25 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Readable invitation links (da3wt.com/hala-turki): one doc per name,
+    // pointing at its event. Public to read (the invitation page resolves the
+    // name before anyone signs in). First come, first served: only the
+    // event's own owner can claim a free name — "create" never overwrites, so
+    // a name someone holds can't be taken — and only for an event they own.
+    // Same pattern and reserved words as SLUG_RE / RESERVED_SLUGS in utils.js.
+    match /slugs/{slug} {
+      allow get: if true;
+      allow create: if request.auth != null &&
+        slug.matches('^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$') &&
+        !(slug in ['index', 'app', 'event', 'invite', 'scan', 'guide', 'icons', 'tests', 'sitemap', 'robots',
+                   'manifest', 'sw', 'utils', 'format', 'admin', 'login', 'www', 'api', '404']) &&
+        request.resource.data.keys().hasOnly(['eventId', 'ownerUid', 'createdAt']) &&
+        request.resource.data.ownerUid == request.auth.uid &&
+        request.resource.data.eventId is string &&
+        get(/databases/$(database)/documents/events/$(request.resource.data.eventId)).data.ownerUid == request.auth.uid;
+      allow delete: if request.auth != null && (isAdmin() || resource.data.ownerUid == request.auth.uid);
+    }
+
     match /events/{eventId} {
       // Public on purpose: invite.html (guests) and scan.html (door staff)
       // need the name/date/venue/theme without signing in. Nothing secret

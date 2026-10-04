@@ -123,6 +123,19 @@ function setButtonBusy(btn, label) {
   return () => { btn.disabled = false; btn.textContent = original; };
 }
 
+// Readable event links (da3wt.com/hala-turki). Same pattern and reserved
+// words in firestore.rules (slugs/{slug}) and 404.html — keep the three in step.
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+const RESERVED_SLUGS = ['index', 'app', 'event', 'invite', 'scan', 'guide', 'icons', 'tests', 'sitemap', 'robots',
+  'manifest', 'sw', 'utils', 'format', 'admin', 'login', 'www', 'api', '404'];
+function normalizeSlug(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, '-'); }
+// '' when fine, otherwise the reason in Arabic.
+function slugProblem(s) {
+  if (!SLUG_RE.test(s)) return 'الرابط بالإنجليزي والأرقام والشرطة (-) فقط، من 3 إلى 40 حرف';
+  if (RESERVED_SLUGS.includes(s)) return 'هذا الاسم محجوز، جرّب غيره';
+  return '';
+}
+
 // Shared bottom toast — the calling page needs its own #toast element and
 // matching CSS (each page's dark theme sets slightly different colors).
 function showToast(msg) {

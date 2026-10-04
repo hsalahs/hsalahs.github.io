@@ -405,7 +405,7 @@ function renderEvents(events, showOwner, changedIds) {
       <div class="event-actions">
         ${showOwner && !ev.paid ? `<button class="btn small" style="margin:0; flex:1;" onclick="quickActivatePayment('${ev.id}')">${ic('check', 14)} تفعيل</button>` : ''}
         <a class="btn ghost small" style="text-decoration:none; margin:0; flex:1; text-align:center;" href="event.html?id=${ev.id}">فتح</a>
-        <button class="btn ghost small" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteEvent('${ev.id}', '${escapeForJsAttr(ev.name)}', '${ev.ownerUid}')" aria-label="حذف">${ic('trash-2', 15)}</button>
+        <button class="btn ghost small" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteEvent('${ev.id}', '${escapeForJsAttr(ev.name)}', '${ev.ownerUid}', '${escapeForJsAttr(ev.slug || '')}')" aria-label="حذف">${ic('trash-2', 15)}</button>
       </div>
     </div>
   `).join('');
@@ -435,7 +435,7 @@ async function loadEventStats(ev) {
   }
 }
 
-async function deleteEvent(eventId, name, ownerUid) {
+async function deleteEvent(eventId, name, ownerUid, slug) {
   if (!confirm('حذف "' + name + '" نهائيًا؟\n\nراح ينحذف كل الضيوف والطلبات المرتبطة فيها، وما تقدر ترجعها بعدين.')) return;
   const { collection, getDocs, deleteDoc, doc, runTransaction } = window._fsFns;
   try {
@@ -445,7 +445,9 @@ async function deleteEvent(eventId, name, ownerUid) {
       ...guestsSnap.docs.map(d => deleteDoc(d.ref)),
       ...requestsSnap.docs.map(d => deleteDoc(d.ref)),
       // Before the event doc itself: the rules check ownership through it.
-      deleteDoc(doc(window._db, 'events', eventId, 'roster', 'list'))
+      deleteDoc(doc(window._db, 'events', eventId, 'roster', 'list')),
+      // Frees the readable link so it can be used again.
+      ...(slug ? [deleteDoc(doc(window._db, 'slugs', slug))] : [])
     ]);
     await deleteDoc(doc(window._db, 'events', eventId));
 
