@@ -76,7 +76,7 @@ test('a guest name containing a backslash and a quote does not break the delete 
   let dialogMessage = '';
   page.on('dialog', (d) => { dialogMessage = d.message(); d.accept(); });
   await page.locator('.guest-item .more-btn').click();
-  await page.locator('.guest-item .del-btn').click();
+  await page.locator('#guest-sheet .gs-del').click();
 
   expect(dialogMessage).toContain(trickyName);
   await expect(page.locator('.guest-item')).toHaveCount(0);
@@ -175,7 +175,7 @@ test('deleting a guest frees up their slot, so the customer can add a replacemen
 
   page.on('dialog', d => d.accept());
   await page.locator('.guest-item .more-btn').click();
-  await page.locator('.guest-item .del-btn').click();
+  await page.locator('#guest-sheet .gs-del').click();
   await expect(page.locator('.guest-item')).toHaveCount(0);
 
   await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.guestCount)).toBe(0);
@@ -199,7 +199,7 @@ test('deleting a guest who already checked in also takes them off the door count
   page.on('dialog', d => d.accept());
   const row = page.locator('.guest-item', { hasText: 'أحمد' });
   await row.locator('.more-btn').click();
-  await row.locator('.del-btn').click();
+  await page.locator('#guest-sheet .gs-del').click();
   await expect(page.locator('.guest-item')).toHaveCount(1);
   await expect.poll(() => counts(page)).toEqual([1, 0]);
 });
@@ -1083,6 +1083,42 @@ test('marking a guest VIP from the ⋮ menu saves it, shows the badge, and can b
   await page.getByRole('button', { name: /إلغاء تمييز VIP/ }).click();
   await expect.poll(vip).toBe(false);
   await expect(page.locator('.guest-item .vip-badge')).toHaveCount(0);
+});
+
+test('the guest ⋮ opens a sheet with the guest\'s name, code and status; cancel, the backdrop and Escape close it', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([
+    { id: 'WD-1', name: 'أحمد', scanned: true, vip: true }, { id: 'WD-2', name: 'سارة', scanned: false },
+  ]) });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('.guest-item')).toHaveCount(2);
+  const sheet = page.locator('#guest-sheet');
+  await expect(sheet).toBeHidden();
+
+  await page.locator('.guest-item', { hasText: 'أحمد' }).locator('.more-btn').click();
+  await expect(sheet).toBeVisible();
+  await expect(sheet.locator('#gs-name')).toHaveText('أحمد ★ VIP');
+  await expect(sheet.locator('#gs-sub')).toHaveText('الكود WD-1 · حضر');
+  await expect(sheet.locator('.gs-vip')).toContainText('إلغاء تمييز VIP');
+  await sheet.getByRole('button', { name: 'إلغاء', exact: true }).click();
+  await expect(sheet).toBeHidden();
+
+  await page.locator('.guest-item', { hasText: 'سارة' }).locator('.more-btn').click();
+  await expect(sheet.locator('#gs-sub')).toHaveText('الكود WD-2 · لم يحضر بعد');
+  await expect(sheet.locator('.gs-vip')).toContainText('تمييز كـ VIP');
+  await page.mouse.click(10, 10);
+  await expect(sheet).toBeHidden();
+
+  await page.locator('.guest-item', { hasText: 'سارة' }).locator('.more-btn').click();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  // Declining the delete confirm keeps the guest.
+  page.once('dialog', d => d.dismiss());
+  await page.locator('.guest-item', { hasText: 'سارة' }).locator('.more-btn').click();
+  await sheet.locator('.gs-del').click();
+  await expect(sheet).toBeHidden();
+  await expect(page.locator('.guest-item')).toHaveCount(2);
 });
 
 test('a VIP guest\'s card is drawn in the dark VIP design with a gold badge; a normal guest\'s stays light', async ({ page }) => {
