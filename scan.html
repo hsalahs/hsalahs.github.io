@@ -89,6 +89,8 @@
   .result-card.duplicate { background:linear-gradient(135deg,rgba(244,67,54,0.12),rgba(244,67,54,0.04)); border:1px solid rgba(244,67,54,0.3); }
   .result-card.denied { background:linear-gradient(135deg,rgba(244,67,54,0.12),rgba(244,67,54,0.04)); border:1px solid rgba(244,67,54,0.3); }
   .result-icon { font-size:48px; margin-bottom:12px; }
+  /* A VIP guest (marked on the dashboard) gets a clear flag at the door. */
+  .vip-flag { display:inline-block; margin:0 auto 8px; padding:5px 16px; border-radius:99px; font-weight:700; font-size:16px; letter-spacing:1px; color:#1a1400; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); }
   .result-name { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:var(--gold); margin-bottom:8px; }
   .result-status { font-size:14px; color:#B8B4AC; }
   .result-status.ok { color:#4CAF50; }
@@ -187,11 +189,13 @@ setTimeout(() => {
 
       <div class="result-card allowed" id="result-allowed">
         <div class="result-icon">✅</div>
+        <div class="vip-flag" id="result-vip-ok" style="display:none;">★ VIP</div>
         <div class="result-name" id="result-name-ok"></div>
         <div class="result-status ok">مسموح بالدخول</div>
       </div>
       <div class="result-card duplicate" id="result-duplicate">
         <div class="result-icon">🚫</div>
+        <div class="vip-flag" id="result-vip-dup" style="display:none;">★ VIP</div>
         <div class="result-name" id="result-name-dup"></div>
         <div class="result-status dup">تم استخدام هذه الدعوة مسبقًا!</div>
       </div>
@@ -910,12 +914,13 @@ async function handleScan(raw) {
   const { doc, runTransaction } = window._fsFns;
   const gRef = doc(window._db, 'events', eventId, 'guests', val);
   const eventRef = doc(window._db, 'events', eventId);
-  let outcome, guestName;
+  let outcome, guestName, guestVip = false;
   try {
     outcome = await runTransaction(window._db, async (tx) => {
       const snap = await tx.get(gRef);
       if (!snap.exists()) return 'missing';
       guestName = snap.data().name;
+      guestVip = !!snap.data().vip;
       if (snap.data().scanned) return 'dup';
       // The live door counter (events/{id}.scannedCount) is bumped in this
       // same transaction, so it can never drift from the guest flip it
@@ -943,6 +948,7 @@ async function handleScan(raw) {
   }
   if (outcome === 'ok') {
     document.getElementById('result-name-ok').textContent = guestName;
+    document.getElementById('result-vip-ok').style.display = guestVip ? 'inline-block' : 'none';
     document.getElementById('result-allowed').style.display = 'block';
     status.textContent = '✅ مسموح بالدخول';
     playBeep(true);
@@ -957,6 +963,7 @@ async function handleScan(raw) {
     if (document.getElementById('offline-list-section').style.display === 'block') renderOfflineList();
   } else if (outcome === 'dup') {
     document.getElementById('result-name-dup').textContent = guestName;
+    document.getElementById('result-vip-dup').style.display = guestVip ? 'inline-block' : 'none';
     document.getElementById('result-duplicate').style.display = 'block';
     status.textContent = '🚫 تم استخدام هذه الدعوة مسبقًا';
     playBeep(false);

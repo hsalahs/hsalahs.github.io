@@ -916,3 +916,22 @@ test('the names list comes from the dashboard\'s roster document when there is o
   await expect(list.locator('div', { hasText: 'من القائمة | المجمّعة' })).toContainText('✓ دخل');
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 2');
 });
+
+test('scanning a VIP guest shows "★ VIP" on the result; a normal guest shows no flag', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: counterStore({
+    'WD-V': { name: 'ضيف مهم', id: 'WD-V', scanned: false, vip: true },
+    'WD-N': { name: 'ضيف عادي', id: 'WD-N', scanned: false },
+  }, 0) });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.locator('#manual-code').fill('WD-V');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+  await expect(page.locator('#result-allowed')).toBeVisible();
+  await expect(page.locator('#result-vip-ok')).toBeVisible();
+  await page.getByRole('button', { name: /مسح جديد/ }).click();
+  await page.locator('#manual-code').fill('WD-N');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+  await expect(page.locator('#result-allowed')).toBeVisible();
+  await expect(page.locator('#result-vip-ok')).toBeHidden();
+});

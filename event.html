@@ -167,7 +167,11 @@
   .guest-item .more-btn { background:none; border:1px solid rgba(var(--accent-rgb),0.25); color:var(--gold); font-size:13px; cursor:pointer; padding:3px 8px; border-radius:8px; line-height:1; transition:all 0.2s ease; }
   .guest-item .more-btn:hover { background:rgba(var(--accent-rgb),0.1); }
   .guest-item .more-menu { display:none; position:absolute; top:calc(100% + 6px); left:0; background:var(--bg-1); border:1px solid rgba(var(--accent-rgb),0.3); border-radius:10px; padding:6px; z-index:20; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
-  .guest-item .more-menu.open { display:block; }
+  .guest-item .more-menu.open { display:flex; flex-direction:column; align-items:stretch; gap:6px; }
+  /* VIP guests: gold badge, a faint gold row, and their own card design. */
+  .guest-item.vip { background:linear-gradient(90deg, rgba(var(--accent-rgb),0.10), transparent); }
+  .vip-badge { display:inline-block; font-size:10.5px; font-weight:700; color:#1a1400; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); padding:2px 7px; border-radius:99px; vertical-align:middle; margin-right:4px; white-space:nowrap; }
+  .guest-item .vip-btn { background:transparent; border:1px solid rgba(var(--accent-rgb),0.35); color:var(--gold); font-family:inherit; font-size:12px; padding:6px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; }
   .guest-item .del-btn { background:rgba(244,67,54,0.08); border:1px solid rgba(244,67,54,0.25); color:#F44336; font-size:16px; cursor:pointer; padding:7px 10px; border-radius:8px; transition:all 0.2s ease; }
   .guest-item .del-btn:hover { background:rgba(244,67,54,0.18); border-color:#F44336; }
   #bulk-bar { display:flex; align-items:center; justify-content:space-between; background:rgba(244,67,54,0.08); border:1px solid rgba(244,67,54,0.3); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:13px; color:#ff9d9d; }
@@ -1046,12 +1050,12 @@ function renderGuests() {
     return;
   }
   el.innerHTML = list.map((g, i) => `
-    <div class="guest-item">
+    <div class="guest-item${g.vip ? ' vip' : ''}">
       ${selectionMode
         ? `<input type="checkbox" class="gsel" ${selectedGuestIds.has(g.docId) ? 'checked' : ''} onchange="toggleGuestSelect('${g.docId}', this.checked)">`
         : `<span class="gnum">${i + 1}</span>`}
       <div style="flex:1; min-width:0;">
-        <div class="name">${escapeHtml(g.name)}</div>
+        <div class="name">${escapeHtml(g.name)}${g.vip ? ' <span class="vip-badge">★ VIP</span>' : ''}</div>
         <div class="gid">${escapeHtml(g.id)}</div>
       </div>
       ${selectionMode ? '' : (g.scanned
@@ -1061,6 +1065,7 @@ function renderGuests() {
       <div class="more-wrap">
         <button class="more-btn" onclick="toggleGuestMenu(event)" aria-label="خيارات">${ic('more-vertical', 13)}</button>
         <div class="more-menu">
+          <button class="vip-btn" onclick="toggleGuestVip('${g.docId}')">★ ${g.vip ? 'إلغاء تمييز VIP' : 'تمييز كـ VIP'}</button>
           <button class="del-btn" onclick="deleteGuest('${g.docId}', '${escapeForJsAttr(g.name)}')" aria-label="حذف">${ic('trash-2', 13)}</button>
         </div>
       </div>`}
@@ -1156,6 +1161,20 @@ async function undoGuestAttend(docId, name) {
       tx.update(eventRef, { scannedCount: Math.max(0, (evSnap.data().scannedCount || 0) - 1) });
     });
     showToast('↩️ تم التراجع — ' + name + ' لم يصل');
+  } catch (e) { showErr(e); }
+}
+
+// Marks a guest as VIP (or back): their card is drawn in the dark VIP design
+// and the door scanner shows "★ VIP" when they arrive. A plain owner edit of
+// the guest doc — already allowed by firestore.rules.
+async function toggleGuestVip(docId) {
+  const g = guests.find(x => x.docId === docId);
+  if (!g) return;
+  document.querySelectorAll('.guest-item .more-menu.open').forEach(m => m.classList.remove('open'));
+  const { doc, updateDoc } = window._fsFns;
+  try {
+    await updateDoc(doc(window._db, 'events', eventId, 'guests', docId), { vip: !g.vip });
+    showToast(g.vip ? '✅ ألغينا تمييز ' + g.name : '⭐ ' + g.name + ' صار VIP — حمّل بطاقته من جديد');
   } catch (e) { showErr(e); }
 }
 
@@ -1320,7 +1339,10 @@ function buildGuestCard(guest) {
       c.width = 1000; c.height = 1400;
       const ctx = c.getContext('2d');
 
-      ctx.fillStyle = '#FAFAF8';
+      // VIP guests get a dark card with a double gold frame and a ★ VIP
+      // badge; the QR box stays black on white so it always scans.
+      const vip = !!guest.vip;
+      ctx.fillStyle = vip ? '#0E0C08' : '#FAFAF8';
       ctx.fillRect(0, 0, 1000, 1400);
 
       const glow = ctx.createRadialGradient(500, 530, 60, 500, 530, 520);
@@ -1338,6 +1360,11 @@ function buildGuestCard(guest) {
       ctx.strokeStyle = hexToRgba(GOLD, 0.35);
       ctx.lineWidth = 1.5;
       ctx.strokeRect(42, 42, 916, 1316);
+      if (vip) {
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(30, 30, 940, 1340);
+      }
 
       const titleGrad = ctx.createLinearGradient(300, 0, 700, 0);
       titleGrad.addColorStop(0, GOLD);
@@ -1347,7 +1374,7 @@ function buildGuestCard(guest) {
       ctx.textAlign = 'center';
       fitText(ctx, eventData.name, 500, 118, 820, 58, 28, 'bold %dpx "IBM Plex Sans Arabic", Arial');
 
-      ctx.fillStyle = '#999';
+      ctx.fillStyle = vip ? '#B8B4AC' : '#999';
       ctx.font = '34px "IBM Plex Sans Arabic", Arial';
       ctx.fillText(formatEventDate(eventData.date), 500, 172);
 
@@ -1374,14 +1401,14 @@ function buildGuestCard(guest) {
 
       ctx.drawImage(qr, 220, 272, 560, 560);
 
-      ctx.fillStyle = '#0A0A0A';
+      ctx.fillStyle = vip ? GOLD_LIGHT : '#0A0A0A';
       fitText(ctx, guest.name, 500, 940, 820, 54, 24, 'bold %dpx "IBM Plex Sans Arabic", Arial');
 
       ctx.fillStyle = '#B0AAA0';
       ctx.font = '28px "Playfair Display", Arial';
       ctx.fillText(guest.id, 500, 992);
 
-      drawFadedLine(ctx, 220, 780, 1028, 'rgba(0,0,0,0.18)');
+      drawFadedLine(ctx, 220, 780, 1028, vip ? hexToRgba(GOLD, 0.5) : 'rgba(0,0,0,0.18)');
 
       if (eventData.venue) {
         ctx.fillStyle = GOLD;
@@ -1392,12 +1419,32 @@ function buildGuestCard(guest) {
         ctx.beginPath(); ctx.moveTo(640, 1076); ctx.lineTo(700, 1076); ctx.stroke();
       }
 
-      ctx.fillStyle = '#888';
+      ctx.fillStyle = vip ? '#B8B4AC' : '#888';
       ctx.font = '26px "IBM Plex Sans Arabic", Arial';
       ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1148);
-      ctx.fillStyle = '#666';
+      ctx.fillStyle = vip ? '#8a857a' : '#666';
       ctx.font = '24px "IBM Plex Sans Arabic", Arial';
       ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1200);
+
+      if (vip) {
+        const bw = 190, bh = 58, bx = 500 - bw / 2, by = 1236;
+        const badge = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+        badge.addColorStop(0, GOLD);
+        badge.addColorStop(0.5, GOLD_LIGHT);
+        badge.addColorStop(1, GOLD);
+        ctx.fillStyle = badge;
+        ctx.beginPath();
+        ctx.moveTo(bx + bh / 2, by);
+        ctx.arcTo(bx + bw, by, bx + bw, by + bh, bh / 2);
+        ctx.arcTo(bx + bw, by + bh, bx, by + bh, bh / 2);
+        ctx.arcTo(bx, by + bh, bx, by, bh / 2);
+        ctx.arcTo(bx, by, bx + bw, by, bh / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#1a1400';
+        ctx.font = 'bold 34px "Playfair Display", Arial';
+        ctx.fillText('★ VIP', 500, by + 41);
+      }
 
       drawSparkle(ctx, 92, 92, 16, GOLD);
       drawSparkle(ctx, 908, 92, 16, GOLD);

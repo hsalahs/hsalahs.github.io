@@ -1065,3 +1065,52 @@ test('an invalid link message is left alone by the stuck-loading timer', async (
   await page.clock.runFor(13000);
   await expect(page.locator('#loading-msg')).toContainText('رابط غير صحيح');
 });
+
+test('marking a guest VIP from the ⋮ menu saves it, shows the badge, and can be undone', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]) });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+  const vip = () => page.evaluate(() => window.__fakeFirebase.store['events/e1/guests'].g0.vip);
+
+  await page.locator('.guest-item .more-btn').click();
+  await page.getByRole('button', { name: /تمييز كـ VIP/ }).click();
+  await expect.poll(vip).toBe(true);
+  await expect(page.locator('.guest-item .vip-badge')).toHaveText('★ VIP');
+  await expect(page.locator('.guest-item')).toHaveClass(/vip/);
+
+  await page.locator('.guest-item .more-btn').click();
+  await page.getByRole('button', { name: /إلغاء تمييز VIP/ }).click();
+  await expect.poll(vip).toBe(false);
+  await expect(page.locator('.guest-item .vip-badge')).toHaveCount(0);
+});
+
+test('a VIP guest\'s card is drawn in the dark VIP design with a gold badge; a normal guest\'s stays light', async ({ page }) => {
+  // qrcodejs is a CDN script the test harness blocks; a stand-in draws a
+  // non-blank canvas so the card builder gets past its "QR has ink" check.
+  await page.addInitScript(() => {
+    window.QRCode = function (el) {
+      const c = document.createElement('canvas'); c.width = c.height = 256;
+      const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 256, 256); x.fillStyle = '#fff'; x.fillRect(64, 64, 128, 128);
+      el.appendChild(c);
+    };
+    window.QRCode.CorrectLevel = { H: 2, M: 0, L: 1, Q: 3 };
+  });
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([
+    { id: 'WD-1', name: 'ضيف عادي', scanned: false }, { id: 'WD-2', name: 'ضيف مهم', scanned: false, vip: true },
+  ]) });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('.guest-item')).toHaveCount(2);
+  const sample = (id) => page.evaluate(async (id) => {
+    const c = await buildGuestCard(guests.find(g => g.id === id));
+    const px = (x, y) => Array.from(c.getContext('2d').getImageData(x, y, 1, 1).data.slice(0, 3));
+    return { bg: px(60, 700), badge: px(500, 1250) };
+  }, id);
+  const normal = await sample('WD-1');
+  const vip = await sample('WD-2');
+  expect(Math.max(...normal.bg)).toBeGreaterThan(200);   // light background
+  expect(Math.max(...vip.bg)).toBeLessThan(40);          // dark background
+  expect(vip.badge[0]).toBeGreaterThan(150);             // gold badge (reddish-yellow)
+  expect(vip.badge[2]).toBeLessThan(vip.badge[0]);
+});
