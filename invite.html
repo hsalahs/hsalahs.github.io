@@ -40,7 +40,7 @@
 <meta name="twitter:image" content="https://da3wt.com/icons/og-image.jpg">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<script type="module" src="firebase-init.js"></script>
+<script type="module" src="firebase-init-lite.js"></script>
 <!-- A <link> here (discovered by the browser's preloader while it's still
      parsing <head>) starts the font fetch far earlier than an @import
      buried inside <style> (which isn't seen until the CSS itself is being
@@ -48,6 +48,7 @@
      them. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -228,9 +229,6 @@
     <div id="loading">جاري التحميل...</div>
   </div>
 
-<!-- Moved out of <head> so it doesn't block first paint on a fetch to
-     another CDN — nothing needs it until the script below runs. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="icons.js"></script>
 <script src="utils.js"></script>
 <script src="format.js"></script>
@@ -471,8 +469,36 @@ const THEME_COLORS = {
   ivory:    { accent: '#9C7A45', accentLight: '#B08D57' }
 };
 
+// qrcodejs is only needed once a request is approved, so it is fetched then
+// rather than blocking every visit. Rejects if the CDN fails, so the caller
+// can show a retry instead of a blank card.
+let qrLibPromise = null;
+function loadQrLib() {
+  if (window.QRCode) return Promise.resolve();
+  if (!qrLibPromise) {
+    qrLibPromise = new Promise((resolve, reject) => {
+      const fail = () => { qrLibPromise = null; reject(new Error('qrcode')); };
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+      s.async = true;
+      s.onload = () => {
+        let tries = 0;
+        (function check() {
+          if (window.QRCode) return resolve();
+          if (++tries > 40) return fail();
+          setTimeout(check, 50);
+        })();
+      };
+      s.onerror = () => { s.remove(); fail(); };
+      document.head.appendChild(s);
+    });
+  }
+  return qrLibPromise;
+}
+
 function buildInviteCard(eventData, guest) {
   return new Promise((resolve) => {
+    if (!window.QRCode) { resolve(null); return; }
     const themeColors = THEME_COLORS[eventData.theme || 'gold'] || THEME_COLORS.gold;
     const GOLD = themeColors.accent;
     const GOLD_LIGHT = themeColors.accentLight;
@@ -673,15 +699,26 @@ async function renderApproved(eventData, guest) {
     ${demoScanNote}
   `;
   startCountdown(eventData);
-  const built = await buildInviteCard(eventData, guest);
-  if (!built) return;
-  cardCanvas = built;
-  cardGuestName = guest.name;
-  const img = document.createElement('img');
-  img.src = built.toDataURL('image/png');
-  img.style.cssText = 'width:100%; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,0.4);';
-  document.getElementById('card-wrap').appendChild(img);
-  document.getElementById('save-btn').style.display = 'block';
+  const wrap = document.getElementById('card-wrap');
+  async function drawCard() {
+    wrap.innerHTML = '<div id="qr-loading" style="text-align:center; color:#8a857a; font-size:13px;">جاري تجهيز بطاقتك...</div>';
+    let built = null;
+    try { await loadQrLib(); built = await buildInviteCard(eventData, guest); } catch (e) { built = null; }
+    if (!built) {
+      wrap.innerHTML = '<div class="status-msg" id="qr-retry" style="cursor:pointer">⚠️ تعذّر تجهيز البطاقة بسبب ضعف الإنترنت — اضغط هنا للمحاولة مرة ثانية</div>';
+      document.getElementById('qr-retry').onclick = drawCard;
+      return;
+    }
+    cardCanvas = built;
+    cardGuestName = guest.name;
+    const img = document.createElement('img');
+    img.src = built.toDataURL('image/png');
+    img.style.cssText = 'width:100%; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,0.4);';
+    wrap.innerHTML = '';
+    wrap.appendChild(img);
+    document.getElementById('save-btn').style.display = 'block';
+  }
+  await drawCard();
 }
 
 let currentEvent = null;
