@@ -41,12 +41,12 @@ These are standing instructions the user gave in chat for how to respond, not pr
 - **reviewer** (read-only: Read, Grep, Glob) — after the engineer, before the PR/merge: correctness, rules security, read cost, phones, project rules, tests. Verdict + numbered findings with `file:line`. Never fixes.
 - Typical flow for a feature: discuss with the user → architect → (mockup + user approval) → engineer → reviewer → PR → user's "ادمج". Small fixes can skip the architect.
 
-## طريقة الشغل (the user's standing rules for how Claude works — they override the "typical flow" line above where they differ)
+## طريقة الشغل (the user's standing rules for how Claude works — they add to the "typical flow" line above and do not replace it: a new feature is still discussed first, with a mockup and the user's approval)
 - Claude is the coordinator. The user talks only to Claude; Claude decides what needs agents and what doesn't, and talks to them itself.
 - New feature or big change: call architect (design), then engineer (build), then reviewer (check) — without the user naming them.
 - Small change (text, colour, an obvious bug): do it directly, no agents.
 - No merge and no deploy before a "جاهز" (ready) verdict from reviewer. The user's explicit "ادمج" is still required as well (see Workflow).
-- Ask the user only when a decision changes the shape of the product or touches the rules (`firestore.rules`) or security. Otherwise decide and report.
+- Inside an approved task, ask the user only when a decision changes the shape of the product or touches the rules (`firestore.rules`) or security; other small decisions: decide and report. This does not replace discussing a new feature (and its mockup) before building it.
 - At the end of every task, summarise in two lines: what Claude decided, and which agents worked.
 
 ## Workflow (how every change ships)
