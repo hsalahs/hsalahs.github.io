@@ -429,3 +429,28 @@ test('invitation links carry a share card: invite.html and the readable-link pag
     expect(src, f).toContain('<meta property="og:image" content="https://da3wt.com/icons/og-image.jpg">');
   }
 });
+
+test('the approval note names صاحب الدعوة for a wedding and منظّمي الفعالية for an event', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: {
+    e1: { name: 'زفاف', type: 'wedding', date: '2026-10-29', venue: 'الدمام', theme: 'gold' },
+    e2: { name: 'ملتقى', type: 'event', date: '2026-10-29', venue: 'الرياض', theme: 'emerald' },
+  } } });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card .rsvp-note')).toContainText('تتم مراجعة طلبك من صاحب الدعوة');
+  await page.locator('#g-name').fill('سارة');
+  await page.getByRole('button', { name: 'تأكيد الحضور' }).click();
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة صاحب الدعوة');
+  await page.goto('/invite.html?event=e2');
+  await expect(page.locator('#card .rsvp-note')).toContainText('تتم مراجعة طلبك من منظّمي الفعالية');
+});
+
+test('HTML in the event name and welcome line is shown as text on the invitation', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: { name: '<img id="xn" src=x onerror="window.__x=1">', date: '2026-10-29', venue: 'الدمام', theme: 'gold', welcomeMessage: '<img id="xw" src=x onerror="window.__x=1">' } } } });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card .inv-msg')).toContainText('<img id="xw"');
+  await expect(page.locator('#card')).toContainText('<img id="xn"');
+  await expect(page.locator('#card img[id^="x"]')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__x)).toBeUndefined();
+});

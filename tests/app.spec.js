@@ -570,3 +570,12 @@ test('sign-in starts without the popup/redirect helper (it made iPhones wait on 
     hasPopupRedirectResolver: false,
   });
 });
+
+test('the create form limits the name, venue and map link to 80, 100 and 300 characters', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: {} } });
+  await page.goto('/app.html');
+  await expect(page.locator('#ev-name')).toHaveAttribute('maxlength', '80');
+  await expect(page.locator('#ev-venue')).toHaveAttribute('maxlength', '100');
+  await expect(page.locator('#ev-maps')).toHaveAttribute('maxlength', '300');
+});

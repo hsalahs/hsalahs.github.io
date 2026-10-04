@@ -389,11 +389,11 @@ setTimeout(() => {
         <button type="button" class="type-btn" data-type="graduation" role="radio" onclick="pickEditType('graduation')"><img src="icons/kind-graduation.svg" alt="">تخرج</button>
         <button type="button" class="type-btn" data-type="event" role="radio" onclick="pickEditType('event')"><img src="icons/kind-event.svg" alt="">فعالية</button>
       </div>
-      <input type="text" id="edit-ev-name" placeholder="اسم المناسبة">
+      <input type="text" id="edit-ev-name" maxlength="80" placeholder="اسم المناسبة">
       <label for="edit-ev-date" class="date-label"><i data-ic="calendar" data-size="14"></i> تاريخ المناسبة</label>
       <input type="date" id="edit-ev-date">
-      <input type="text" id="edit-ev-venue" placeholder="مكان الحفل">
-      <input type="text" id="edit-ev-maps" placeholder="رابط الموقع على الخريطة (اختياري)">
+      <input type="text" id="edit-ev-venue" maxlength="100" placeholder="مكان الحفل">
+      <input type="text" id="edit-ev-maps" maxlength="300" placeholder="رابط الموقع على الخريطة (اختياري)">
       <label for="edit-ev-slug" class="date-label"><i data-ic="link" data-size="14"></i> رابط الدعوة المخصص (اختياري)</label>
       <div class="slug-box"><span class="slug-prefix" id="slug-prefix">da3wt.com/</span><input type="text" id="edit-ev-slug" placeholder="hala-turki" dir="ltr" autocapitalize="off" autocomplete="off" spellcheck="false"></div>
       <div class="slug-hint">بالإنجليزي والأرقام والشرطة (-) — مثل hala-turki. الروابط القديمة تبقى شغالة.</div>
@@ -686,7 +686,10 @@ async function saveShareWelcome() {
   try {
     await updateDoc(doc(window._db, 'events', eventId), { welcomeMessage: value });
     eventData.welcomeMessage = value;
-  } catch (e) { console.error('welcome save failed:', e); }
+  } catch (e) {
+    console.error('welcome save failed:', e);
+    showToast('⚠️ ما انحفظت رسالة الترحيب، تأكد من الإنترنت وجرّب مرة ثانية');
+  }
 }
 function closeShareModal() {
   document.getElementById('share-modal').classList.remove('active');
