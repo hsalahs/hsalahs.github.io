@@ -70,6 +70,18 @@
   .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
   #hidden-forms > div { display:none; }
   .empty { text-align:center; color:#6f6a62; font-size:14px; padding:20px 0; }
+  .acc-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .acc-tag { font-size:11px; padding:2px 8px; border-radius:99px; border:1px solid rgba(224,188,122,0.25); color:#B8B4AC; white-space:nowrap; }
+  .acc-tag.paid { color:#4CAF50; border-color:rgba(76,175,80,0.45); background:rgba(76,175,80,0.08); }
+  .acc-tag.trial { color:#E0BC7A; }
+  .acc-tag.none { opacity:0.7; }
+  .acc-row { cursor:pointer; }
+  .acc-row:hover { border-color:rgba(224,188,122,0.45); }
+  .acc-filters { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .acc-filter { background:transparent; border:1px solid rgba(224,188,122,0.25); color:#B8B4AC; font-family:inherit; font-size:12px; padding:5px 12px; border-radius:99px; cursor:pointer; }
+  .acc-filter.on { background:rgba(224,188,122,0.15); border-color:#E0BC7A; color:#E0BC7A; font-weight:700; }
+  .owner-filter-bar { display:none; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px; margin-bottom:12px; border-radius:12px; border:1px solid rgba(224,188,122,0.35); background:rgba(224,188,122,0.08); font-size:13px; color:#FAF8F4; }
+  .owner-filter-bar b { color:#E0BC7A; direction:ltr; display:inline-block; }
   .badge-count { background:#F44336; color:#fff; font-size:11px; font-weight:700; min-width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; padding:0 4px; }
   /* Fixed to the TOP of the viewport, not the bottom — this page can get
      long (many events), and a toast anchored to the bottom of the screen
@@ -173,6 +185,12 @@ setTimeout(() => {
       </div>
       <div id="admin-accounts-body" style="display:none; margin-top:10px;">
         <input type="text" id="admin-accounts-search" placeholder="ابحث بالإيميل" oninput="renderAllAccounts()" style="margin-bottom:10px;">
+        <div class="acc-filters" id="admin-accounts-filters">
+          <button class="acc-filter on" data-f="all" onclick="setAccountsFilter('all')">الكل</button>
+          <button class="acc-filter" data-f="paid" onclick="setAccountsFilter('paid')">عندهم مناسبة مفعّلة</button>
+          <button class="acc-filter" data-f="trial" onclick="setAccountsFilter('trial')">يجرّبون</button>
+          <button class="acc-filter" data-f="none" onclick="setAccountsFilter('none')">بدون مناسبة</button>
+        </div>
         <div id="admin-accounts-list"></div>
       </div>
     </div>
@@ -196,6 +214,7 @@ setTimeout(() => {
       </div>
     </form>
 
+    <div class="owner-filter-bar" id="owner-filter-bar"><span>مناسبات <b id="owner-filter-email"></b></span><button class="btn ghost small" style="margin:0;" onclick="setOwnerFilter(null)">عرض الكل</button></div>
     <div id="events-list"></div>
   </div>
 
@@ -389,7 +408,7 @@ function statsHtml(total, attended) {
 function renderEvents(events, showOwner, changedIds) {
   const list = document.getElementById('events-list');
   if (events.length === 0) {
-    list.innerHTML = '<div class="empty">لسه ما أنشأت أي مناسبة</div>';
+    list.innerHTML = '<div class="empty">' + (ownerFilter ? 'هذا الحساب ما عنده مناسبات' : 'لسه ما أنشأت أي مناسبة') + '</div>';
     return;
   }
   list.innerHTML = events.map(ev => `
@@ -587,8 +606,9 @@ function watchEvents(user) {
     myEventsCount = admin ? events.filter(ev => ev.ownerUid === user.uid).length : events.length;
     updateCreateGate(admin);
     const changedIds = new Set(snap.docChanges().filter(c => c.type !== 'removed').map(c => c.doc.id));
-    renderEvents(events, admin, changedIds);
+    renderEvents(ownerFilter ? events.filter(ev => ev.ownerUid === ownerFilter.uid) : events, admin, changedIds);
     if (admin) {
+      renderAllAccounts();
       renderUnpaidEvents(events);
       checkNewlyCappedEvents(events);
     }
@@ -728,6 +748,39 @@ function setAccountsBadge(n) {
   document.getElementById('admin-accounts-badge').textContent = n > 99 ? '99+' : String(n);
 }
 
+// What each account has done, from the events this page already reads (no
+// extra Firestore reads): how many events, and whether any is activated.
+let accountsFilter = 'all';
+function accountStatus(uid) {
+  const evs = allEvents.filter(ev => ev.ownerUid === uid);
+  const paid = evs.filter(ev => ev.paid);
+  if (evs.length === 0) return { kind: 'none', tags: '<span class="acc-tag none">بدون مناسبة</span>' };
+  let tags = '<span class="acc-tag">' + evs.length + ' ' + (evs.length === 1 ? 'مناسبة' : 'مناسبات') + '</span>';
+  if (paid.length) {
+    const limits = paid.map(ev => ev.guestLimit).filter(n => typeof n === 'number');
+    tags += '<span class="acc-tag paid">✓ مفعّلة' + (limits.length ? ' (' + limits.reduce((x, y) => x + y, 0) + ' ' + guestWord(limits.reduce((x, y) => x + y, 0)) + ')' : '') + '</span>';
+    return { kind: 'paid', tags };
+  }
+  return { kind: 'trial', tags: tags + '<span class="acc-tag trial">يجرّب مجانًا</span>' };
+}
+function setAccountsFilter(f) {
+  accountsFilter = f;
+  document.querySelectorAll('#admin-accounts-filters .acc-filter').forEach(b => b.classList.toggle('on', b.dataset.f === f));
+  renderAllAccounts();
+}
+
+// Tapping an account shows only that customer's events in the list below.
+let ownerFilter = null;
+function setOwnerFilter(uid, email) {
+  ownerFilter = uid ? { uid, email } : null;
+  const bar = document.getElementById('owner-filter-bar');
+  bar.style.display = ownerFilter ? 'flex' : 'none';
+  if (ownerFilter) document.getElementById('owner-filter-email').textContent = email;
+  const sorted = [...allEvents].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  renderEvents(ownerFilter ? sorted.filter(ev => ev.ownerUid === uid) : sorted, true, new Set());
+  if (ownerFilter) bar.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 async function toggleAllAccounts() {
   const body = document.getElementById('admin-accounts-body');
   const open = body.style.display !== 'block';
@@ -752,7 +805,9 @@ function renderAllAccounts() {
   if (!allAccounts) return;
   const list = document.getElementById('admin-accounts-list');
   const q = document.getElementById('admin-accounts-search').value.trim().toLowerCase();
-  const accounts = q ? allAccounts.filter(a => (a.email || a.id).toLowerCase().includes(q)) : allAccounts;
+  const accounts = allAccounts
+    .filter(a => !q || (a.email || a.id).toLowerCase().includes(q))
+    .filter(a => accountsFilter === 'all' || accountStatus(a.id).kind === accountsFilter);
   if (accounts.length === 0) {
     list.innerHTML = '<div class="sub" style="text-align:center;">' + (q ? 'لا يوجد حساب بهذا الإيميل' : 'لا يوجد حسابات') + '</div>';
     return;
@@ -764,13 +819,15 @@ function renderAllAccounts() {
     const h = dt ? dt.getHours() : 0;
     const time = dt ? ((h % 12 || 12) + ':' + String(dt.getMinutes()).padStart(2, '0') + ' ' + (h < 12 ? 'ص' : 'م')) : '';
     const when = dt ? (dt.getDate() + ' ' + AR_MONTHS[dt.getMonth()] + ' ' + dt.getFullYear() + ' · ' + time) : '…';
+    const st = accountStatus(a.id);
     return `
-    <div class="card event-card-top">
+    <div class="card event-card-top acc-row" onclick="setOwnerFilter('${escapeForJsAttr(a.id)}', '${escapeForJsAttr(a.email || a.id)}')">
       <div>
         <div class="event-name">${escapeHtml(a.email || a.id)}</div>
         <div class="event-date">سجّل: ${when}</div>
+        <div class="acc-tags">${st.tags}</div>
       </div>
-      <button class="btn ghost small acc-del-btn" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="deleteAccountRecord('${escapeForJsAttr(a.id)}', '${escapeForJsAttr(a.email || a.id)}')" aria-label="حذف">${ic('trash-2', 15)}</button>
+      <button class="btn ghost small acc-del-btn" style="margin:0; border-color:rgba(255,120,120,0.4); color:#ff9d9d;" onclick="event.stopPropagation(); deleteAccountRecord('${escapeForJsAttr(a.id)}', '${escapeForJsAttr(a.email || a.id)}')" aria-label="حذف">${ic('trash-2', 15)}</button>
     </div>
   `;
   }).join('');
