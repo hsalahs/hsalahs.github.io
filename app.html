@@ -83,8 +83,11 @@
   .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; text-align:center; }
   .event-card { display:flex; flex-direction:column; gap:12px; }
   .event-card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
-  .event-name { font-weight:700; color:#E0BC7A; font-size:15px; }
-  .event-date { color:#B8B4AC; font-size:12px; margin-top:3px; }
+  /* min-width:0 + anywhere-wrapping: a long email or event name breaks onto
+     the next line instead of pushing the card wider than a phone screen. */
+  .event-card-top > div:first-child { min-width:0; flex:1; }
+  .event-name { font-weight:700; color:#E0BC7A; font-size:15px; overflow-wrap:anywhere; }
+  .event-date { color:#B8B4AC; font-size:12px; margin-top:3px; overflow-wrap:anywhere; }
   .event-stats { display:flex; gap:8px; flex-wrap:wrap; }
   .event-stat { flex:1; text-align:center; background:rgba(224,188,122,0.06); border:1px solid rgba(224,188,122,0.15); border-radius:10px; padding:8px 4px; }
   .event-stat .n { font-weight:700; color:#FAF8F4; font-size:15px; }
