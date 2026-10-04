@@ -199,6 +199,11 @@
   .approve-btn { background:rgba(76,175,80,0.15); border:1px solid rgba(76,175,80,0.55); color:#4CAF50; font-size:13px; padding:6px 12px; border-radius:8px; cursor:pointer; white-space:nowrap; }
   .reject-btn { background:rgba(229,72,77,0.12); border:1px solid rgba(229,72,77,0.45); color:#E5484D; font-size:13px; padding:6px 10px; border-radius:8px; cursor:pointer; }
   .link-box { display:flex; gap:8px; align-items:center; }
+  .type-picker { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+  .type-btn { display:flex; flex-direction:column; align-items:center; gap:5px; padding:10px 6px 8px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(var(--accent-rgb),0.2); color:var(--text-soft); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s ease; }
+  .type-btn img { height:30px; width:auto; opacity:0.55; }
+  .type-btn.on { background:rgba(var(--accent-rgb),0.12); border-color:var(--gold); color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset; }
+  .type-btn.on img { opacity:1; }
   .slug-box { display:flex; align-items:center; direction:ltr; border:1px solid rgba(var(--accent-rgb),0.25); border-radius:10px; background:rgba(255,255,255,0.04); margin-bottom:6px; overflow:hidden; }
   .slug-box .slug-prefix { padding:0 4px 0 12px; color:var(--text-soft); font-size:14px; white-space:nowrap; }
   .slug-box input { border:none !important; background:transparent !important; margin:0 !important; padding-left:2px !important; text-align:left; }
@@ -352,6 +357,12 @@ setTimeout(() => {
     </div>
 
     <div class="card" id="edit-event-card" style="display:none">
+      <div class="date-label">نوع المناسبة</div>
+      <div class="type-picker" id="edit-ev-type" role="radiogroup" aria-label="نوع المناسبة">
+        <button type="button" class="type-btn" data-type="wedding" role="radio" onclick="pickEditType('wedding')"><img src="icons/kind-wedding.svg" alt="">زفاف</button>
+        <button type="button" class="type-btn" data-type="graduation" role="radio" onclick="pickEditType('graduation')"><img src="icons/kind-graduation.svg" alt="">تخرج</button>
+        <button type="button" class="type-btn" data-type="event" role="radio" onclick="pickEditType('event')"><img src="icons/kind-event.svg" alt="">فعالية</button>
+      </div>
       <input type="text" id="edit-ev-name" placeholder="اسم المناسبة">
       <label for="edit-ev-date" class="date-label"><i data-ic="calendar" data-size="14"></i> تاريخ المناسبة</label>
       <input type="date" id="edit-ev-date">
@@ -731,6 +742,7 @@ function toggleEditEvent() {
   const opening = el.style.display !== 'block';
   el.style.display = opening ? 'block' : 'none';
   if (opening) {
+    pickEditType(eventTypeOf(eventData));
     document.getElementById('edit-ev-name').value = eventData.name || '';
     document.getElementById('edit-ev-date').value = eventData.date || '';
     document.getElementById('edit-ev-venue').value = eventData.venue || '';
@@ -738,6 +750,17 @@ function toggleEditEvent() {
     document.getElementById('edit-ev-slug').value = eventData.slug || '';
     document.getElementById('slug-prefix').textContent = location.host + '/';
   }
+}
+
+// The kind of event (wedding / graduation / event) in the edit card: what the
+// guest's invitation opens with. Changing it leaves the colour as it is.
+let editEventType = 'wedding';
+function pickEditType(t) {
+  editEventType = t;
+  document.querySelectorAll('#edit-ev-type .type-btn').forEach(b => {
+    b.classList.toggle('on', b.dataset.type === t);
+    b.setAttribute('aria-checked', b.dataset.type === t ? 'true' : 'false');
+  });
 }
 
 async function saveEventEdit() {
@@ -755,8 +778,8 @@ async function saveEventEdit() {
       const ok = await setEventSlug(slug);
       if (!ok) return;
     }
-    await updateDoc(doc(window._db, 'events', eventId), { name, date, venue, mapsLink });
-    eventData.name = name; eventData.date = date; eventData.venue = venue; eventData.mapsLink = mapsLink;
+    await updateDoc(doc(window._db, 'events', eventId), { name, type: editEventType, date, venue, mapsLink });
+    eventData.name = name; eventData.type = editEventType; eventData.date = date; eventData.venue = venue; eventData.mapsLink = mapsLink;
     document.getElementById('ev-title').textContent = name;
     renderEventMeta();
     toggleEditEvent();

@@ -108,36 +108,57 @@
 <body>
   <div id="splash">
     <div class="splash-inner">
-      <div class="splash-rings"><img src="icons/kind-wedding.svg" alt="" style="display:block; margin:0 auto; height:96px; width:auto;"></div>
-      <div class="splash-title">دعوة زفاف</div>
-      <div class="splash-subtitle">Wedding Invitation</div>
+      <div class="splash-rings"><img src="icons/logo.svg" alt="" style="display:block; margin:0 auto; height:104px; width:104px;"></div>
+      <div class="splash-title">دعوات</div>
+      <div class="splash-subtitle">Digital Invitations</div>
       <div class="splash-line"></div>
     </div>
   </div>
   <script>
-  // The sample invitation (?demo=1) opens with a splash that matches the
-  // kind of event picked (?type=…): its own picture and title. With no pick
-  // yet it is the neutral product splash (the logo). Real invitations keep the
-  // wedding splash that is already in the markup. This has to run before
-  // first paint and depend on nothing else, so it's inline, guarded, and tiny.
+  // The opening splash matches the kind of event: its own picture and title.
+  // The sample invitation (?demo=1) knows it from ?type= (none picked yet: the
+  // neutral logo). A real invitation only learns it once the event loads, so it
+  // starts from the kind this device saw last time for this link (instant on a
+  // repeat visit), otherwise the neutral logo, and showInviteKind() fades the
+  // right one in when the event arrives. Runs before first paint and depends
+  // on nothing else, so it's inline, guarded, and tiny.
   (function () {
     try {
       const p = new URLSearchParams(location.search);
-      if (p.get('demo') !== '1') return;
       const KINDS = {
         wedding:    ['دعوة زفاف', 'Wedding Invitation', 'kind-wedding.svg'],
         graduation: ['دعوة حفل تخرج', 'Graduation Invitation', 'kind-graduation.svg'],
         event:      ['دعوة فعالية', 'Event Invitation', 'kind-event.svg'],
       };
+      const LOGO = ['دعوات', 'Digital Invitations', 'logo.svg'];
       // hasOwnProperty, so ?type=constructor and the like can't pick up inherited keys.
-      const t = p.get('type');
-      const k = Object.prototype.hasOwnProperty.call(KINDS, t) ? KINDS[t] : ['دعوات', 'Digital Invitations', 'logo.svg'];
-      document.querySelector('#splash .splash-title').textContent = k[0];
-      document.querySelector('#splash .splash-subtitle').textContent = k[1];
-      const img = document.querySelector('#splash .splash-rings img');
-      img.src = 'icons/' + k[2];
-      img.style.height = k[2] === 'logo.svg' ? '104px' : '96px';
-      img.style.width = k[2] === 'logo.svg' ? '104px' : 'auto';
+      const kindOf = (t) => Object.prototype.hasOwnProperty.call(KINDS, t) ? KINDS[t] : null;
+      const inner = document.querySelector('#splash .splash-inner');
+      let shown = null;
+      const paint = (k) => {
+        shown = k;
+        inner.querySelector('.splash-title').textContent = k[0];
+        inner.querySelector('.splash-subtitle').textContent = k[1];
+        const img = inner.querySelector('.splash-rings img');
+        img.src = 'icons/' + k[2];
+        img.style.height = k[2] === 'logo.svg' ? '104px' : '96px';
+        img.style.width = k[2] === 'logo.svg' ? '104px' : 'auto';
+      };
+      if (p.get('demo') === '1') { paint(kindOf(p.get('type')) || LOGO); return; }
+      const key = 'inv_kind_' + (p.get('event') || 's:' + (p.get('s') || '').toLowerCase());
+      let saved = null;
+      try { saved = localStorage.getItem(key); } catch (e) {}
+      paint(kindOf(saved) || LOGO);
+      window.showInviteKind = function (t) {
+        try { localStorage.setItem(key, t); } catch (e) {}
+        const k = kindOf(t);
+        if (!k || k === shown) return;
+        // Seen for a moment at least: the splash hider below waits for this.
+        window._splashKindAt = Date.now();
+        inner.style.transition = 'opacity 0.25s ease';
+        inner.style.opacity = '0';
+        setTimeout(() => { paint(k); inner.style.opacity = '1'; }, 250);
+      };
     } catch (e) {}
   })();
   </script>
@@ -148,7 +169,12 @@
   // splash would never get hidden and would block the real page forever.
   // This one line is all this tiny script does, so nothing else on the
   // page can prevent it from running.
-  setTimeout(() => {
+  // When the event's own picture faded in late, it stays up a moment longer
+  // (never past 3.5 seconds in all).
+  const splashStart = Date.now();
+  setTimeout(function hideSplash() {
+    const left = (window._splashKindAt || 0) + 1200 - Date.now();
+    if (left > 0 && Date.now() - splashStart + left <= 3500) { setTimeout(hideSplash, left); return; }
     const splash = document.getElementById('splash');
     if (splash) splash.classList.add('hide');
   }, 2200);
@@ -690,6 +716,7 @@ async function init() {
   if (!snap.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذه المناسبة غير موجودة</div>'; return; }
   currentEvent = snap.data();
   document.body.setAttribute('data-theme', currentEvent.theme || 'gold');
+  if (window.showInviteKind) window.showInviteKind(eventTypeOf(currentEvent));
 
   if (myReqId) watchStatus();
   else renderForm(currentEvent);

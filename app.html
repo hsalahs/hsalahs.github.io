@@ -40,6 +40,12 @@
      border/background/padding fully control the box like any other input. */
   input[type="date"] { appearance:none; -webkit-appearance:none; color-scheme:dark; }
   /* iOS Safari ignores placeholder on date inputs (an empty one shows blank), so the field gets a visible label. */
+  .type-picker { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
+  .type-btn { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 6px 10px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(224,188,122,0.2); color:#B8B4AC; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; transition:all 0.2s ease; }
+  .type-btn img { height:38px; width:auto; opacity:0.55; transition:opacity 0.2s ease; }
+  .type-btn:hover { border-color:rgba(224,188,122,0.45); }
+  .type-btn.on { background:rgba(224,188,122,0.12); border-color:#E0BC7A; color:#E0BC7A; box-shadow:0 0 0 1px #E0BC7A inset; }
+  .type-btn.on img { opacity:1; }
   .date-label { display:block; font-size:12px; color:#B8B4AC; margin:0 4px 4px; }
   .btn:disabled { opacity:0.7; cursor:default; }
   svg.ic { flex-shrink:0; vertical-align:middle; }
@@ -203,6 +209,12 @@ setTimeout(() => {
     </div>
 
     <form class="card" id="create-form" style="display:none" onsubmit="event.preventDefault(); createNewEvent();" novalidate>
+      <div class="date-label">نوع المناسبة</div>
+      <div class="type-picker" id="ev-type-picker" role="radiogroup" aria-label="نوع المناسبة">
+        <button type="button" class="type-btn" data-type="wedding" role="radio" aria-checked="false" onclick="pickEventType('wedding')"><img src="icons/kind-wedding.svg" alt="">زفاف</button>
+        <button type="button" class="type-btn" data-type="graduation" role="radio" aria-checked="false" onclick="pickEventType('graduation')"><img src="icons/kind-graduation.svg" alt="">تخرج</button>
+        <button type="button" class="type-btn" data-type="event" role="radio" aria-checked="false" onclick="pickEventType('event')"><img src="icons/kind-event.svg" alt="">فعالية</button>
+      </div>
       <input type="text" id="ev-name" placeholder="اسم المناسبة (مثال: زفاف حسن وفاطمة)" enterkeyhint="next">
       <label for="ev-date" class="date-label"><i data-ic="calendar" data-size="14"></i> تاريخ المناسبة</label>
       <input type="date" id="ev-date">
@@ -307,15 +319,48 @@ function doLogout() {
   signOut(window._auth);
 }
 
+// The kind of event picked in the create form (required — no default, so a
+// graduation isn't saved as a wedding by mistake). Until one is picked, the
+// name field's example cycles through the kinds, like the landing page's card.
+let newEventType = null;
+let namePlaceholderTimer = null;
+function pickEventType(t) {
+  newEventType = t;
+  document.querySelectorAll('#ev-type-picker .type-btn').forEach(b => {
+    b.classList.toggle('on', b.dataset.type === t);
+    b.setAttribute('aria-checked', b.dataset.type === t ? 'true' : 'false');
+  });
+  clearInterval(namePlaceholderTimer);
+  document.getElementById('ev-name').placeholder = 'اسم المناسبة (مثال: ' + EVENT_TYPES[t].example + ')';
+}
+function resetEventTypePicker() {
+  newEventType = null;
+  document.querySelectorAll('#ev-type-picker .type-btn').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-checked', 'false'); });
+  const examples = Object.values(EVENT_TYPES).map(k => k.example);
+  let i = 0;
+  const input = document.getElementById('ev-name');
+  input.placeholder = 'اسم المناسبة (مثال: ' + examples[0] + ')';
+  clearInterval(namePlaceholderTimer);
+  namePlaceholderTimer = setInterval(() => {
+    i = (i + 1) % examples.length;
+    input.placeholder = 'اسم المناسبة (مثال: ' + examples[i] + ')';
+  }, 2500);
+}
+
 function showCreateForm() {
   const f = document.getElementById('create-form');
-  f.style.display = f.style.display === 'block' ? 'none' : 'block';
+  const opening = f.style.display !== 'block';
+  f.style.display = opening ? 'block' : 'none';
+  if (opening && !newEventType) resetEventTypePicker();
+  if (!opening) clearInterval(namePlaceholderTimer);
 }
 
 // Changed your mind: close the form and forget what was typed, so it opens
 // empty next time. Nothing is created.
 function cancelCreateForm() {
   ['ev-name', 'ev-date', 'ev-venue', 'ev-maps'].forEach(id => { document.getElementById(id).value = ''; });
+  newEventType = null;
+  clearInterval(namePlaceholderTimer);
   document.getElementById('create-form').style.display = 'none';
 }
 
@@ -328,7 +373,9 @@ async function createNewEvent() {
   const date = document.getElementById('ev-date').value;
   const venue = document.getElementById('ev-venue').value.trim();
   const mapsLink = document.getElementById('ev-maps').value.trim();
+  if (!newEventType) { alert('اختر نوع المناسبة: زفاف أو تخرج أو فعالية'); return; }
   if (!name) { alert('اكتب اسم المناسبة'); return; }
+  const type = newEventType;
 
   const { serverTimestamp, doc, runTransaction } = window._fsFns;
   const eventId = newEventId();
@@ -346,7 +393,7 @@ async function createNewEvent() {
   try {
     await runTransaction(window._db, async (tx) => {
       const eventData = {
-        name, date, venue, mapsLink,
+        name, type, date, venue, mapsLink, theme: EVENT_TYPES[type].theme,
         paid: false, guestCount: 0,
         ownerUid: user.uid,
         ownerEmail: user.email || '',

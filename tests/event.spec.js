@@ -1151,6 +1151,21 @@ test('a VIP guest\'s card is drawn in the dark VIP design with a gold badge; a n
   expect(vip.badge[2]).toBeLessThan(vip.badge[0]);
 });
 
+test('the owner can change the event\'s kind in the edit card; an event saved before kinds existed shows as a wedding', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]), events: { e1: { ...EVENT, slug: '' } } } });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('button', { name: /تعديل المناسبة/ }).click();
+  await expect(page.locator('#edit-ev-type').getByRole('radio', { name: 'زفاف' })).toHaveAttribute('aria-checked', 'true');
+  await page.locator('#edit-ev-type').getByRole('radio', { name: 'تخرج' }).click();
+  await page.getByRole('button', { name: 'حفظ التعديل' }).click();
+  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.type)).toBe('graduation');
+  // The colour is the owner's own choice and stays as it was.
+  expect(await page.evaluate(() => window.__fakeFirebase.store.events.e1.theme)).toBe('gold');
+});
+
 test('an event with no link yet gets one from its name when the owner opens it, skipping a taken name', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]), slugs: { 'hfl-tjreebi': { eventId: 'other', ownerUid: 'u9', createdAt: 'x' } } } });
