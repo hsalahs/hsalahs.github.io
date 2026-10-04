@@ -237,3 +237,21 @@ test('the pricing section says the price depends on the guest count and lists th
   await expect(card.locator('p b')).toHaveText(['أول 5 ضيوف مجانًا لكل مناسبة', '1. جرّب مجانًا:', '2. اطلب عرضك:', '3. ادفع ونفعّل:']);
   await expect(card.locator('a[data-wa="pricing"]')).toContainText('اسأل عن الأسعار على واتساب');
 });
+
+// A WhatsApp button pinned to the corner follows the visitor as they scroll,
+// on the landing page and the guide only (not the organizer's or guests' pages).
+for (const [file, msg] of [['index.html', 'السلام عليكم، عندي سؤال عن خدمة دعوات.'], ['guide.html', 'السلام عليكم، عندي سؤال عن استخدام دعوات.']]) {
+  test(`${file}: a floating WhatsApp button stays visible from top to bottom`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 760 });
+    await page.goto('/' + file);
+    const btn = page.locator('a.wa-float');
+    await expect(btn).toHaveAttribute('aria-label', 'تواصل معنا على واتساب');
+    expect(decodeURIComponent((await btn.getAttribute('href')).split('text=')[1])).toBe(msg);
+    await expect(btn).toBeInViewport();
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await expect(btn).toBeInViewport();
+    const box = await btn.boundingBox();
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    expect(box.x).toBeGreaterThan(390 / 2);   // the right-hand corner
+  });
+}
