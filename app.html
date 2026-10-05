@@ -118,7 +118,7 @@
   #toast { position:fixed; left:50%; top:16px; transform:translateX(-50%) translateY(-20px); background:rgba(20,18,14,0.95); color:#E0BC7A; border:1px solid rgba(224,188,122,0.35); padding:12px 20px; border-radius:30px; font-size:13px; opacity:0; pointer-events:none; transition:all 0.25s ease; z-index:1000; max-width:90vw; text-align:center; }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
-  #splash { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.8s ease, visibility 0.8s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
+  #splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.8s ease, visibility 0.8s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
   #splash::before { content:''; position:absolute; width:460px; height:460px; border-radius:50%; background:radial-gradient(circle, rgba(224,188,122,0.12), transparent 70%); animation:splashPulse 3.5s ease-in-out infinite; }
   #splash.hide { opacity:0; visibility:hidden; }
   .splash-inner { text-align:center; position:relative; z-index:1; animation:splashFade 1.2s cubic-bezier(0.2,0.8,0.2,1); }

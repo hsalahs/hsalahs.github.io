@@ -96,7 +96,7 @@
     transition:background 0.4s ease, color 0.4s ease;
   }
   body::before {
-    content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+    content:''; position:fixed; top:0; right:0; bottom:0; left:0; z-index:0; pointer-events:none;
     background:
       radial-gradient(ellipse 80% 50% at 50% -10%, var(--glow-1), transparent 60%),
       radial-gradient(ellipse 60% 40% at 100% 100%, var(--glow-2), transparent 55%),
@@ -135,7 +135,7 @@
   #qr-box { margin-top:18px; padding:16px; background:#fff; border-radius:12px; display:inline-block; }
   .guest-name { color:var(--gold); font-weight:700; margin-top:14px; font-size:15px; }
 
-  #splash { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.8s ease, visibility 0.8s ease; overflow:hidden; background:radial-gradient(ellipse at center, var(--bg-1) 0%, var(--bg-base) 70%); }
+  #splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.8s ease, visibility 0.8s ease; overflow:hidden; background:radial-gradient(ellipse at center, var(--bg-1) 0%, var(--bg-base) 70%); }
   #splash::before { content:''; position:absolute; width:460px; height:460px; border-radius:50%; background:radial-gradient(circle, rgba(var(--accent-rgb),0.12), transparent 70%); animation:splashPulse 3.5s ease-in-out infinite; }
   #splash.hide { opacity:0; visibility:hidden; }
   .splash-inner { text-align:center; position:relative; z-index:1; animation:splashFade 1.2s cubic-bezier(0.2,0.8,0.2,1); }

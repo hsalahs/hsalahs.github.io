@@ -1005,7 +1005,7 @@ test('scanner batch 2: the timing line shows only with ?timing=1', async ({ page
   await page.locator('#pin-input').fill('1234');
   await page.getByRole('button', { name: 'دخول' }).first().click();
   await expect(page.locator('#scanner-view')).toBeVisible();
-  await expect(page.locator('#timing-line')).toHaveText(/^هوية \d+ ms · كتابة \d+ ms · المجموع \d+ ms$/);
+  await expect(page.locator('#timing-line')).toHaveText(/^هوية \d+ ms · كتابة \d+ ms · المجموع \d+ ms · تأخير النقرة \d+ ms$/);
   expect(logs.some((l) => l.includes('scan timing:'))).toBe(true);
 
   await page.goto('/scan.html?event=e1');
@@ -1037,4 +1037,65 @@ test('scanner batch 2: qr-scanner is served locally, precached by sw.js, and a f
   await page.route('**/vendor/qr-scanner.umd.min.js', (r) => r.abort());
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#load-fail')).toBeVisible();
+});
+
+
+test('old Android compat: no html file declares inset: or uses aspect-ratio', async () => {
+  const fs = require('fs');
+  const files = fs.readdirSync('.').filter((f) => f.endsWith('.html') || f.endsWith('.css'));
+  expect(files.length).toBeGreaterThan(5);
+  for (const f of files) {
+    const src = fs.readFileSync(f, 'utf8');
+    expect(src, f + ' uses the inset shorthand').not.toMatch(/(^|[^-\w])inset\s*:/);
+    expect(src, f + ' uses aspect-ratio').not.toMatch(/aspect-ratio/);
+  }
+});
+
+test('old Android compat: the camera box is a square and the scan frame is 65% centred in it', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.evaluate(() => { document.getElementById('camera-wrapper').style.display = 'block'; });
+  const w = await page.locator('#camera-wrapper').boundingBox();
+  expect(Math.abs(w.width - w.height)).toBeLessThanOrEqual(1);
+  expect(w.width).toBeLessThanOrEqual(320);
+  expect(w.width).toBeGreaterThan(250);
+  const v = await page.locator('#camera-video').boundingBox();
+  expect(Math.abs(v.width - (w.width - 4))).toBeLessThanOrEqual(1);
+  expect(Math.abs(v.height - (w.height - 4))).toBeLessThanOrEqual(1);
+  const f = await page.locator('.scan-frame').boundingBox();
+  const inner = w.width - 4;
+  expect(Math.abs(f.width - inner * 0.65)).toBeLessThanOrEqual(1.5);
+  expect(Math.abs(f.height - inner * 0.65)).toBeLessThanOrEqual(1.5);
+  expect(Math.abs((f.x + f.width / 2) - (w.x + w.width / 2))).toBeLessThanOrEqual(1);
+  expect(Math.abs((f.y + f.height / 2) - (w.y + w.height / 2))).toBeLessThanOrEqual(1);
+  const line = await page.locator('.scan-line').boundingBox();
+  expect(line.width).toBeGreaterThan(0);
+});
+
+test('old Android compat: the landing sample card QR is still a square', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto('/index.html');
+  const q = await page.locator('.card-preview .cp-qr').boundingBox();
+  expect(q.width).toBeGreaterThan(50);
+  expect(Math.abs(q.width - q.height)).toBeLessThanOrEqual(1);
+});
+
+test('scanner debug panel: appears only with debug=1', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#debug-panel')).toHaveCount(0);
+
+  await page.goto('/scan.html?event=e1&debug=1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  const panel = page.locator('#debug-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('BarcodeDetector');
+  await expect(panel).toContainText('hasCamera');
+  await expect(panel).toContainText('قراءات ناجحة: 0');
+  await expect(panel).toContainText('QrScanner بدأ: no');
 });
