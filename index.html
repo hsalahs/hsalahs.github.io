@@ -45,7 +45,7 @@
   }
   .wrap { position:relative; z-index:1; max-width:520px; margin:0 auto; padding:0 20px 60px; }
 
-  #splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.8s ease, visibility 0.8s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
+  #splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.4s ease, visibility 0.4s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
   #splash::before { content:''; position:absolute; width:460px; height:460px; border-radius:50%; background:radial-gradient(circle, rgba(224,188,122,0.12), transparent 70%); animation:splashPulse 3.5s ease-in-out infinite; }
   #splash.hide { opacity:0; visibility:hidden; }
   .splash-inner { text-align:center; position:relative; z-index:1; animation:splashFade 1.2s cubic-bezier(0.2,0.8,0.2,1); }
@@ -98,7 +98,7 @@
   .card-preview .cp-name { color:#0A0A0A; font-weight:700; font-size:14px; }
   .card-preview .cp-id { color:#B0AAA0; font-size:10px; margin-top:2px; }
 
-  .section-title { text-align:center; font-family:'Playfair Display',serif; font-size:22px; color:#E0BC7A; margin:64px 0 8px; }
+  .section-title { font-weight:400; text-align:center; font-family:'Playfair Display',serif; font-size:22px; color:#E0BC7A; margin:64px 0 8px; }
   .section-sub { text-align:center; color:#8a857a; font-size:13px; margin-bottom:30px; }
 
   .steps { display:flex; flex-direction:column; gap:14px; }
@@ -113,7 +113,7 @@
   }
   .feature { background:rgba(255,255,255,0.03); border:1px solid rgba(224,188,122,0.15); border-radius:14px; padding:18px 14px; text-align:center; }
   .feature .f-icon { width:48px; height:48px; border-radius:14px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:10px; background:rgba(224,188,122,0.12); color:#E0BC7A; }
-  .feature h4 { font-size:13px; margin-bottom:4px; color:#FAF8F4; }
+  .feature h3 { font-size:13px; margin-bottom:4px; color:#FAF8F4; }
   .feature p { font-size:11px; color:#8a857a; line-height:1.6; }
 
   .cta-final { text-align:center; margin-top:64px; padding:34px 24px; border-radius:20px; background:rgba(224,188,122,0.06); border:1px solid rgba(224,188,122,0.2); }
@@ -126,13 +126,23 @@
   .wa-float:hover { transform:scale(1.06); }
 </style>
 <script>
-setTimeout(() => {
-  const splash = document.getElementById('splash');
-  if (splash) {
-    splash.classList.add('hide');
-    setTimeout(() => splash.remove(), 900);
+(function () {
+  const start = Date.now();
+  let done = false;
+  function hide() {
+    if (done) return;
+    done = true;
+    const splash = document.getElementById('splash');
+    if (splash) {
+      splash.classList.add('hide');
+      setTimeout(() => splash.remove(), 500);
+    }
   }
-}, 2200);
+  function afterLoad() { setTimeout(hide, Math.max(0, 1600 - (Date.now() - start))); }
+  if (document.readyState === 'complete') afterLoad();
+  else window.addEventListener('load', afterLoad);
+  setTimeout(hide, 3000);
+})();
 </script>
 </head>
 <body>
@@ -152,6 +162,7 @@ setTimeout(() => {
     <a class="nav-login" href="app.html">تسجيل الدخول</a>
   </nav>
 
+  <main>
   <div class="hero">
     <div class="hero-badge">دعوات رقمية · تسجيل حضور بالباركود</div>
     <h1>دعوة <span>أنيقة</span> لكل ضيف<br>وباب <span>ذكي</span> لمناسبتك</h1>
@@ -173,7 +184,7 @@ setTimeout(() => {
     </div>
   </div>
 
-  <div class="section-title">كيف يشتغل؟</div>
+  <h2 class="section-title">كيف يشتغل؟</h2>
   <div class="section-sub">ثلاث خطوات بس</div>
   <div class="steps">
     <div class="step">
@@ -199,42 +210,42 @@ setTimeout(() => {
     </div>
   </div>
 
-  <div class="section-title">ليش دعوات؟</div>
+  <h2 class="section-title">ليش دعوات؟</h2>
   <div class="section-sub">كل اللي تحتاجه، بدون تطبيق أو طباعة</div>
   <div class="features">
     <div class="feature">
       <div class="f-icon"><i data-ic="zap" data-size="24"></i></div>
-      <h4>خدمة ذاتية وفورية</h4>
+      <h3>خدمة ذاتية وفورية</h3>
       <p>أنشئ مناسبتك، خصّص بطاقتك، وخذ رابط الدعوة خلال دقيقتين بدون انتظار رد خدمة العملاء.</p>
     </div>
     <div class="feature">
       <div class="f-icon"><i data-ic="smartphone" data-size="24"></i></div>
-      <h4>بدون تطبيقات أو تحميل</h4>
+      <h3>بدون تطبيقات أو تحميل</h3>
       <p>المسح يتم عبر كاميرا الجوال مباشرة من المتصفح، لا تحتاج أنت أو ضيوفك لتنزيل أي تطبيق.</p>
     </div>
     <div class="feature">
       <div class="f-icon"><i data-ic="gift" data-size="24"></i></div>
-      <h4>تجربة مجانية بالكامل</h4>
+      <h3>تجربة مجانية بالكامل</h3>
       <p>جرّب النظام بجميع مميزاته حتى 5 ضيوف مجانًا، واختبر المسح بنفسك قبل دفع أي ريال.</p>
     </div>
     <div class="feature">
       <div class="f-icon"><i data-ic="ticket" data-size="24"></i></div>
-      <h4>بطاقة مصممة لكل ضيف</h4>
+      <h3>بطاقة مصممة لكل ضيف</h3>
       <p>بطاقة دعوة أنيقة ومخصصة مع باركود فردي، قابلة للحفظ والمشاركة.</p>
     </div>
     <div class="feature">
       <div class="f-icon"><i data-ic="chart-column" data-size="24"></i></div>
-      <h4>تحديث وإحصائيات لحظية</h4>
+      <h3>تحديث وإحصائيات لحظية</h3>
       <p>تتابع عدد من حضر ومن لم يحضر لحظة بلحظة، ويُمنع الدخول المكرر تلقائيًا.</p>
     </div>
     <div class="feature">
       <div class="f-icon"><i data-ic="lock" data-size="24"></i></div>
-      <h4>بياناتك خاصة وآمنة</h4>
+      <h3>بياناتك خاصة وآمنة</h3>
       <p>كل مناسبة معزولة تمامًا، ولا يطّلع على قائمة ضيوفك إلا أنت ومن تعطيه رمز الباب.</p>
     </div>
   </div>
 
-  <div class="section-title">كم السعر؟</div>
+  <h2 class="section-title">كم السعر؟</h2>
   <div class="section-sub">السعر حسب عدد ضيوفك</div>
   <div class="price-card">
     <p><b><i data-ic="gift" data-size="15"></i> أول 5 ضيوف مجانًا لكل مناسبة</b> — بدون دفع رسوم.</p>
@@ -249,6 +260,8 @@ setTimeout(() => {
     <p>تحتاج بس بريد إلكتروني عشان تبدأ — جرّب حتى 5 ضيوف مجانًا، وادفع بس لو قررت تكمل</p>
     <a class="btn-primary" href="app.html">إنشاء حساب</a>
   </div>
+
+  </main>
 
   <footer>دعوات — دعوات رقمية بباركود · <a href="guide.html" style="color:inherit; text-decoration:underline;">دليل الاستخدام</a></footer>
 </div>
