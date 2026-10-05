@@ -335,6 +335,17 @@ test('the splash screen clears on its own even if the entire app script fails to
   await expect(page.locator('#splash')).toHaveCount(0, { timeout: 4000 });
 });
 
+test('the splash still clears at the 2 s cap when a subresource never answers and the load event never fires', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.route('**/vendor/qr-scanner.umd.min.js', () => {});
+  await page.goto('/scan.html?event=e1', { waitUntil: 'commit' });
+  await page.waitForTimeout(1200);
+  await expect(page.locator('#splash')).toHaveCount(1);
+  expect(await page.evaluate(() => document.readyState)).not.toBe('complete');
+  await expect(page.locator('#splash')).toHaveCount(0, { timeout: 2000 });
+});
+
 test('the splash hides after load and at least 800 ms, well before 2.2 s, and its node is then removed', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
