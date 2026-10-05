@@ -575,3 +575,12 @@ test('the invitation splash still hides within 3.5 s when the event data never a
   expect(t).toBeGreaterThanOrEqual(3400);
   expect(t).toBeLessThan(4200);
 });
+
+test('the invitation card is the page main landmark', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: { name: 'حفل تجريبي', date: '2030-01-01', venue: 'الرياض', theme: 'gold' } } } });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('main#card')).toHaveCount(1);
+  await expect(page.locator('#g-name')).toBeVisible();
+  await expect(page.locator('main#card')).not.toHaveClass(/card-wait/);
+});

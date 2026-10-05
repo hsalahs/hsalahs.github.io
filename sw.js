@@ -2,8 +2,10 @@
 // on signInAnonymously/deleteField exported by firebase-init.js): a new
 // name makes the worker re-precache them all as one coherent set, so the
 // offline fallback can never pair a new page with an old helper file.
-const CACHE_NAME = 'dawaat-scan-v10';
-const SHELL_FILES = ['scan.html', 'firebase-init.js', 'icons.js', 'utils.js', 'vendor/qr-scanner.umd.min.js', 'icons/logo.svg'];
+const CACHE_NAME = 'dawaat-scan-v11';
+const SHELL_FILES = [
+  'scan.html', 'firebase-init.js', 'icons.js', 'utils.js', 'vendor/qr-scanner.umd.min.js', 'icons/logo.svg',
+  'fonts/ibm-plex-sans-arabic-400-arabic.woff2', 'fonts/ibm-plex-sans-arabic-400-latin.woff2', 'fonts/ibm-plex-sans-arabic-500-arabic.woff2', 'fonts/ibm-plex-sans-arabic-500-latin.woff2', 'fonts/ibm-plex-sans-arabic-700-arabic.woff2', 'fonts/ibm-plex-sans-arabic-700-latin.woff2', 'fonts/playfair-display-700-latin.woff2', 'fonts/reem-kufi-700-arabic.woff2', 'fonts/reem-kufi-700-latin.woff2'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

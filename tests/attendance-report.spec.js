@@ -10,8 +10,6 @@ function store(list) {
 }
 
 async function open(page, list) {
-  // The report page loads Google Fonts; keep the test off the network.
-  await page.context().route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   await stubFirebase(page);
   await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: store(list) });
   await page.goto('/event.html?id=e1');

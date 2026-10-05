@@ -89,12 +89,15 @@ td.empty { text-align:center; color:var(--muted); padding:22px; }
   h1 { font-size:19px; }
 }`;
 
+  const fontCss = [['400', 'arabic', 'U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFC,U+200C-200E'], ['400', 'latin', 'U+0000-00FF,U+2000-206F,U+20AC'], ['700', 'arabic', 'U+0600-06FF,U+0750-077F,U+FB50-FDFF,U+FE70-FEFC,U+200C-200E'], ['700', 'latin', 'U+0000-00FF,U+2000-206F,U+20AC']].map(function (f) {
+    return "@font-face{font-family:'IBM Plex Sans Arabic';font-weight:" + f[0] + ";font-display:swap;src:url(" + origin + "/fonts/ibm-plex-sans-arabic-" + f[0] + "-" + f[1] + ".woff2) format('woff2');unicode-range:" + f[2] + "}";
+  }).join('');
+
   return '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src ' + reportEscape(origin) + '; script-src \'nonce-' + reportEscape(nonce) + '\'">' +
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; font-src ' + reportEscape(origin) + '; img-src ' + reportEscape(origin) + '; script-src \'nonce-' + reportEscape(nonce) + '\'">' +
     '<title>كشف الحضور — ' + reportEscape(event.name) + '</title>' +
-    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;700&display=swap">' +
-    '<style>' + css + '</style></head><body>' +
+    '<style>' + fontCss + css + '</style></head><body>' +
     '<div class="bar"><button id="print-btn" type="button">🖨️ طباعة / حفظ PDF</button>' +
     '<span>في نافذة الطباعة اختر «حفظ كـ PDF» بدل الطابعة.</span></div>' +
     '<main class="sheet">' +
