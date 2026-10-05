@@ -1128,7 +1128,7 @@ test('scanner batch 2: qr-scanner is served locally, precached by sw.js, and a f
   expect(html).toContain('<script src="vendor/qr-scanner.umd.min.js"></script>');
   const sw = fs.readFileSync('sw.js', 'utf8');
   expect(sw).toMatch(/SHELL_FILES = \[[^\]]*'vendor\/qr-scanner\.umd\.min\.js'/);
-  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v11'");
+  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v12'");
   expect(fs.readFileSync('vendor/qr-scanner.umd.min.js', 'utf8')).toContain('QrScanner');
 
   const requested = [];
