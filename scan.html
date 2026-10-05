@@ -106,19 +106,25 @@
   .scan-frame { width:65%; height:65%; border:2px solid var(--gold); border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,0.45); }
   .scan-line { position:absolute; width:65%; height:2px; background:linear-gradient(90deg,transparent,var(--gold),transparent); animation:scanLine 2s linear infinite; }
   @keyframes scanLine { 0% { top:17.5%; } 100% { top:82.5%; } }
-  .result-card { display:none; padding:24px; border-radius:16px; margin-top:16px; text-align:center; animation:slideUp 0.4s ease-out; }
-  @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-  .result-card.allowed { background:linear-gradient(135deg,rgba(76,175,80,0.12),rgba(76,175,80,0.04)); border:1px solid rgba(76,175,80,0.3); }
-  .result-card.duplicate { background:linear-gradient(135deg,rgba(244,67,54,0.12),rgba(244,67,54,0.04)); border:1px solid rgba(244,67,54,0.3); }
-  .result-card.denied { background:linear-gradient(135deg,rgba(244,67,54,0.12),rgba(244,67,54,0.04)); border:1px solid rgba(244,67,54,0.3); }
-  .result-icon { font-size:48px; margin-bottom:12px; }
+  /* Full-screen scan result. Tweak the look here: colours per state, icon
+     and name sizes. Durations are RESULT_UI in the script. */
+  #result-overlay { --res-ok:#1b5e20; --res-dup:#b71c1c; --res-denied:#bf360c; --res-error:#5d4037; --res-icon:120px; --res-icon-glyph:72px; --res-name:32px; --res-status:20px; --res-hint:14px;
+    position:fixed; top:0; right:0; bottom:0; left:0; z-index:100001; display:none; flex-direction:column; align-items:center; justify-content:center; padding:24px 16px; text-align:center; color:#fff; cursor:pointer; overflow:hidden; -webkit-tap-highlight-color:transparent; }
+  #result-overlay.rs-allowed { background:var(--res-ok); }
+  #result-overlay.rs-duplicate { background:var(--res-dup); }
+  #result-overlay.rs-denied { background:var(--res-denied); }
+  #result-overlay.rs-error { background:var(--res-error); }
+  #result-icon { width:var(--res-icon); height:var(--res-icon); border-radius:50%; background:rgba(255,255,255,0.2); display:flex; align-items:center; justify-content:center; margin-bottom:20px; flex-shrink:0; }
+  #result-icon svg { width:var(--res-icon-glyph); height:var(--res-icon-glyph); stroke-width:2.5; }
   /* A VIP guest (marked on the dashboard) gets a clear flag at the door. */
-  .vip-flag { display:inline-block; margin:0 auto 8px; padding:5px 16px; border-radius:99px; font-weight:700; font-size:16px; letter-spacing:1px; color:#1a1400; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); }
-  .result-name { font-family:'Playfair Display',serif; font-size:22px; font-weight:700; color:var(--gold); margin-bottom:8px; }
-  .result-status { font-size:14px; color:#B8B4AC; }
-  .result-status.ok { color:#4CAF50; }
-  .result-status.dup { color:#F44336; }
-  .result-status.err { color:#F44336; }
+  .vip-flag { display:inline-block; margin:0 auto 12px; padding:5px 18px; border-radius:99px; font-weight:700; font-size:18px; letter-spacing:1px; color:#1a1400; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); }
+  #result-name { max-width:100%; font-size:var(--res-name); font-weight:700; line-height:1.3; margin-bottom:12px; overflow-wrap:anywhere; }
+  #result-status { font-size:var(--res-status); font-weight:500; line-height:1.5; overflow-wrap:anywhere; }
+  #result-hint { font-size:var(--res-hint); margin-top:28px; color:rgba(255,255,255,0.9); }
+  @media (prefers-reduced-motion:no-preference) {
+    #result-overlay.rs-show { animation:resultPop 0.18s ease-out; }
+    @keyframes resultPop { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+  }
   #connection-banner { display:none; position:sticky; top:0; z-index:1000; background:#5a1a1a; color:#ffd7d7; text-align:center; padding:10px 16px; font-size:13px; font-weight:600; }
 
   #splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.3s ease, visibility 0.3s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
@@ -225,24 +231,6 @@
         <button class="btn" style="width:auto; padding:12px 18px;" onclick="submitManualCode()">تحقق ✓</button>
         <input type="text" id="manual-code" placeholder="مثال: WD-ABC123" style="margin-bottom:0; text-align:center; letter-spacing:2px; font-size:14px;" onkeydown="if(event.key==='Enter') submitManualCode()">
       </div>
-
-      <div class="result-card allowed" id="result-allowed">
-        <div class="result-icon">✅</div>
-        <div class="vip-flag" id="result-vip-ok" style="display:none;">★ VIP</div>
-        <div class="result-name" id="result-name-ok"></div>
-        <div class="result-status ok">مسموح بالدخول</div>
-      </div>
-      <div class="result-card duplicate" id="result-duplicate">
-        <div class="result-icon">🚫</div>
-        <div class="vip-flag" id="result-vip-dup" style="display:none;">★ VIP</div>
-        <div class="result-name" id="result-name-dup"></div>
-        <div class="result-status dup">تم استخدام هذه الدعوة مسبقًا!</div>
-      </div>
-      <div class="result-card denied" id="result-denied">
-        <div class="result-icon">❌</div>
-        <div class="result-name">غير مسجّل</div>
-        <div class="result-status err">باركود غير صحيح</div>
-      </div>
     </div>
 
     <button class="btn ghost" id="new-scan-btn" style="margin-top:14px; display:none" onclick="resetScanState()"><i data-ic="refresh-cw" data-size="16"></i> مسح جديد</button>
@@ -268,6 +256,14 @@
          back automatically from their own account either way. -->
     <button class="btn ghost" id="lock-device-btn" style="margin-top:16px; display:none; opacity:0.7; font-size:12px;" onclick="lockOrClose()"><i data-ic="log-out" data-size="14"></i> تسجيل خروج من هذا الجهاز</button>
   </div>
+</div>
+
+<div id="result-overlay" role="alert" aria-live="assertive" style="display:none" onclick="onResultTap()">
+  <div id="result-icon"></div>
+  <div class="vip-flag" id="result-vip" style="display:none;">★ VIP</div>
+  <div id="result-name"></div>
+  <div id="result-status"></div>
+  <div id="result-hint">المس الشاشة لإغلاقها</div>
 </div>
 
 <!-- Moved out of <head> so it doesn't block first paint (and the splash
@@ -321,21 +317,105 @@ function waitForAuth() {
   });
 }
 
+// Scan result look and timing in one place (colours and sizes are the
+// --res-* variables on #result-overlay in the CSS). autoMs 0 = stays until tapped.
+const RESULT_UI = {
+  tapGuardMs: 400,        // taps this soon after the overlay appears are ignored
+  clearLastMs: 600,       // lastScanned is cleared this long AFTER hiding
+  allowed:   { autoMs: 1500, icon: 'check',  cls: 'rs-allowed',   status: 'مسموح بالدخول', camera: '✅ مسموح بالدخول',
+               vibrate: 80,              tones: [{ f: 1000, type: 'sine', at: 0, dur: 0.15 }] },
+  duplicate: { autoMs: 3000, icon: 'x',      cls: 'rs-duplicate', status: 'تم استخدام هذه الدعوة مسبقًا!', camera: '🚫 تم استخدام هذه الدعوة مسبقًا',
+               vibrate: [150, 80, 150],  tones: [{ f: 220, type: 'square', at: 0, dur: 0.18 }, { f: 220, type: 'square', at: 0.26, dur: 0.18 }] },
+  denied:    { autoMs: 3000, icon: 'x',      cls: 'rs-denied',    status: 'باركود غير مسجّل', camera: '❌ باركود غير مسجّل',
+               vibrate: 300,             tones: [{ f: 220, type: 'square', at: 0, dur: 0.18 }, { f: 220, type: 'square', at: 0.26, dur: 0.18 }] },
+  error:     { autoMs: 0,    icon: 'alert',  cls: 'rs-error',     status: '', camera: '',
+               vibrate: 300,             tones: [{ f: 150, type: 'sawtooth', at: 0, dur: 0.7 }] },
+};
+
 // Audible feedback for busy door staff who can't watch the screen every
-// scan — a high sine for allowed, a low square for duplicate/denied.
-function playBeep(success) {
+// scan: one short high beep for allowed, a low double buzz for
+// duplicate/denied, one long low tone for a connection error.
+// iOS Safari starts an AudioContext suspended, so one shared context is
+// created and resumed on the supervisor's own taps (start camera, manual
+// check) and resumed again before each beep.
+function unlockAudio() {
   try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.connect(g); g.connect(audioCtx.destination);
-    o.frequency.value = success ? 880 : 300;
-    o.type = success ? 'sine' : 'square';
-    g.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-    o.start(audioCtx.currentTime);
-    o.stop(audioCtx.currentTime + 0.4);
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state !== 'running' && audioCtx.resume) {
+      const p = audioCtx.resume();
+      if (p && p.catch) p.catch(() => {});
+    }
   } catch (e) {}
+}
+
+function playBeep(kind) {
+  try {
+    const def = RESULT_UI[kind];
+    if (!def) return;
+    unlockAudio();
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime;
+    def.tones.forEach(t => {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.frequency.value = t.f;
+      o.type = t.type;
+      g.gain.setValueAtTime(0.3, t0 + t.at);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + t.at + t.dur);
+      o.start(t0 + t.at);
+      o.stop(t0 + t.at + t.dur);
+    });
+  } catch (e) {}
+}
+
+let resultTimer = null, lastClearTimer = null, resultShownAt = 0, resultUp = false;
+
+let scanEpoch = 0;
+
+function showResult(kind, name, vip, message) {
+  const def = RESULT_UI[kind];
+  const ov = document.getElementById('result-overlay');
+  if (document.getElementById('scanner-view').style.display === 'none') return;
+  clearTimeout(resultTimer); clearTimeout(lastClearTimer);
+  document.getElementById('manual-code').blur();
+  ov.className = def.cls;
+  document.getElementById('result-icon').innerHTML = ic(def.icon, 72);
+  document.getElementById('result-vip').style.display = vip ? 'inline-block' : 'none';
+  document.getElementById('result-name').textContent = name || '';
+  document.getElementById('result-status').textContent = message || def.status;
+  ov.style.display = 'flex';
+  void ov.offsetWidth;
+  ov.classList.add('rs-show');
+  scanCooldown = true;
+  resultUp = true;
+  resultShownAt = Date.now();
+  playBeep(kind);
+  try { if (navigator.vibrate) navigator.vibrate(def.vibrate); } catch (e) {}
+  if (def.autoMs) resultTimer = setTimeout(hideResult, def.autoMs);
+}
+
+// instant = the code path that is about to start a new check or tear the
+// scanner down: no delayed lastScanned reset, no camera-status rewrite.
+function hideResult(instant) {
+  clearTimeout(resultTimer); clearTimeout(lastClearTimer);
+  const ov = document.getElementById('result-overlay');
+  if (ov) ov.style.display = 'none';
+  const wasUp = resultUp;
+  resultUp = false;
+  if (instant === true) return;
+  scanCooldown = false;
+  if (wasUp) document.getElementById('camera-status').textContent = 'وجّه الكاميرا نحو الباركود';
+  lastClearTimer = setTimeout(() => { lastScanned = null; }, RESULT_UI.clearLastMs);
+}
+
+function onResultTap() {
+  if (Date.now() - resultShownAt < RESULT_UI.tapGuardMs) return;
+  hideResult();
 }
 
 // The door code is never sent to this page. Unlocking means creating this
@@ -495,6 +575,8 @@ function sessionRevoked() {
     try { qrScanner.destroy(); } catch (_) {}
     qrScanner = null;
   }
+  scanEpoch++;
+  hideResult(true);
   scanCooldown = false; lastScanned = null;
   document.getElementById('scanner-view').style.display = 'none';
   document.getElementById('pin-input').value = '';
@@ -599,6 +681,8 @@ async function lockOrClose() {
   const user = window._auth.currentUser;
   if (!user || user.isAnonymous) return lockDevice();
   lockingDevice = true;
+  scanEpoch++;
+  hideResult(true);
   stopSessionWatch();
   if (eventUnsub) { eventUnsub(); eventUnsub = null; }
   if (qrScanner) {
@@ -617,6 +701,8 @@ async function lockOrClose() {
 // identity it's signed in with (anonymous, admin, or owner).
 async function lockDevice() {
   lockingDevice = true;
+  scanEpoch++;
+  hideResult(true);
   usesSessionDoc = false;
   stopSessionWatch();
   if (eventUnsub) { eventUnsub(); eventUnsub = null; }
@@ -810,7 +896,8 @@ function resetScanState() {
     try { qrScanner.destroy(); } catch (_) {}
     qrScanner = null;
   }
-  hideResultCards();
+  scanEpoch++;
+  hideResult(true);
   scanCooldown = false;
   lastScanned = null;
   document.getElementById('manual-code').value = '';
@@ -820,7 +907,9 @@ function resetScanState() {
 }
 
 function submitManualCode() {
+  unlockAudio();
   const input = document.getElementById('manual-code');
+  input.blur();
   const raw = input.value.trim();
   if (!raw) return;
   const match = raw.toUpperCase().match(/WD-[A-Z0-9]+/);
@@ -930,12 +1019,6 @@ async function init() {
   warmIdentity();
 }
 
-function hideResultCards() {
-  document.getElementById('result-allowed').style.display = 'none';
-  document.getElementById('result-duplicate').style.display = 'none';
-  document.getElementById('result-denied').style.display = 'none';
-}
-
 const dbg = { started: false, decodes: 0, errCount: 0, lastDecodeError: '', lastError: '', formats: '...', hasCamera: '...' };
 const DEBUG_MODE = new URLSearchParams(location.search).get('debug') === '1';
 
@@ -981,6 +1064,7 @@ function startDebugPanel() {
 startDebugPanel();
 
 async function startCamera() {
+  unlockAudio();
   const video = document.getElementById('camera-video');
   const status = document.getElementById('camera-status');
   status.textContent = 'جاري تشغيل الكاميرا...';
@@ -1051,12 +1135,13 @@ async function handleScan(raw) {
   if (!match) return;
   const val = match[0];
   if (val === lastScanned) return;
+  hideResult(true);
+  const epoch = scanEpoch;
   lastScanned = val;
   scanCooldown = true;
 
   const status = document.getElementById('camera-status');
   status.textContent = '🔍 جاري التحقق...';
-  hideResultCards();
 
   // The guest's own barcode text IS its document id (see event.html), so
   // this goes straight to that one document — no collection read, and no
@@ -1088,6 +1173,7 @@ async function handleScan(raw) {
     // scanCooldown stuck on true — the scanner silently ignored every
     // barcode after one network hiccup until "مسح جديد" was pressed.
     console.error('check-in failed:', e);
+    if (epoch !== scanEpoch) return;
     if (e && e.code === 'permission-denied') { sessionRevoked(); return; }
     if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
       status.textContent = '⏳ انقطع الاتصال — جاري تحديث الصفحة...';
@@ -1095,17 +1181,16 @@ async function handleScan(raw) {
       return;
     }
     status.textContent = '⚠️ تعذّر تسجيل الدخول — تأكد من الإنترنت وحاول مرة ثانية';
-    playBeep(false);
-    scanCooldown = false; lastScanned = null;
+    lastScanned = null;
+    showResult('error', 'تعذّر تسجيل الدخول', false, 'تأكد من الإنترنت وحاول مرة ثانية');
     return;
   }
+  const stale = epoch !== scanEpoch;
   if (outcome === 'ok') {
-    document.getElementById('result-name-ok').textContent = guestName;
-    document.getElementById('result-vip-ok').style.display = guestVip ? 'inline-block' : 'none';
-    document.getElementById('result-allowed').style.display = 'block';
-    status.textContent = '✅ مسموح بالدخول';
-    playBeep(true);
-    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    if (!stale) {
+      showResult('allowed', guestName, guestVip);
+      status.textContent = RESULT_UI.allowed.camera;
+    }
     // The counter itself updates from startEventCounterWatch(), moments
     // after this transaction commits. The name list was only read once, at
     // open — keep its offline copy in step with scans this device does.
@@ -1114,24 +1199,15 @@ async function handleScan(raw) {
     else guests.push({ docId: val, id: val, name: guestName, scanned: true });
     cacheGuestsOffline();
     if (document.getElementById('offline-list-section').style.display === 'block') renderOfflineList();
+  } else if (stale) {
+    return;
   } else if (outcome === 'dup') {
-    document.getElementById('result-name-dup').textContent = guestName;
-    document.getElementById('result-vip-dup').style.display = guestVip ? 'inline-block' : 'none';
-    document.getElementById('result-duplicate').style.display = 'block';
-    status.textContent = '🚫 تم استخدام هذه الدعوة مسبقًا';
-    playBeep(false);
-    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    showResult('duplicate', guestName, guestVip);
+    status.textContent = RESULT_UI.duplicate.camera;
   } else {
-    document.getElementById('result-denied').style.display = 'block';
-    status.textContent = '❌ باركود غير مسجّل';
-    playBeep(false);
+    showResult('denied', 'غير مسجّل', false);
+    status.textContent = RESULT_UI.denied.camera;
   }
-
-  setTimeout(() => {
-    hideResultCards();
-    scanCooldown = false; lastScanned = null;
-    status.textContent = 'وجّه الكاميرا نحو الباركود';
-  }, 2500);
 }
 
 if (window._db) {

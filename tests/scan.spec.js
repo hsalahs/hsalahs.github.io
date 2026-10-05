@@ -265,10 +265,10 @@ test('re-scanning an already-checked-in guest shows a clear red "already used" a
   await page.locator('#manual-code').fill('WD-DUP123');
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
 
-  const dupCard = page.locator('#result-duplicate');
+  const dupCard = page.locator('#result-overlay.rs-duplicate');
   await expect(dupCard).toBeVisible();
   await expect(dupCard).toContainText('تم استخدام هذه الدعوة مسبقًا');
-  await expect(dupCard.locator('.result-status.dup')).toHaveCSS('color', 'rgb(244, 67, 54)');
+  await expect(dupCard).toHaveCSS('background-color', 'rgb(183, 28, 28)');
 });
 
 test('a check-in write that fails on the network resets the scanner instead of silently ignoring every scan after it', async ({ page }) => {
@@ -288,12 +288,16 @@ test('a check-in write that fails on the network resets the scanner instead of s
   await page.locator('#manual-code').fill('WD-NET1');
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
   await expect(page.locator('#camera-status')).toContainText('تعذّر تسجيل الدخول');
+  await expect(page.locator('#result-overlay.rs-error')).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.locator('#result-overlay').click();
+  await expect(page.locator('#result-overlay')).toBeHidden();
 
   // Second attempt must go through — the failure used to leave scanCooldown
   // stuck on true, so this would have been ignored.
   await page.locator('#manual-code').fill('WD-NET1');
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
-  await expect(page.locator('#result-allowed')).toBeVisible();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
 });
 
 test('"مسح جديد" tears the camera down and returns to the start-camera screen, instead of trusting it\'s still healthy', async ({ page }) => {
@@ -714,12 +718,15 @@ test('whatever the theme, the scanner page is dark and the result colours stay g
     await openScanner(page, theme);
     const c = await page.evaluate(() => {
       const [r, g, b] = getComputedStyle(document.body).backgroundColor.match(/\d+/g).map(Number);
-      const css = (sel) => { const el = document.querySelector(sel); return el ? getComputedStyle(el).borderColor : null; };
-      return { lum: (r + g + b) / 3, allowed: css('#result-allowed'), dup: css('#result-duplicate') };
+      const ov = document.getElementById('result-overlay');
+      const css = (cls) => { ov.className = cls; return getComputedStyle(ov).backgroundColor; };
+      return { lum: (r + g + b) / 3, allowed: css('rs-allowed'), dup: css('rs-duplicate'), denied: css('rs-denied'), error: css('rs-error') };
     });
     expect(c.lum).toBeLessThan(30);
-    expect(c.allowed).toBe('rgba(76, 175, 80, 0.3)');
-    expect(c.dup).toBe('rgba(244, 67, 54, 0.3)');
+    expect(c.allowed).toBe('rgb(27, 94, 32)');
+    expect(c.dup).toBe('rgb(183, 28, 28)');
+    expect(c.denied).toBe('rgb(191, 54, 12)');
+    expect(c.error).toBe('rgb(93, 64, 55)');
   }
 });
 
@@ -748,7 +755,7 @@ test('the barcode text is the guest\'s Firestore document id — a code nobody r
 
   await page.locator('#manual-code').fill('WD-GHOST9');
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
-  await expect(page.locator('#result-denied')).toBeVisible();
+  await expect(page.locator('#result-overlay.rs-denied')).toBeVisible();
   await expect(page.locator('#camera-status')).toContainText('باركود غير مسجّل');
 });
 
@@ -773,7 +780,7 @@ test('a successful scan updates the counter and the offline cache right away', a
 
   await page.locator('#manual-code').fill('WD-A');
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
-  await expect(page.locator('#result-allowed')).toBeVisible();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 من 2');
   const ev = await page.evaluate(() => window.__fakeFirebase.store.events.e1);
   expect(ev.scannedCount).toBe(1);
@@ -795,7 +802,7 @@ test('the names list, if already open, shows a scan from this device straight aw
 
   await page.locator('#manual-code').fill('WD-A');
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
-  await expect(page.locator('#result-allowed')).toBeVisible();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
   await expect(page.locator('#offline-list-results')).toContainText('✓ دخل');
 });
 
@@ -958,13 +965,13 @@ test('scanning a VIP guest shows "★ VIP" on the result; a normal guest shows n
   await expect(page.locator('#scanner-view')).toBeVisible();
   await page.locator('#manual-code').fill('WD-V');
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
-  await expect(page.locator('#result-allowed')).toBeVisible();
-  await expect(page.locator('#result-vip-ok')).toBeVisible();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  await expect(page.locator('#result-vip')).toBeVisible();
   await page.getByRole('button', { name: /مسح جديد/ }).click();
   await page.locator('#manual-code').fill('WD-N');
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
-  await expect(page.locator('#result-allowed')).toBeVisible();
-  await expect(page.locator('#result-vip-ok')).toBeHidden();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  await expect(page.locator('#result-vip')).toBeHidden();
 });
 
 const FRESH_STORE = { events: { e1: EVENT }, 'events/e1/guests': {} };
@@ -1128,7 +1135,7 @@ test('scanner batch 2: qr-scanner is served locally, precached by sw.js, and a f
   expect(html).toContain('<script src="vendor/qr-scanner.umd.min.js"></script>');
   const sw = fs.readFileSync('sw.js', 'utf8');
   expect(sw).toMatch(/SHELL_FILES = \[[^\]]*'vendor\/qr-scanner\.umd\.min\.js'/);
-  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v12'");
+  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v13'");
   expect(fs.readFileSync('vendor/qr-scanner.umd.min.js', 'utf8')).toContain('QrScanner');
 
   const requested = [];
@@ -1250,4 +1257,220 @@ test('close scanner: a door-code device keeps "تسجيل خروج من هذا �
   const btn = page.locator('#lock-device-btn');
   await expect(btn).toContainText('تسجيل خروج من هذا الجهاز');
   await expect(btn).toHaveAttribute('aria-label', 'تسجيل خروج من هذا الجهاز');
+});
+
+
+// Full-screen scan result overlay (RESULT_UI in scan.html)
+async function scanManual(page, code) {
+  await page.locator('#manual-code').fill(code);
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+}
+const overlayStore = () => counterStore({
+  'WD-A': { name: 'أ', id: 'WD-A', scanned: false },
+  'WD-B': { name: 'ب', id: 'WD-B', scanned: false },
+  'WD-D': { name: 'مكرر', id: 'WD-D', scanned: true },
+}, 1);
+async function openOverlayScanner(page, user = DEVICE, vp) {
+  if (vp) await page.setViewportSize(vp);
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user, store: overlayStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.waitForTimeout(1700);
+}
+
+for (const vp of [{ width: 320, height: 568 }, { width: 390, height: 844 }]) {
+  test(`result overlay covers the whole viewport at ${vp.width}x${vp.height}, long name included`, async ({ page }) => {
+    await openOverlayScanner(page, DEVICE, vp);
+    await page.evaluate(() => { window.__fakeFirebase.store['events/e1/guests']['WD-A'].name = 'عبدالرحمن بن محمد بن عبدالعزيز آل سعود الكبير جدا جدا'; });
+    await scanManual(page, 'WD-A');
+    const ov = page.locator('#result-overlay');
+    await expect(ov).toBeVisible();
+    await page.waitForTimeout(400);
+    const box = await ov.boundingBox();
+    expect(box).toEqual({ x: 0, y: 0, width: vp.width, height: vp.height });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.getElementById('result-overlay').scrollWidth <= innerWidth)).toBe(true);
+    await expect(page.locator('#result-icon svg')).toBeVisible();
+  });
+}
+
+test('result overlay: allowed closes by itself after about 1.5 s, duplicate and denied after about 3 s', async ({ page }) => {
+  await openOverlayScanner(page);
+  const ov = page.locator('#result-overlay');
+  const timeIt = async (code, cls) => {
+    await scanManual(page, code);
+    await expect(page.locator('#result-overlay.' + cls)).toBeVisible();
+    const t0 = Date.now();
+    await expect(ov).toBeHidden({ timeout: 5000 });
+    return Date.now() - t0;
+  };
+  const a = await timeIt('WD-A', 'rs-allowed');
+  expect(a).toBeGreaterThan(1000); expect(a).toBeLessThan(2100);
+  const d = await timeIt('WD-D', 'rs-duplicate');
+  expect(d).toBeGreaterThan(2500); expect(d).toBeLessThan(3600);
+  await page.waitForTimeout(700);
+  const n = await timeIt('WD-GHOST', 'rs-denied');
+  expect(n).toBeGreaterThan(2500); expect(n).toBeLessThan(3600);
+  expect(await page.evaluate(() => scanCooldown)).toBe(false);
+  await expect(page.locator('#camera-status')).toHaveText('وجّه الكاميرا نحو الباركود');
+});
+
+test('result overlay: an error stays until tapped; a tap in the first 400 ms is ignored, a later one closes it and frees scanCooldown', async ({ page }) => {
+  await openOverlayScanner(page);
+  await page.evaluate(() => { window._fsFns.runTransaction = () => Promise.reject(new Error('network')); });
+  await scanManual(page, 'WD-A');
+  const ov = page.locator('#result-overlay.rs-error');
+  await expect(ov).toBeVisible();
+  await ov.dispatchEvent('click');
+  await expect(ov).toBeVisible();
+  expect(await page.evaluate(() => scanCooldown)).toBe(true);
+  await page.waitForTimeout(4000);
+  await expect(ov).toBeVisible();
+  await ov.click();
+  await expect(page.locator('#result-overlay')).toBeHidden();
+  expect(await page.evaluate(() => scanCooldown)).toBe(false);
+  await expect(page.locator('#camera-status')).toHaveText('وجّه الكاميرا نحو الباركود');
+});
+
+test('result overlay: the same card re-read within 600 ms of closing is ignored, a different guest scans at once', async ({ page }) => {
+  await openOverlayScanner(page);
+  await scanManual(page, 'WD-A');
+  const ov = page.locator('#result-overlay');
+  await expect(ov).toBeVisible();
+  await page.waitForTimeout(500);
+  await ov.click();
+  await expect(ov).toBeHidden();
+  await page.evaluate(() => handleScan('WD-A'));
+  await page.waitForTimeout(200);
+  await expect(ov).toBeHidden();
+  await page.evaluate(() => handleScan('WD-B'));
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  await expect(page.locator('#result-name')).toHaveText('ب');
+  await expect(ov).toBeHidden({ timeout: 3000 });
+  await page.waitForTimeout(800);
+  await page.evaluate(() => handleScan('WD-A'));
+  await expect(page.locator('#result-overlay.rs-duplicate')).toBeVisible();
+});
+
+test('result overlay: manual entry shows it and closes the keyboard (input blurred)', async ({ page }) => {
+  await openOverlayScanner(page);
+  await page.locator('#manual-code').fill('WD-A');
+  await page.locator('#manual-code').focus();
+  await page.locator('#manual-code').press('Enter');
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  expect(await page.evaluate(() => document.activeElement === document.getElementById('manual-code'))).toBe(false);
+});
+
+test('result overlay: VIP pill and name show; resetScanState hides it', async ({ page }) => {
+  await openOverlayScanner(page);
+  await page.evaluate(() => { window.__fakeFirebase.store['events/e1/guests']['WD-D'].vip = true; });
+  await scanManual(page, 'WD-D');
+  await expect(page.locator('#result-name')).toHaveText('مكرر');
+  await expect(page.locator('#result-vip')).toBeVisible();
+  await page.evaluate(() => resetScanState());
+  await expect(page.locator('#result-overlay')).toBeHidden();
+});
+
+test('result overlay: sessionRevoked hides it so it never stays over the code gate', async ({ page }) => {
+  await openOverlayScanner(page);
+  await page.evaluate(() => { window._fsFns.runTransaction = () => Promise.reject(new Error('network')); });
+  await scanManual(page, 'WD-A');
+  await expect(page.locator('#result-overlay')).toBeVisible();
+  await page.evaluate(() => sessionRevoked());
+  await expect(page.locator('#result-overlay')).toBeHidden();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+});
+
+test('result overlay: lockDevice and lockOrClose hide it', async ({ page }) => {
+  await openOverlayScanner(page);
+  await scanManual(page, 'WD-D');
+  await expect(page.locator('#result-overlay')).toBeVisible();
+  await page.evaluate(() => lockDevice());
+  await expect(page.locator('#result-overlay')).toBeHidden();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+
+  await page.route('**/event.html*', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>x</title>' }));
+  const ownerPage = await page.context().newPage();
+  await stubFirebase(ownerPage);
+  await seedFakeFirebase(ownerPage, { user: OWNER, store: overlayStore() });
+  await ownerPage.route('**/event.html*', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>x</title>' }));
+  await ownerPage.goto('/scan.html?event=e1');
+  await expect(ownerPage.locator('#scanner-view')).toBeVisible();
+  await ownerPage.evaluate(() => { window.__hid = 0; const f = hideResult; hideResult = function () { window.__hid++; return f.apply(this, arguments); }; });
+  await ownerPage.evaluate(() => { handleScan('WD-D'); });
+  await expect(ownerPage.locator('#result-overlay')).toBeVisible();
+  await ownerPage.locator('#lock-device-btn').click({ force: true });
+  expect(await ownerPage.evaluate(() => window.__hid)).toBeGreaterThan(0);
+});
+
+test('result overlay: beep and vibrate patterns per state, and no crash without AudioContext', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__vib = [];
+    navigator.vibrate = (p) => { window.__vib.push(p); return true; };
+    window.AudioContext = undefined; window.webkitAudioContext = undefined;
+  });
+  await openOverlayScanner(page);
+  await page.evaluate(() => { window._fsFns.runTransaction = () => Promise.reject(new Error('network')); });
+  await scanManual(page, 'WD-A');
+  await expect(page.locator('#result-overlay.rs-error')).toBeVisible();
+  await page.evaluate(() => hideResult(true));
+  await page.evaluate(() => { showResult('allowed', 'x', false); showResult('duplicate', 'x', false); showResult('denied', 'x', false); });
+  expect(await page.evaluate(() => window.__vib)).toEqual([300, 80, [150, 80, 150], 300]);
+});
+
+test('result overlay: honours reduced motion (no animation)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openOverlayScanner(page);
+  await scanManual(page, 'WD-D');
+  await expect(page.locator('#result-overlay')).toHaveCSS('animation-name', 'none');
+});
+
+const holdCheckIn = (page) => page.evaluate(() => {
+  window._fsFns.runTransaction = () => new Promise((resolve, reject) => { window.__held = { resolve, reject }; });
+});
+
+for (const teardown of ['lockDevice()', 'resetScanState()', 'sessionRevoked()']) {
+  for (const settle of ['ok', 'dup', 'missing', 'fail']) {
+    test(`result overlay: a check-in still pending when ${teardown} runs never pops the overlay (${settle})`, async ({ page }) => {
+      await openOverlayScanner(page);
+      await holdCheckIn(page);
+      await scanManual(page, 'WD-A');
+      await expect(page.locator('#camera-status')).toHaveText('🔍 جاري التحقق...');
+      await page.evaluate((t) => { window.eval(t); }, teardown);
+      await page.waitForTimeout(300);
+      await page.evaluate((s) => { if (s === 'fail') window.__held.reject(new Error('network')); else window.__held.resolve(s); }, settle);
+      await page.waitForTimeout(500);
+      await expect(page.locator('#result-overlay')).toBeHidden();
+      expect(await page.evaluate(() => resultUp)).toBe(false);
+      if (teardown === 'resetScanState()') await expect(page.locator('#start-cam-btn')).toBeVisible();
+      else await expect(page.locator('#scanner-view')).toBeHidden();
+    });
+  }
+}
+
+test('result overlay: showResult is a no-op while the scanner view is hidden', async ({ page }) => {
+  await openOverlayScanner(page);
+  await page.evaluate(() => { document.getElementById('scanner-view').style.display = 'none'; showResult('error', 'x', false, 'y'); });
+  await expect(page.locator('#result-overlay')).toBeHidden();
+});
+
+test('audio: the camera-start tap unlocks a suspended AudioContext and each beep resumes it again without throwing', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__ac = { made: 0, resumes: 0 };
+    class FakeAC {
+      constructor() { window.__ac.made++; this.state = 'suspended'; this.currentTime = 0; this.destination = {}; }
+      resume() { window.__ac.resumes++; return Promise.reject(new Error('blocked')); }
+      createOscillator() { return { connect() {}, start() {}, stop() {}, frequency: {} }; }
+      createGain() { return { connect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } }; }
+    }
+    window.AudioContext = FakeAC;
+  });
+  await openOverlayScanner(page);
+  await page.locator('#start-cam-btn').click();
+  expect(await page.evaluate(() => window.__ac)).toEqual({ made: 1, resumes: 1 });
+  await scanManual(page, 'WD-A');
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  const ac = await page.evaluate(() => window.__ac);
+  expect(ac.made).toBe(1);
+  expect(ac.resumes).toBeGreaterThanOrEqual(3);
 });
