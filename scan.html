@@ -121,7 +121,7 @@
   .result-status.err { color:#F44336; }
   #connection-banner { display:none; position:sticky; top:0; z-index:1000; background:#5a1a1a; color:#ffd7d7; text-align:center; padding:10px 16px; font-size:13px; font-weight:600; }
 
-  #splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.8s ease, visibility 0.8s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
+  #splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.3s ease, visibility 0.3s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
   #splash::before { content:''; position:absolute; width:460px; height:460px; border-radius:50%; background:radial-gradient(circle, rgba(224,188,122,0.12), transparent 70%); animation:splashPulse 3.5s ease-in-out infinite; }
   #splash.hide { opacity:0; visibility:hidden; }
   .splash-inner { text-align:center; position:relative; z-index:1; animation:splashFade 1.2s cubic-bezier(0.2,0.8,0.2,1); }
@@ -148,16 +148,32 @@
   </div>
 </div>
 <script>
-// Isolated on purpose, and NOT gated on window.load — if this lived inside
+// Isolated on purpose — hides after load + 800 ms, but a 2000 ms cap
+// runs regardless of load. If this lived inside
 // the big application script below and something earlier in that script
 // threw (a slow/failed CDN script, a bug, a bad connection at the venue),
 // the splash would never get hidden and would block the real page
-// forever. This one line is all this tiny script does, so nothing else on
+// forever. This tiny script does only the splash, so nothing else on
 // the page can prevent it from running.
-setTimeout(() => {
-  const splash = document.getElementById('splash');
-  if (splash) splash.classList.add('hide');
-}, 2200);
+(function () {
+  const t0 = Date.now();
+  let hidden = false;
+  function hideSplash() {
+    if (hidden) return;
+    hidden = true;
+    const splash = document.getElementById('splash');
+    if (!splash) return;
+    splash.classList.add('hide');
+    setTimeout(() => { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 400);
+  }
+  function whenReady() {
+    setTimeout(hideSplash, Math.max(0, 800 - (Date.now() - t0)));
+  }
+  if (document.readyState === 'complete') whenReady();
+  else window.addEventListener('load', whenReady);
+  // unconditional cap: never depends on load or on the app script
+  setTimeout(hideSplash, 2000);
+})();
 </script>
 
 <div id="connection-banner">⚠️ انقطع الاتصال بقاعدة البيانات — القائمة قد لا تكون محدّثة. تحقق من الإنترنت.</div>
