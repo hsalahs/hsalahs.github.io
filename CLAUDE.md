@@ -14,7 +14,7 @@ An Arabic, multi-tenant digital-invitation service (weddings and other occasions
 
 ## The person you work with
 A non-technical founder on a tight budget who **writes Arabic** (answer in Arabic, simple words, short). Standing preferences:
-- **Answer style: direct and concise.** Lead with the answer or recommendation, no preamble, no long menus of options; numbered lists; explain more only when asked.
+- **Answer style: direct and concise.** Lead with the answer or recommendation, no preamble, no long menus of options; numbered lists; explain more only when asked. The user asked again (Oct 2026) for much shorter replies: one or two lines per update, no long recaps; go into detail ONLY when they say "اشرح".
 - **Zero bugs.** Verify everything; report failures honestly.
 - **Discuss before implementing**, and give an honest recommendation, not a menu.
 - **Never merge or deploy without an explicit "ادمج".** Confirm CI first.
