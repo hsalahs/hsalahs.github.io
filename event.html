@@ -1760,7 +1760,7 @@ async function downloadGuestCard(docId) {
       // There's no way to skip straight into a specific WhatsApp chat since
       // we don't collect guest phone numbers, and wa.me links can only carry
       // text, never an attached image.
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (!prefersDirectSave() && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: guest.name, text: caption });
         return;
       }
@@ -1775,7 +1775,7 @@ async function downloadGuestCard(docId) {
     link.click();
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-    showToast('💾 تم حفظ صورة الدعوة — أرسلها يدويًا عبر واتساب');
+    showToast(prefersDirectSave() ? '💾 تم حفظ صورة الدعوة في جوالك — تقدر ترسلها من المعرض، أو أرسلها يدويًا عبر واتساب' : '💾 تم حفظ صورة الدعوة — أرسلها يدويًا عبر واتساب');
   }, 'image/png');
 }
 
