@@ -39,6 +39,7 @@ These are standing instructions the user gave in chat for how to respond, not pr
 - **architect** (read-only: Read, Grep, Glob) — before a new feature or structural change (new event fields, new pages/flows, `firestore.rules`, Firebase read cost). Returns goal → design → rules impact → read cost → risks → step plan. Never edits.
 - **engineer** (all tools) — implements an approved plan: code, tests, guide text, CLAUDE.md entry; runs the suites. Never merges or deploys.
 - **reviewer** (read-only: Read, Grep, Glob) — after the engineer, before the PR/merge: correctness, rules security, read cost, phones, project rules, tests. Verdict + numbered findings with `file:line`. Never fixes.
+- All three agents are pinned to `model: sonnet` in their frontmatter (user's choice, Oct 2026, to keep cost down). Don't suggest changing the model unless the task is very hard, and ask the user first.
 - Typical flow for a feature: discuss with the user → architect → (mockup + user approval) → engineer → reviewer → PR → user's "ادمج". Small fixes can skip the architect.
 
 ## طريقة الشغل (the user's standing rules for how Claude works — they add to the "typical flow" line above and do not replace it: a new feature is still discussed first, with a mockup and the user's approval)
