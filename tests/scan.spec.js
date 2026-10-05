@@ -962,12 +962,62 @@ test('scanner batch 2: the anonymous sign-in starts while the code screen is ope
 test('scanner batch 2: tapping before the warm-up finishes still works and signs in only once', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { store: FRESH_STORE });
-  await page.addInitScript(() => { window.__signInDelay = 800; });
+  await page.addInitScript(() => { window.__signInDelay = 2000; });
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#pin-gate')).toBeVisible();
-  await page.locator('#pin-input').fill('1234');
-  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await page.evaluate(() => { document.getElementById('pin-input').value = '1234'; checkPin(); });
   await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.waitForTimeout(2500);
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  const st = await page.evaluate(() => ({
+    calls: window.__fakeFirebase.auth.anonCalls,
+    uid: window.__fakeFirebase.auth.user.uid,
+    keys: Object.keys(window.__fakeFirebase.store['events/e1/scanSessions'] || {}),
+  }));
+  expect(st.calls).toBe(1);
+  expect(st.keys).toEqual([st.uid]);
+});
+
+test('scanner batch 2: tapping right after locking the device signs in only once and the session matches the user', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.evaluate(() => { window.__signInDelay = 2000; window.__fakeFirebase.auth.anonCalls = 0; });
+  await page.locator('#lock-device-btn').click();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await page.evaluate(() => { document.getElementById('pin-input').value = '1234'; checkPin(); });
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.waitForTimeout(2500);
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  const st = await page.evaluate(() => ({
+    calls: window.__fakeFirebase.auth.anonCalls,
+    uid: window.__fakeFirebase.auth.user.uid,
+    keys: Object.keys(window.__fakeFirebase.store['events/e1/scanSessions'] || {}),
+  }));
+  expect(st.calls).toBe(1);
+  expect(st.uid).not.toBe('anon-1');
+  expect(st.keys).toEqual([st.uid]);
+});
+
+test('scanner batch 2: an admin sign-in during a slow warm-up ends with the admin, not an anonymous user', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.addInitScript(() => { window.__signInDelay = 2000; });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await page.evaluate(() => { window.__fakeFirebase.auth.nextSignInResult = { uid: 'admin-1', email: 'hsallah@outlook.sa', isAnonymous: false }; });
+  await page.evaluate(() => {
+    showAdminLogin();
+    document.getElementById('admin-email').value = 'hsallah@outlook.sa';
+    document.getElementById('admin-pass').value = 'secret123';
+    submitAdminLogin();
+  });
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.waitForTimeout(2500);
+  const u = await page.evaluate(() => window.__fakeFirebase.auth.user);
+  expect(u.uid).toBe('admin-1');
+  expect(u.isAnonymous).toBeFalsy();
 });
 
 test('scanner batch 2: a device that already has a user does not sign in again, and locking the device warms a new identity', async ({ page }) => {

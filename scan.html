@@ -330,12 +330,17 @@ function playBeep(success) {
 // accepted or denied. Every guest read and every check-in write is then
 // gated on that session doc still being valid, so "generate a new code" on
 // the dashboard cuts every device off at once.
-async function ensureIdentity() {
+let identityP = null;
+function ensureIdentity() {
   const current = window._auth.currentUser;
-  if (current) return current;
+  if (current) return Promise.resolve(current);
+  if (identityP) return identityP;
   const { signInAnonymously } = window._authFns;
-  const cred = await signInAnonymously(window._auth);
-  return cred.user;
+  identityP = (async () => {
+    const cred = await signInAnonymously(window._auth);
+    return cred.user;
+  })().finally(() => { identityP = null; });
+  return identityP;
 }
 
 // The anonymous sign-in is the slowest step after typing the code, so start
@@ -524,7 +529,12 @@ async function submitAdminLogin() {
 
   const { signInWithEmailAndPassword, signOut } = window._authFns;
   try {
-    const cred = await signInWithEmailAndPassword(window._auth, email, pass);
+    if (identityP) { try { await identityP; } catch (e) {} }
+    let cred = await signInWithEmailAndPassword(window._auth, email, pass);
+    const now = window._auth.currentUser;
+    if (now && now.isAnonymous && !cred.user.isAnonymous) {
+      cred = await signInWithEmailAndPassword(window._auth, email, pass);
+    }
     if (!isAdmin(cred.user)) {
       await signOut(window._auth);
       showErr('هذا الحساب ليس حساب الأدمن');
