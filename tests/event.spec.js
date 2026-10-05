@@ -958,7 +958,7 @@ test('approving a guest request copies the new barcode id onto the request, for 
   expect(state.docKey).toBe(state.guestId);
 });
 
-test('guests approved before the invite page stopped reading the guests collection get their barcode id backfilled onto their request', async ({ page }) => {
+test('opening the dashboard does not read the approved requests (no backfill query)', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: { uid: 'u1', email: 'customer@example.com' },
@@ -971,7 +971,8 @@ test('guests approved before the invite page stopped reading the guests collecti
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store['events/e1/requests'].r1.guestId)).toBe('WD-OLD1');
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => (window.__fakeFirebase.getDocsPaths || []).filter(p => p === 'events/e1/requests').length)).toBe(0);
 });
 
 test('the dashboard shows the event date as words with Western digits', async ({ page }) => {
@@ -1400,3 +1401,41 @@ for (const [label, next] of [['anonymous', { uid: 'anon-9', isAnonymous: true, e
     await expect(page.locator('#dashboard')).toBeVisible();
   });
 }
+
+test('importing names and approving a request schedule a roster write for the door scanner', async ({ page }) => {
+  test.setTimeout(90000);
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: {
+      events: { e1: { ...EVENT, paid: true } },
+      'events/e1/guests': {},
+      'events/e1/private': { scan: { scanPin: '1234' } },
+      'events/e1/requests': { r1: { name: 'ضيف طالب', reqId: 'REQ-1', status: 'pending', createdAt: 'x' } },
+    },
+  });
+  page.on('dialog', d => d.accept());
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await page.evaluate(() => {
+    window.__rosterCalls = 0;
+    const orig = window.scheduleRosterWrite;
+    window.scheduleRosterWrite = function () { window.__rosterCalls++; return orig(); };
+  });
+  const roster = () => page.evaluate(() => {
+    const r = (window.__fakeFirebase.store['events/e1/roster'] || {}).list;
+    return r ? r.guests.map(x => x.split('|')[2]).sort() : null;
+  });
+  await page.locator('#csv-import').setInputFiles({ name: 'guests.csv', mimeType: 'text/csv', buffer: Buffer.from('Guest A\nGuest B') });
+  await expect(page.locator('.guest-item')).toHaveCount(2);
+  expect(await page.evaluate(() => window.__rosterCalls)).toBeGreaterThanOrEqual(1);
+  await expect.poll(roster, { timeout: 10000 }).toEqual(['Guest A', 'Guest B']);
+
+  const before = await page.evaluate(() => window.__rosterCalls);
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('button', { name: /^الطلبات/ }).click();
+  await page.locator('.approve-btn').click();
+  await expect(page.locator('#toast')).toContainText('تمت الموافقة');
+  expect(await page.evaluate(() => window.__rosterCalls)).toBeGreaterThan(before);
+  await expect.poll(roster, { timeout: 45000 }).toEqual(['Guest A', 'Guest B', 'ضيف طالب']);
+});
