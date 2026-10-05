@@ -54,22 +54,15 @@ async function openInvite(page) {
 }
 
 const pages = [
-  { name: 'event.html', open: openEvent, btn: '.guest-item .dl-btn', androidDirect: false },
-  { name: 'invite.html', open: openInvite, btn: '#save-btn', androidDirect: true },
+  { name: 'event.html', open: openEvent, btn: '.guest-item .dl-btn' },
+  { name: 'invite.html', open: openInvite, btn: '#save-btn' },
 ];
 
 for (const p of pages) {
-  test.describe(p.name + ' on Android', () => {
-    test.use({ userAgent: ANDROID });
-    if (p.androidDirect) {
-      test('saves the PNG directly and never opens the share sheet', async ({ page }) => {
-        await p.open(page);
-        await Promise.all([page.waitForEvent('download'), page.locator(p.btn).click()]);
-        expect(await page.evaluate(() => window.__shared)).toBe(0);
-        await expect(page.locator('#toast')).toContainText('تم حفظ صورة الدعوة في جوالك');
-      });
-    } else {
-      test('keeps the share sheet (WhatsApp with the ready message) and does not download', async ({ page }) => {
+  for (const [label, ua] of [['Android', ANDROID], ['Android in-app browser', ANDROID.replace('Android 13; Pixel 7', 'Android 13; Pixel 7; wv')], ['iPhone', IPHONE], ['desktop', DESKTOP]]) {
+    test.describe(p.name + ' on ' + label, () => {
+      test.use({ userAgent: ua });
+      test('opens the share sheet (WhatsApp with the ready message) and does not download', async ({ page }) => {
         await p.open(page);
         let downloaded = false;
         page.on('download', () => { downloaded = true; });
@@ -77,38 +70,11 @@ for (const p of pages) {
         await expect.poll(() => page.evaluate(() => window.__shared)).toBe(1);
         expect(downloaded).toBe(false);
       });
-    }
-  });
-  test.describe(p.name + ' in an Android in-app browser', () => {
-    test.use({ userAgent: ANDROID.replace('Android 13; Pixel 7', 'Android 13; Pixel 7; wv') });
-    test('keeps the share sheet because <a download> is unreliable there', async ({ page }) => {
-      await p.open(page);
-      let downloaded = false;
-      page.on('download', () => { downloaded = true; });
-      await page.locator(p.btn).click();
-      await expect.poll(() => page.evaluate(() => window.__shared)).toBe(1);
-      expect(downloaded).toBe(false);
     });
-  });
-  test.describe(p.name + ' on iPhone', () => {
-    test.use({ userAgent: IPHONE });
-    test('opens the share sheet and does not download', async ({ page }) => {
-      await p.open(page);
-      let downloaded = false;
-      page.on('download', () => { downloaded = true; });
-      await page.locator(p.btn).click();
-      await expect.poll(() => page.evaluate(() => window.__shared)).toBe(1);
-      expect(downloaded).toBe(false);
-    });
-  });
-  test.describe(p.name + ' on desktop', () => {
+  }
+  test.describe(p.name + ' when files cannot be shared', () => {
     test.use({ userAgent: DESKTOP });
-    test('keeps the share sheet when files can be shared', async ({ page }) => {
-      await p.open(page);
-      await page.locator(p.btn).click();
-      await expect.poll(() => page.evaluate(() => window.__shared)).toBe(1);
-    });
-    test('downloads when files cannot be shared', async ({ page }) => {
+    test('downloads the PNG as a fallback', async ({ page }) => {
       await p.open(page);
       await page.evaluate(() => { navigator.canShare = () => false; });
       await Promise.all([page.waitForEvent('download'), page.locator(p.btn).click()]);
