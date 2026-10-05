@@ -332,7 +332,30 @@ test('the splash screen clears on its own even if the entire app script fails to
   // depends on entirely.
   await page.route('**/firebase-init.js', (route) => route.abort());
   await page.goto('/scan.html?event=e1');
-  await expect(page.locator('#splash')).toHaveClass(/hide/, { timeout: 4000 });
+  await expect(page.locator('#splash')).toHaveCount(0, { timeout: 4000 });
+});
+
+test('the splash hides after load and at least 800 ms, well before 2.2 s, and its node is then removed', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.addInitScript(() => {
+    window.__t = { start: performance.now(), load: null, hide: null };
+    window.addEventListener('load', () => { window.__t.load = performance.now(); });
+    document.addEventListener('DOMContentLoaded', () => {
+      const s = document.getElementById('splash');
+      new MutationObserver(() => {
+        if (s.classList.contains('hide') && !window.__t.hide) window.__t.hide = performance.now();
+      }).observe(s, { attributes: true });
+    });
+  });
+  await page.goto('/scan.html?event=e1');
+  await page.waitForFunction(() => window.__t.hide, null, { timeout: 4000 });
+  const t = await page.evaluate(() => window.__t);
+  expect(t.load).not.toBeNull();
+  expect(t.hide).toBeGreaterThanOrEqual(t.load);
+  expect(t.hide).toBeGreaterThanOrEqual(800);
+  expect(t.hide).toBeLessThan(2200);
+  await expect(page.locator('#splash')).toHaveCount(0, { timeout: 2000 });
 });
 
 test('a dropped connection while loading the event shows a tappable retry instead of hanging on "جاري التحميل..." forever', async ({ page }) => {
