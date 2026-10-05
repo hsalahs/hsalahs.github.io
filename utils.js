@@ -41,7 +41,7 @@ function sortGuestsByName(list) {
     if (aNum && bNum) return parseInt(a.name, 10) - parseInt(b.name, 10);
     if (aNum) return -1;
     if (bNum) return 1;
-    return a.name.localeCompare(b.name, 'ar');
+    return a.name.localeCompare(b.name, 'ar', { numeric: true });
   });
 }
 
