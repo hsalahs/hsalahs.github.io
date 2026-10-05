@@ -1033,6 +1033,8 @@ function doLogout() {
   signOut(window._auth).then(() => { window.location.href = 'app.html'; });
 }
 
+let dashboardStarted = false;
+let sessionEnded = false;
 async function init() {
   if (!eventId) {
     document.getElementById('loading-msg').textContent = '⚠️ رابط غير صحيح — ما فيه رقم مناسبة';
@@ -1044,11 +1046,25 @@ async function init() {
     // on the same browser it would otherwise look like "someone is logged
     // in" here.
     if (!user || user.isAnonymous) {
+      if (dashboardStarted) {
+        // Sign-in is shared by every tab of this browser: another tab (the
+        // scanner's lock button) ended it. Listeners would only fail with
+        // permission-denied, so stop showing data instead of a fake outage.
+        sessionEnded = true;
+        document.getElementById('dashboard').style.display = 'none';
+        document.getElementById('loading-msg').style.display = 'none';
+        document.getElementById('denied-msg').style.display = 'block';
+        document.getElementById('denied-msg').innerHTML = 'انتهت جلسة الدخول على هذا المتصفح — <a href="app.html" style="color:#E0BC7A">اضغط هنا لتسجيل الدخول</a>';
+        refreshConnectionBanner();
+        return;
+      }
       document.getElementById('loading-msg').style.display = 'none';
       document.getElementById('denied-msg').style.display = 'block';
       document.getElementById('denied-msg').innerHTML = 'لازم تسجّل دخول الأول — <a href="app.html" style="color:#E0BC7A">اضغط هنا</a>';
       return;
     }
+    if (sessionEnded) { window.location.reload(); return; }
+    if (dashboardStarted) return;
     currentUser = user;
     const { doc, getDoc } = window._fsFns;
     let snap;
@@ -1087,6 +1103,7 @@ async function init() {
     applyTheme(eventData.theme || 'gold');
     renderPaymentGate();
     updateNotifButtonLabel();
+    dashboardStarted = true;
     startListeners();
     watchPaymentStatus();
     backfillRequestGuestIds();
@@ -1149,7 +1166,7 @@ let guestsListenerOK = true;
 let requestsListenerOK = true;
 function refreshConnectionBanner() {
   const b = document.getElementById('connection-banner');
-  if (b) b.style.display = (guestsListenerOK && requestsListenerOK) ? 'none' : 'block';
+  if (b) b.style.display = (guestsListenerOK && requestsListenerOK) || sessionEnded ? 'none' : 'block';
 }
 
 // Tracks which pending request IDs we've already seen, so a newly-added

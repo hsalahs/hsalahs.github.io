@@ -1020,20 +1020,45 @@ test('scanner batch 2: an admin sign-in during a slow warm-up ends with the admi
   expect(u.isAnonymous).toBeFalsy();
 });
 
-test('scanner batch 2: a device that already has a user does not sign in again, and locking the device warms a new identity', async ({ page }) => {
+test('scanner batch 2: a device that already has a user does not sign in again', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { user: { uid: 'owner-x', isAnonymous: false, email: 'o@x.com' }, store: FRESH_STORE });
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#pin-gate')).toBeVisible();
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => window.__fakeFirebase.auth.anonCalls || 0)).toBe(0);
+});
 
+test('cross-tab auth: locking the device as a signed-in organizer signs out and does not sign in anonymously', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'owner-x', isAnonymous: false, email: 'o@x.com' }, store: FRESH_STORE });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
   await page.locator('#pin-input').fill('1234');
   await page.getByRole('button', { name: 'دخول' }).first().click();
   await expect(page.locator('#scanner-view')).toBeVisible();
   await page.locator('#lock-device-btn').click();
   await expect(page.locator('#pin-gate')).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.auth.anonCalls || 0)).toBe(1);
+  await page.waitForTimeout(500);
+  const st = await page.evaluate(() => ({ user: window.__fakeFirebase.auth.user, calls: window.__fakeFirebase.auth.anonCalls || 0 }));
+  expect(st.user).toBeNull();
+  expect(st.calls).toBe(0);
+});
+
+test('cross-tab auth: a door-code device that locks returns to the code screen and a later tap signs in once', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.evaluate(() => { window.__fakeFirebase.auth.anonCalls = 0; });
+  await page.locator('#lock-device-btn').click();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.__fakeFirebase.auth.anonCalls || 0)).toBe(0);
+  await page.locator('#pin-input').fill('1234');
+  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  expect(await page.evaluate(() => window.__fakeFirebase.auth.anonCalls || 0)).toBe(1);
 });
 
 test('scanner batch 2: the scanner view does not wait for the roster or the counter', async ({ page }) => {

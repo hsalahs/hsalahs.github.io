@@ -594,7 +594,6 @@ async function lockDevice() {
   document.getElementById('pin-gate').style.display = 'block';
   hideAdminLogin();
   lockingDevice = false;
-  warmIdentity();
 }
 
 function offlineCacheKey() { return 'scan_offline_cache_' + eventId; }
