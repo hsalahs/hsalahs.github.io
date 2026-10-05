@@ -56,6 +56,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Reem+Kufi:wght@700&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -97,9 +99,10 @@
   .manual-row input { flex:1; }
   .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; display:none; }
   .camera-status { font-size:13px; color:#B8B4AC; margin-bottom:14px; text-align:center; }
-  #camera-wrapper { position:relative; width:100%; max-width:320px; margin:0 auto; aspect-ratio:1; border-radius:16px; overflow:hidden; border:2px solid var(--gold); background:#000; }
-  #camera-video { width:100%; height:100%; object-fit:cover; display:block; }
-  .scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+  #camera-wrapper { position:relative; width:100%; max-width:320px; margin:0 auto; border-radius:16px; overflow:hidden; border:2px solid var(--gold); background:#000; }
+  #camera-wrapper::before { content:''; display:block; padding-top:100%; }
+  #camera-video { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; display:block; }
+  .scan-overlay { position:absolute; top:0; right:0; bottom:0; left:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
   .scan-frame { width:65%; height:65%; border:2px solid var(--gold); border-radius:12px; box-shadow:0 0 0 9999px rgba(0,0,0,0.45); }
   .scan-line { position:absolute; width:65%; height:2px; background:linear-gradient(90deg,transparent,var(--gold),transparent); animation:scanLine 2s linear infinite; }
   @keyframes scanLine { 0% { top:17.5%; } 100% { top:82.5%; } }
@@ -118,7 +121,7 @@
   .result-status.err { color:#F44336; }
   #connection-banner { display:none; position:sticky; top:0; z-index:1000; background:#5a1a1a; color:#ffd7d7; text-align:center; padding:10px 16px; font-size:13px; font-weight:600; }
 
-  #splash { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.8s ease, visibility 0.8s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
+  #splash { position:fixed; top:0; right:0; bottom:0; left:0; z-index:9999; display:flex; align-items:center; justify-content:center; transition:opacity 0.8s ease, visibility 0.8s ease; overflow:hidden; background:radial-gradient(ellipse at center, #14120e 0%, #0A0A0A 70%); }
   #splash::before { content:''; position:absolute; width:460px; height:460px; border-radius:50%; background:radial-gradient(circle, rgba(224,188,122,0.12), transparent 70%); animation:splashPulse 3.5s ease-in-out infinite; }
   #splash.hide { opacity:0; visibility:hidden; }
   .splash-inner { text-align:center; position:relative; z-index:1; animation:splashFade 1.2s cubic-bezier(0.2,0.8,0.2,1); }
@@ -168,7 +171,7 @@ setTimeout(() => {
     <div class="card">
       <div class="err" id="pin-err">رقم غير صحيح</div>
       <input type="tel" inputmode="numeric" maxlength="6" id="pin-input" placeholder="000000" onkeydown="if(event.key==='Enter') checkPin()">
-      <button class="btn" onclick="checkPin()">دخول</button>
+      <button class="btn" onclick="checkPin(event)">دخول</button>
     </div>
 
     <!-- For an admin checking in on a device they don't normally use (a
@@ -254,7 +257,7 @@ setTimeout(() => {
 <!-- Moved out of <head> so it doesn't block first paint (and the splash
      screen) on a fetch to another CDN — nothing needs it until the script
      below runs. -->
-<script src="https://unpkg.com/qr-scanner@1.4.2/qr-scanner.umd.min.js"></script>
+<script src="vendor/qr-scanner.umd.min.js"></script>
 <script src="icons.js"></script>
 <script src="utils.js"></script>
 <script>
@@ -327,12 +330,26 @@ function playBeep(success) {
 // accepted or denied. Every guest read and every check-in write is then
 // gated on that session doc still being valid, so "generate a new code" on
 // the dashboard cuts every device off at once.
-async function ensureIdentity() {
+let identityP = null;
+function ensureIdentity() {
   const current = window._auth.currentUser;
-  if (current) return current;
+  if (current) return Promise.resolve(current);
+  if (identityP) return identityP;
   const { signInAnonymously } = window._authFns;
-  const cred = await signInAnonymously(window._auth);
-  return cred.user;
+  identityP = (async () => {
+    const cred = await signInAnonymously(window._auth);
+    return cred.user;
+  })().finally(() => { identityP = null; });
+  return identityP;
+}
+
+// The anonymous sign-in is the slowest step after typing the code, so start
+// it while the code screen is still open. Fire and forget: checkPin calls
+// ensureIdentity() again and reports a failure itself. Skipped when the
+// device already has a user (admin, organizer, or a returning door device).
+function warmIdentity() {
+  if (window._auth.currentUser) return;
+  ensureIdentity().catch(() => {});
 }
 
 function sessionRef(uid) {
@@ -346,11 +363,13 @@ function showPinError(msg) {
   err.style.display = 'block';
 }
 
-async function checkPin() {
+async function checkPin(ev) {
+  const clickDelay = ev && ev.timeStamp ? performance.now() - ev.timeStamp : 0;
   const val = document.getElementById('pin-input').value.trim();
   document.getElementById('pin-err').style.display = 'none';
   if (!val) return;
 
+  const tapAt = performance.now();
   let user;
   try {
     user = await ensureIdentity();
@@ -362,6 +381,7 @@ async function checkPin() {
     return;
   }
 
+  const identityAt = performance.now();
   const { setDoc } = window._fsFns;
   try {
     await setDoc(sessionRef(user.uid), { pin: val, createdAt: new Date().toISOString() });
@@ -374,8 +394,20 @@ async function checkPin() {
     }
     return;
   }
+  const writeAt = performance.now();
   usesSessionDoc = true;
   showScanner();
+  if (new URLSearchParams(location.search).get('timing') === '1') {
+    const shownAt = performance.now();
+    const ms = (n) => Math.round(n) + ' ms';
+    const text = 'هوية ' + ms(identityAt - tapAt) + ' · كتابة ' + ms(writeAt - identityAt) + ' · المجموع ' + ms(shownAt - tapAt) + ' · تأخير النقرة ' + ms(clickDelay);
+    console.log('scan timing:', text);
+    const line = document.createElement('div');
+    line.id = 'timing-line';
+    line.style.cssText = 'text-align:center;font-size:11px;opacity:0.5;margin-top:8px;';
+    line.textContent = text;
+    document.querySelector('.wrap').appendChild(line);
+  }
 }
 
 // True only for a device that got in by proving the code (a session doc
@@ -497,7 +529,12 @@ async function submitAdminLogin() {
 
   const { signInWithEmailAndPassword, signOut } = window._authFns;
   try {
-    const cred = await signInWithEmailAndPassword(window._auth, email, pass);
+    if (identityP) { try { await identityP; } catch (e) {} }
+    let cred = await signInWithEmailAndPassword(window._auth, email, pass);
+    const now = window._auth.currentUser;
+    if (now && now.isAnonymous && !cred.user.isAnonymous) {
+      cred = await signInWithEmailAndPassword(window._auth, email, pass);
+    }
     if (!isAdmin(cred.user)) {
       await signOut(window._auth);
       showErr('هذا الحساب ليس حساب الأدمن');
@@ -557,6 +594,7 @@ async function lockDevice() {
   document.getElementById('pin-gate').style.display = 'block';
   hideAdminLogin();
   lockingDevice = false;
+  warmIdentity();
 }
 
 function offlineCacheKey() { return 'scan_offline_cache_' + eventId; }
@@ -852,6 +890,7 @@ async function init() {
 
   document.getElementById('pin-gate').style.display = 'block';
   document.getElementById('pin-event-name').textContent = eventData.name;
+  warmIdentity();
 }
 
 function hideResultCards() {
@@ -859,6 +898,50 @@ function hideResultCards() {
   document.getElementById('result-duplicate').style.display = 'none';
   document.getElementById('result-denied').style.display = 'none';
 }
+
+const dbg = { started: false, decodes: 0, errCount: 0, lastDecodeError: '', lastError: '', formats: '...', hasCamera: '...' };
+const DEBUG_MODE = new URLSearchParams(location.search).get('debug') === '1';
+
+function startDebugPanel() {
+  if (!DEBUG_MODE) return;
+  const panel = document.createElement('pre');
+  panel.id = 'debug-panel';
+  panel.style.cssText = 'direction:ltr;text-align:left;font:11px/1.5 monospace;white-space:pre-wrap;word-break:break-all;background:#111;color:#9fe;border:1px solid #333;border-radius:8px;padding:8px;margin-top:10px;';
+  document.getElementById('camera-wrapper').insertAdjacentElement('afterend', panel);
+  const ua = navigator.userAgent;
+  const m = ua.match(/(?:Chrome|CriOS)\/(\d+[\d.]*)/);
+  if (window.BarcodeDetector && BarcodeDetector.getSupportedFormats) {
+    BarcodeDetector.getSupportedFormats().then(f => { dbg.formats = f.join(','); }).catch(e => { dbg.formats = 'error: ' + e; });
+  } else {
+    dbg.formats = '-';
+  }
+  if (typeof QrScanner !== 'undefined') {
+    QrScanner.hasCamera().then(v => { dbg.hasCamera = String(v); }).catch(e => { dbg.hasCamera = 'error: ' + e; });
+  } else {
+    dbg.hasCamera = 'no QrScanner';
+  }
+  window.addEventListener('error', e => { dbg.lastError = e.message; });
+  window.addEventListener('unhandledrejection', e => { dbg.lastError = String((e.reason && e.reason.message) || e.reason); });
+  const video = document.getElementById('camera-video');
+  const tick = () => {
+    const text = [
+      'المتصفح: ' + ua,
+      'إصدار Chrome: ' + (m ? m[1] : '-'),
+      'BarcodeDetector: ' + (window.BarcodeDetector ? 'yes' : 'no') + ' | الصيغ: ' + dbg.formats,
+      'hasCamera: ' + dbg.hasCamera,
+      'الفيديو: ' + video.videoWidth + 'x' + video.videoHeight + ' | readyState: ' + video.readyState,
+      'QrScanner بدأ: ' + (dbg.started ? 'yes' : 'no'),
+      'أخطاء القراءة: ' + dbg.errCount + ' | آخر خطأ قراءة: ' + (dbg.lastDecodeError || '-'),
+      'قراءات ناجحة: ' + dbg.decodes,
+      'آخر خطأ: ' + (dbg.lastError || '-')
+    ].join('\n');
+    panel.textContent = text;
+    console.log('scan debug:', text);
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+startDebugPanel();
 
 async function startCamera() {
   const video = document.getElementById('camera-video');
@@ -883,6 +966,7 @@ async function startCamera() {
     const probe = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     probe.getTracks().forEach(t => t.stop());
   } catch (e) {
+    dbg.lastError = (e.name || '') + ' ' + (e.message || e);
     status.textContent = e.name === 'NotAllowedError'
       ? '⚠️ إذن الكاميرا مرفوض — فعّله من إعدادات الآيفون: الإعدادات ← Safari ← الكاميرا'
       : '⚠️ تعذّر الوصول للكاميرا: ' + (e.name || '') + ' — ' + (e.message || e);
@@ -893,9 +977,20 @@ async function startCamera() {
   while (retries >= 0) {
     try {
       qrScanner = new QrScanner(video, result => {
+        dbg.decodes++;
         if (!scanCooldown) handleScan(result.data);
-      }, { returnDetailedScanResult: true, preferredCamera: 'environment' });
+      }, {
+        returnDetailedScanResult: true,
+        preferredCamera: 'environment',
+        onDecodeError: err => {
+          const msg = String((err && err.message) || err);
+          if (msg === 'No QR code found') return;
+          dbg.errCount++;
+          dbg.lastDecodeError = msg;
+        }
+      });
       await qrScanner.start();
+      dbg.started = true;
       document.getElementById('camera-wrapper').style.display = 'block';
       document.getElementById('start-cam-btn').style.display = 'none';
       status.textContent = 'وجّه الكاميرا نحو الباركود';
@@ -904,6 +999,7 @@ async function startCamera() {
       if (qrScanner) { try { qrScanner.destroy(); } catch (_) {} qrScanner = null; }
       retries--;
       if (retries < 0) {
+        dbg.lastError = (e.name || '') + ' ' + (e.message || e);
         status.textContent = '⚠️ خطأ: ' + (e.name || '') + ' — ' + (e.message || e);
       } else {
         status.textContent = 'إعادة المحاولة...';

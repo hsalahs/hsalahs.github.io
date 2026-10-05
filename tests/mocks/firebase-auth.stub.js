@@ -56,16 +56,23 @@ function _signIn(email) {
 // Firebase console) with auth.nextSignInError.
 export function signInAnonymously(auth) {
   const a = F().auth;
+  a.anonCalls = (a.anonCalls || 0) + 1;
+  if (a.alwaysSignInError) return Promise.reject(a.alwaysSignInError);
   if (a.nextSignInError) {
     const err = a.nextSignInError;
     a.nextSignInError = null;
     return Promise.reject(err);
   }
-  const user = { uid: a.nextAnonUid || ('anon-' + Math.random().toString(36).slice(2, 8)), isAnonymous: true, email: null };
-  a.nextAnonUid = null;
-  a.user = user;
-  notifyAuth();
-  return Promise.resolve({ user });
+  const finish = () => {
+    const user = { uid: a.nextAnonUid || ('anon-' + Math.random().toString(36).slice(2, 8)), isAnonymous: true, email: null };
+    a.nextAnonUid = null;
+    a.user = user;
+    notifyAuth();
+    return { user };
+  };
+  const ms = window.__signInDelay || 0;
+  if (!ms) return Promise.resolve(finish());
+  return new Promise((r) => setTimeout(r, ms)).then(finish);
 }
 
 export function signOut() {

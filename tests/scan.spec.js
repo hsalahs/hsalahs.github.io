@@ -118,7 +118,7 @@ test('a code the server rule rejects shows "رقم غير صحيح" and keeps th
 test('if anonymous sign-in itself is unavailable, the code screen says so instead of blaming the code', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
-  await page.addInitScript(() => { window.__fakeFirebase.auth.nextSignInError = { code: 'auth/admin-restricted-operation' }; });
+  await page.addInitScript(() => { window.__fakeFirebase.auth.alwaysSignInError = { code: 'auth/admin-restricted-operation' }; });
   await page.goto('/scan.html?event=e1');
 
   await page.locator('#pin-input').fill('1234');
@@ -486,7 +486,7 @@ test('"تسجيل خروج من هذا الجهاز" deletes the device\'s sessi
     user: window.__fakeFirebase.auth.user,
     session: window.__fakeFirebase.store['events/e1/scanSessions']['anon-1'],
   }));
-  expect(state.user).toBeNull();
+  expect(state.user === null || state.user.uid !== 'anon-1').toBe(true);
   expect(state.session).toBeUndefined();
 });
 
@@ -934,4 +934,218 @@ test('scanning a VIP guest shows "★ VIP" on the result; a normal guest shows n
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
   await expect(page.locator('#result-allowed')).toBeVisible();
   await expect(page.locator('#result-vip-ok')).toBeHidden();
+});
+
+const FRESH_STORE = { events: { e1: EVENT }, 'events/e1/guests': {} };
+
+test('scanner batch 2: the anonymous sign-in starts while the code screen is open, so the tap only waits for the write', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: FRESH_STORE });
+  await page.addInitScript(() => { window.__signInDelay = 800; window.__setDocDelay = 1500; });
+  await page.goto('/scan.html?event=e1&timing=1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.auth.anonCalls || 0)).toBe(1);
+  await page.waitForTimeout(1000);
+  expect(await page.evaluate(() => !!window.__fakeFirebase.auth.user)).toBe(true);
+
+  await page.locator('#pin-input').fill('1234');
+  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  const line = await page.locator('#timing-line').textContent();
+  const [, identity, write] = line.match(/هوية (\d+) ms · كتابة (\d+) ms/).map(Number);
+  expect(identity).toBeLessThan(100);
+  expect(write).toBeGreaterThanOrEqual(1400);
+  expect(write).toBeLessThan(1900);
+  expect(await page.evaluate(() => window.__fakeFirebase.auth.anonCalls)).toBe(1);
+});
+
+test('scanner batch 2: tapping before the warm-up finishes still works and signs in only once', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: FRESH_STORE });
+  await page.addInitScript(() => { window.__signInDelay = 2000; });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await page.evaluate(() => { document.getElementById('pin-input').value = '1234'; checkPin(); });
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.waitForTimeout(2500);
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  const st = await page.evaluate(() => ({
+    calls: window.__fakeFirebase.auth.anonCalls,
+    uid: window.__fakeFirebase.auth.user.uid,
+    keys: Object.keys(window.__fakeFirebase.store['events/e1/scanSessions'] || {}),
+  }));
+  expect(st.calls).toBe(1);
+  expect(st.keys).toEqual([st.uid]);
+});
+
+test('scanner batch 2: tapping right after locking the device signs in only once and the session matches the user', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.evaluate(() => { window.__signInDelay = 2000; window.__fakeFirebase.auth.anonCalls = 0; });
+  await page.locator('#lock-device-btn').click();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await page.evaluate(() => { document.getElementById('pin-input').value = '1234'; checkPin(); });
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.waitForTimeout(2500);
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  const st = await page.evaluate(() => ({
+    calls: window.__fakeFirebase.auth.anonCalls,
+    uid: window.__fakeFirebase.auth.user.uid,
+    keys: Object.keys(window.__fakeFirebase.store['events/e1/scanSessions'] || {}),
+  }));
+  expect(st.calls).toBe(1);
+  expect(st.uid).not.toBe('anon-1');
+  expect(st.keys).toEqual([st.uid]);
+});
+
+test('scanner batch 2: an admin sign-in during a slow warm-up ends with the admin, not an anonymous user', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.addInitScript(() => { window.__signInDelay = 2000; });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await page.evaluate(() => { window.__fakeFirebase.auth.nextSignInResult = { uid: 'admin-1', email: 'hsallah@outlook.sa', isAnonymous: false }; });
+  await page.evaluate(() => {
+    showAdminLogin();
+    document.getElementById('admin-email').value = 'hsallah@outlook.sa';
+    document.getElementById('admin-pass').value = 'secret123';
+    submitAdminLogin();
+  });
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.waitForTimeout(2500);
+  const u = await page.evaluate(() => window.__fakeFirebase.auth.user);
+  expect(u.uid).toBe('admin-1');
+  expect(u.isAnonymous).toBeFalsy();
+});
+
+test('scanner batch 2: a device that already has a user does not sign in again, and locking the device warms a new identity', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'owner-x', isAnonymous: false, email: 'o@x.com' }, store: FRESH_STORE });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.__fakeFirebase.auth.anonCalls || 0)).toBe(0);
+
+  await page.locator('#pin-input').fill('1234');
+  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.locator('#lock-device-btn').click();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.auth.anonCalls || 0)).toBe(1);
+});
+
+test('scanner batch 2: the scanner view does not wait for the roster or the counter', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.addInitScript(() => { window.__getDocDelays = { 'events/e1/roster/list': 4000 }; });
+  const t0 = Date.now();
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  expect(Date.now() - t0).toBeLessThan(2500);
+});
+
+test('scanner batch 2: the timing line shows only with ?timing=1', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: FRESH_STORE });
+  const logs = [];
+  page.on('console', (m) => logs.push(m.text()));
+  await page.goto('/scan.html?event=e1&timing=1');
+  await page.locator('#pin-input').fill('1234');
+  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#timing-line')).toHaveText(/^هوية \d+ ms · كتابة \d+ ms · المجموع \d+ ms · تأخير النقرة \d+ ms$/);
+  expect(logs.some((l) => l.includes('scan timing:'))).toBe(true);
+
+  await page.goto('/scan.html?event=e1');
+  await page.locator('#pin-input').fill('1234');
+  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#timing-line')).toHaveCount(0);
+});
+
+test('scanner batch 2: qr-scanner is served locally, precached by sw.js, and a failed local copy shows the reload bar', async ({ page }) => {
+  const fs = require('fs');
+  const html = fs.readFileSync('scan.html', 'utf8');
+  expect(html).not.toContain('unpkg.com');
+  expect(html).toContain('<script src="vendor/qr-scanner.umd.min.js"></script>');
+  const sw = fs.readFileSync('sw.js', 'utf8');
+  expect(sw).toMatch(/SHELL_FILES = \[[^\]]*'vendor\/qr-scanner\.umd\.min\.js'/);
+  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v10'");
+  expect(fs.readFileSync('vendor/qr-scanner.umd.min.js', 'utf8')).toContain('QrScanner');
+
+  const requested = [];
+  page.on('request', (r) => requested.push(r.url()));
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: FRESH_STORE });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  expect(requested.some((u) => u.includes('unpkg.com'))).toBe(false);
+  expect(await page.evaluate(() => typeof QrScanner)).toBe('function');
+
+  await page.route('**/vendor/qr-scanner.umd.min.js', (r) => r.abort());
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#load-fail')).toBeVisible();
+});
+
+
+test('old Android compat: no html file declares inset: or uses aspect-ratio', async () => {
+  const fs = require('fs');
+  const files = fs.readdirSync('.').filter((f) => f.endsWith('.html') || f.endsWith('.css'));
+  expect(files.length).toBeGreaterThan(5);
+  for (const f of files) {
+    const src = fs.readFileSync(f, 'utf8');
+    expect(src, f + ' uses the inset shorthand').not.toMatch(/(^|[^-\w])inset\s*:/);
+    expect(src, f + ' uses aspect-ratio').not.toMatch(/aspect-ratio/);
+  }
+});
+
+test('old Android compat: the camera box is a square and the scan frame is 65% centred in it', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.evaluate(() => { document.getElementById('camera-wrapper').style.display = 'block'; });
+  const w = await page.locator('#camera-wrapper').boundingBox();
+  expect(Math.abs(w.width - w.height)).toBeLessThanOrEqual(1);
+  expect(w.width).toBeLessThanOrEqual(320);
+  expect(w.width).toBeGreaterThan(250);
+  const v = await page.locator('#camera-video').boundingBox();
+  expect(Math.abs(v.width - (w.width - 4))).toBeLessThanOrEqual(1);
+  expect(Math.abs(v.height - (w.height - 4))).toBeLessThanOrEqual(1);
+  const f = await page.locator('.scan-frame').boundingBox();
+  const inner = w.width - 4;
+  expect(Math.abs(f.width - inner * 0.65)).toBeLessThanOrEqual(1.5);
+  expect(Math.abs(f.height - inner * 0.65)).toBeLessThanOrEqual(1.5);
+  expect(Math.abs((f.x + f.width / 2) - (w.x + w.width / 2))).toBeLessThanOrEqual(1);
+  expect(Math.abs((f.y + f.height / 2) - (w.y + w.height / 2))).toBeLessThanOrEqual(1);
+  const line = await page.locator('.scan-line').boundingBox();
+  expect(line.width).toBeGreaterThan(0);
+});
+
+test('old Android compat: the landing sample card QR is still a square', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto('/index.html');
+  const q = await page.locator('.card-preview .cp-qr').boundingBox();
+  expect(q.width).toBeGreaterThan(50);
+  expect(Math.abs(q.width - q.height)).toBeLessThanOrEqual(1);
+});
+
+test('scanner debug panel: appears only with debug=1', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#debug-panel')).toHaveCount(0);
+
+  await page.goto('/scan.html?event=e1&debug=1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  const panel = page.locator('#debug-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('BarcodeDetector');
+  await expect(panel).toContainText('hasCamera');
+  await expect(panel).toContainText('قراءات ناجحة: 0');
+  await expect(panel).toContainText('QrScanner بدأ: no');
 });
