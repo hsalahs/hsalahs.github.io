@@ -322,11 +322,11 @@ function waitForAuth() {
 const RESULT_UI = {
   tapGuardMs: 400,        // taps this soon after the overlay appears are ignored
   clearLastMs: 600,       // lastScanned is cleared this long AFTER hiding
-  allowed:   { autoMs: 1500, icon: 'check',  cls: 'rs-allowed',   status: 'مسموح بالدخول', camera: '✅ مسموح بالدخول',
+  allowed:   { autoMs: 5000, icon: 'check',  cls: 'rs-allowed',   status: 'مسموح بالدخول', camera: '✅ مسموح بالدخول',
                vibrate: 80,              tones: [{ f: 1000, type: 'sine', at: 0, dur: 0.15 }] },
-  duplicate: { autoMs: 3000, icon: 'x',      cls: 'rs-duplicate', status: 'تم استخدام هذه الدعوة مسبقًا!', camera: '🚫 تم استخدام هذه الدعوة مسبقًا',
+  duplicate: { autoMs: 6000, icon: 'x',      cls: 'rs-duplicate', status: 'تم استخدام هذه الدعوة مسبقًا!', camera: '🚫 تم استخدام هذه الدعوة مسبقًا',
                vibrate: [150, 80, 150],  tones: [{ f: 220, type: 'square', at: 0, dur: 0.18 }, { f: 220, type: 'square', at: 0.26, dur: 0.18 }] },
-  denied:    { autoMs: 3000, icon: 'x',      cls: 'rs-denied',    status: 'باركود غير مسجّل', camera: '❌ باركود غير مسجّل',
+  denied:    { autoMs: 6000, icon: 'x',      cls: 'rs-denied',    status: 'باركود غير مسجّل', camera: '❌ باركود غير مسجّل',
                vibrate: 300,             tones: [{ f: 220, type: 'square', at: 0, dur: 0.18 }, { f: 220, type: 'square', at: 0.26, dur: 0.18 }] },
   error:     { autoMs: 0,    icon: 'alert',  cls: 'rs-error',     status: '', camera: '',
                vibrate: 300,             tones: [{ f: 150, type: 'sawtooth', at: 0, dur: 0.7 }] },
