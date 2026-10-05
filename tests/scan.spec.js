@@ -1135,7 +1135,7 @@ test('scanner batch 2: qr-scanner is served locally, precached by sw.js, and a f
   expect(html).toContain('<script src="vendor/qr-scanner.umd.min.js"></script>');
   const sw = fs.readFileSync('sw.js', 'utf8');
   expect(sw).toMatch(/SHELL_FILES = \[[^\]]*'vendor\/qr-scanner\.umd\.min\.js'/);
-  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v13'");
+  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v14'");
   expect(fs.readFileSync('vendor/qr-scanner.umd.min.js', 'utf8')).toContain('QrScanner');
 
   const requested = [];
@@ -1473,4 +1473,114 @@ test('audio: the camera-start tap unlocks a suspended AudioContext and each beep
   const ac = await page.evaluate(() => window.__ac);
   expect(ac.made).toBe(1);
   expect(ac.resumes).toBeGreaterThanOrEqual(3);
+});
+
+function manyGuests(n) {
+  const g = {};
+  for (let i = 1; i <= n; i++) g['WD-G' + i] = { name: 'ضيف' + i, id: 'WD-G' + i, scanned: false };
+  return g;
+}
+async function openCounterScanner(page, guests, scannedCount) {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: counterStore(guests, scannedCount) });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+}
+const storeCount = (page) => page.evaluate(() => window.__fakeFirebase.store.events.e1.scannedCount);
+
+test('check-in counter: simultaneous check-ins of different guests all count and nobody is kicked out', async ({ page }) => {
+  await openCounterScanner(page, manyGuests(6), 0);
+  await page.evaluate(async () => {
+    // another phone bumps the counter between this phone's read and write
+    const real = window._fsFns.runTransaction;
+    window._fsFns.runTransaction = (db, fn) => real(db, async (tx) => {
+      const r = await fn(tx);
+      const ev = window.__fakeFirebase.store.events.e1;
+      ev.scannedCount = (ev.scannedCount || 0) + 1;
+      return r;
+    });
+    await Promise.all(['WD-G1', 'WD-G2', 'WD-G3', 'WD-G4', 'WD-G5', 'WD-G6'].map((c) => handleScan(c)));
+  });
+  expect(await storeCount(page)).toBe(12);
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#pin-gate')).toBeHidden();
+});
+
+test('check-in counter: plain concurrent check-ins end with scannedCount equal to N', async ({ page }) => {
+  await openCounterScanner(page, manyGuests(5), 0);
+  await page.evaluate(() => Promise.all(['WD-G1', 'WD-G2', 'WD-G3', 'WD-G4', 'WD-G5'].map((c) => handleScan(c))));
+  expect(await storeCount(page)).toBe(5);
+  await expect(page.locator('#scanner-view')).toBeVisible();
+});
+
+test('check-in counter: an event with no scannedCount goes to 1', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore(manyGuests(1)) });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.evaluate(() => handleScan('WD-G1'));
+  expect(await storeCount(page)).toBe(1);
+});
+
+test('check-in counter: a duplicate scan does not bump the count', async ({ page }) => {
+  const g = manyGuests(1);
+  g['WD-G1'].scanned = true;
+  await openCounterScanner(page, g, 1);
+  await page.evaluate(() => handleScan('WD-G1'));
+  await expect(page.locator('#result-overlay.rs-duplicate')).toBeVisible();
+  expect(await storeCount(page)).toBe(1);
+});
+
+test('check-in retry: a one-off permission-denied with a valid session retries and succeeds', async ({ page }) => {
+  await openCounterScanner(page, manyGuests(1), 0);
+  await page.evaluate(() => {
+    const real = window._fsFns.runTransaction;
+    window.__tries = 0;
+    window._fsFns.runTransaction = (db, fn) => {
+      window.__tries++;
+      if (window.__tries === 1) { const e = new Error('denied'); e.code = 'permission-denied'; return Promise.reject(e); }
+      return real(db, fn);
+    };
+  });
+  await page.evaluate(() => handleScan('WD-G1'));
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  expect(await page.evaluate(() => window.__tries)).toBe(2);
+  expect(await storeCount(page)).toBe(1);
+  await expect(page.locator('#scanner-view')).toBeVisible();
+});
+
+test('check-in retry: gives up after 2 retries and revokes the device', async ({ page }) => {
+  await openCounterScanner(page, manyGuests(1), 0);
+  await page.evaluate(() => {
+    window.__tries = 0;
+    window._fsFns.runTransaction = () => { window.__tries++; const e = new Error('denied'); e.code = 'permission-denied'; return Promise.reject(e); };
+  });
+  await page.evaluate(() => handleScan('WD-G1'));
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  expect(await page.evaluate(() => window.__tries)).toBe(3);
+});
+
+test('check-in retry: permission-denied with a deleted session revokes at once, no retry', async ({ page }) => {
+  await openCounterScanner(page, manyGuests(1), 0);
+  await page.evaluate(() => {
+    window.__tries = 0;
+    delete window.__fakeFirebase.store['events/e1/scanSessions']['anon-1'];
+    window._fsFns.runTransaction = () => { window.__tries++; const e = new Error('denied'); e.code = 'permission-denied'; return Promise.reject(e); };
+  });
+  await page.evaluate(() => handleScan('WD-G1'));
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  expect(await page.evaluate(() => window.__tries)).toBe(1);
+});
+
+test('check-in retry: the organizer (no session doc) is not retried', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', isAnonymous: false, email: 'o@x.com' }, store: counterStore(manyGuests(1), 0) });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.evaluate(() => {
+    window.__tries = 0;
+    window._fsFns.runTransaction = () => { window.__tries++; const e = new Error('denied'); e.code = 'permission-denied'; return Promise.reject(e); };
+  });
+  await page.evaluate(() => handleScan('WD-G1'));
+  expect(await page.evaluate(() => window.__tries)).toBe(1);
 });

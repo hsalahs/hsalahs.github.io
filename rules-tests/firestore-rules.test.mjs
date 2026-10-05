@@ -92,6 +92,12 @@ await check('with a session: cannot leave it unchanged', () => assertFails(anon(
 await check('with a session: cannot decrease it', () => assertFails(anon('dev1').doc('events/e1').update({ scannedCount: 1 })));
 await check('with a session: cannot bump the counter together with any other field', () => assertFails(anon('dev1').doc('events/e1').update({ scannedCount: 3, name: 'hacked' })));
 await check('with a session: cannot use this path to touch guestCount instead', () => assertFails(anon('dev1').doc('events/e1').update({ guestCount: 99 })));
+await check('with a session: increment(1) from the stored value is allowed (what scan.html writes)', () => assertSucceeds(anon('dev1').doc('events/e1').update({ scannedCount: firebase.firestore.FieldValue.increment(1) })));
+await check('with a session: two increment(1) writes in a row both pass', async () => {
+  await assertSucceeds(anon('dev1').doc('events/e1').update({ scannedCount: firebase.firestore.FieldValue.increment(1) }));
+  await assertSucceeds(anon('dev1').doc('events/e1').update({ scannedCount: firebase.firestore.FieldValue.increment(1) }));
+});
+await check('with a session: increment(2) is still denied', () => assertFails(anon('dev1').doc('events/e1').update({ scannedCount: firebase.firestore.FieldValue.increment(2) })));
 
 console.log('\nfreeing up a guest slot after a delete (events/{id}.guestCount, owner-only, -1 only):');
 // e1 is still ownerUid 'owner1', guestCount: 2 at this point — untouched by
