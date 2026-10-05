@@ -1130,6 +1130,17 @@ async function startCamera() {
   }
 }
 
+async function sessionStillValid(getDoc) {
+  const user = window._auth.currentUser;
+  if (!user) return false;
+  try {
+    const snap = await getDoc(sessionRef(user.uid));
+    return snap.exists();
+  } catch (e) {
+    return false;
+  }
+}
+
 async function handleScan(raw) {
   const match = raw.trim().toUpperCase().match(/WD-[A-Z0-9]+/);
   if (!match) return;
@@ -1149,41 +1160,56 @@ async function handleScan(raw) {
   // transaction's own tx.get() is the single source of truth for both
   // "not registered" and "already scanned"; it re-reads live every time,
   // so two devices scanning the same guest at once can't both win.
-  const { doc, runTransaction } = window._fsFns;
+  const { doc, runTransaction, getDoc, increment } = window._fsFns;
   const gRef = doc(window._db, 'events', eventId, 'guests', val);
   const eventRef = doc(window._db, 'events', eventId);
   let outcome, guestName, guestVip = false;
-  try {
-    outcome = await runTransaction(window._db, async (tx) => {
-      const snap = await tx.get(gRef);
-      if (!snap.exists()) return 'missing';
-      guestName = snap.data().name;
-      guestVip = !!snap.data().vip;
-      if (snap.data().scanned) return 'dup';
-      // The live door counter (events/{id}.scannedCount) is bumped in this
-      // same transaction, so it can never drift from the guest flip it
-      // represents — see the matching rule in firestore.rules.
-      const evSnap = await tx.get(eventRef);
-      tx.update(gRef, { scanned: true, scannedAt: new Date().toISOString() });
-      tx.update(eventRef, { scannedCount: (evSnap.data().scannedCount || 0) + 1 });
-      return 'ok';
-    });
-  } catch (e) {
-    // A failed write used to escape this function entirely, which left
-    // scanCooldown stuck on true — the scanner silently ignored every
-    // barcode after one network hiccup until "مسح جديد" was pressed.
-    console.error('check-in failed:', e);
-    if (epoch !== scanEpoch) return;
-    if (e && e.code === 'permission-denied') { sessionRevoked(); return; }
-    if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
-      status.textContent = '⏳ انقطع الاتصال — جاري تحديث الصفحة...';
-      setTimeout(() => location.reload(), 800);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      outcome = await runTransaction(window._db, async (tx) => {
+        const snap = await tx.get(gRef);
+        if (!snap.exists()) return 'missing';
+        guestName = snap.data().name;
+        guestVip = !!snap.data().vip;
+        if (snap.data().scanned) return 'dup';
+        // The live door counter (events/{id}.scannedCount) is bumped in this
+        // same transaction, so it can never drift from the guest flip it
+        // represents — see the matching rule in firestore.rules. It is an
+        // increment, not old+1 from a read: a read-then-write value goes stale
+        // when other door phones check in at the same moment and the rule
+        // (+1 over the stored value) then denies it.
+        tx.update(gRef, { scanned: true, scannedAt: new Date().toISOString() });
+        tx.update(eventRef, { scannedCount: increment(1) });
+        return 'ok';
+      });
+      break;
+    } catch (e) {
+      // A failed write used to escape this function entirely, which left
+      // scanCooldown stuck on true — the scanner silently ignored every
+      // barcode after one network hiccup until "مسح جديد" was pressed.
+      console.error('check-in failed:', e);
+      if (epoch !== scanEpoch) return;
+      if (e && e.code === 'permission-denied') {
+        // A door phone with a still-valid session can be denied by a race
+        // between phones; only a missing session means it was revoked.
+        if (usesSessionDoc && attempt < 2 && await sessionStillValid(getDoc)) {
+          await new Promise(r => setTimeout(r, 100 + Math.random() * 300));
+          if (epoch !== scanEpoch) return;
+          continue;
+        }
+        sessionRevoked();
+        return;
+      }
+      if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
+        status.textContent = '⏳ انقطع الاتصال — جاري تحديث الصفحة...';
+        setTimeout(() => location.reload(), 800);
+        return;
+      }
+      status.textContent = '⚠️ تعذّر تسجيل الدخول — تأكد من الإنترنت وحاول مرة ثانية';
+      lastScanned = null;
+      showResult('error', 'تعذّر تسجيل الدخول', false, 'تأكد من الإنترنت وحاول مرة ثانية');
       return;
     }
-    status.textContent = '⚠️ تعذّر تسجيل الدخول — تأكد من الإنترنت وحاول مرة ثانية';
-    lastScanned = null;
-    showResult('error', 'تعذّر تسجيل الدخول', false, 'تأكد من الإنترنت وحاول مرة ثانية');
-    return;
   }
   const stale = epoch !== scanEpoch;
   if (outcome === 'ok') {
