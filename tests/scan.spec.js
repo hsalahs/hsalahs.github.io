@@ -1584,3 +1584,37 @@ test('check-in retry: the organizer (no session doc) is not retried', async ({ p
   await page.evaluate(() => handleScan('WD-G1'));
   expect(await page.evaluate(() => window.__tries)).toBe(1);
 });
+
+test('check-in counter: the event doc is never read in the transaction and the counter patch is an increment', async ({ page }) => {
+  await openCounterScanner(page, manyGuests(1), 0);
+  await page.evaluate(() => {
+    const real = window._fsFns.runTransaction;
+    window.__txGets = []; window.__txUpdates = [];
+    window._fsFns.runTransaction = (db, fn) => real(db, (tx) => fn({
+      get: (ref) => { window.__txGets.push(ref.path); return tx.get(ref); },
+      update: (ref, patch) => { window.__txUpdates.push({ path: ref.path, patch }); return tx.update(ref, patch); },
+    }));
+  });
+  await page.evaluate(() => handleScan('WD-G1'));
+  const gets = await page.evaluate(() => window.__txGets);
+  const updates = await page.evaluate(() => window.__txUpdates);
+  expect(gets).toEqual(['events/e1/guests/WD-G1']);
+  const ev = updates.find((u) => u.path === 'events/e1');
+  expect(ev.patch).toEqual({ scannedCount: { __increment: 1 } });
+});
+
+test('check-in retry: locking the device during the backoff cancels the retry, no overlay, one try', async ({ page }) => {
+  await openCounterScanner(page, manyGuests(1), 0);
+  await page.evaluate(() => {
+    window.__tries = 0;
+    window._fsFns.runTransaction = () => { window.__tries++; const e = new Error('denied'); e.code = 'permission-denied'; return Promise.reject(e); };
+    window.__scanDone = handleScan('WD-G1');
+    window.__scanDone.then(() => { window.__finished = true; });
+  });
+  await page.waitForTimeout(30);
+  await page.evaluate(() => lockDevice());
+  await page.waitForFunction(() => window.__finished === true);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.__tries)).toBe(1);
+  await expect(page.locator('#result-overlay')).toBeHidden();
+});
