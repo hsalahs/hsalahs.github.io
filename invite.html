@@ -152,12 +152,9 @@
   @keyframes splashLineGrow { from { width:0; } to { width:140px; } }
   @keyframes splashPulse { 0%,100% { transform:scale(0.9); opacity:0.5; } 50% { transform:scale(1.1); opacity:1; } }
   svg.ic { flex-shrink:0; vertical-align:middle; }
-  #toast { position:fixed; left:50%; top:16px; transform:translateX(-50%) translateY(-20px); background:rgba(20,18,14,0.95); color:#E8D48B; border:1px solid rgba(201,168,76,0.35); padding:12px 20px; border-radius:30px; font-size:13px; opacity:0; pointer-events:none; transition:all 0.25s ease; z-index:1000; max-width:90%; text-align:center; }
-  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
-  <div id="toast"></div>
   <div id="splash">
     <div class="splash-inner">
       <div class="splash-rings"><img src="icons/logo.svg" alt="" style="display:block; margin:0 auto; height:104px; width:104px;"></div>
@@ -686,7 +683,7 @@ async function downloadInviteCard() {
     if (!blob) return;
     try {
       const file = new File([blob], fileName, { type: 'image/png' });
-      if (!prefersDirectSave() && navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: cardGuestName });
         return;
       }
@@ -701,7 +698,6 @@ async function downloadInviteCard() {
     link.click();
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-    if (prefersDirectSave()) showToast('💾 تم حفظ صورة الدعوة في جوالك — تقدر ترسلها من المعرض');
   }, 'image/png');
 }
 
