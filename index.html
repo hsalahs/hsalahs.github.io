@@ -128,7 +128,10 @@
 <script>
 setTimeout(() => {
   const splash = document.getElementById('splash');
-  if (splash) splash.classList.add('hide');
+  if (splash) {
+    splash.classList.add('hide');
+    setTimeout(() => splash.remove(), 900);
+  }
 }, 2200);
 </script>
 </head>

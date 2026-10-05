@@ -255,3 +255,10 @@ for (const [file, msg] of [['index.html', 'السلام عليكم، عندي س
     expect(box.x).toBeGreaterThan(390 / 2);   // the right-hand corner
   });
 }
+
+test('the splash leaves the page after it hides, so its endless animations stop', async ({ page }) => {
+  await stubFirebase(page);
+  await page.goto('/index.html');
+  await expect(page.locator('#splash')).toHaveCount(1);
+  await expect(page.locator('#splash')).toHaveCount(0, { timeout: 6000 });
+});

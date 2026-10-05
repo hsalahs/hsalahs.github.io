@@ -87,8 +87,8 @@ test('an approval that predates the barcode-id-on-request change shows "preparin
   // The organizer opening their dashboard backfills the id; the same
   // listener picks it up.
   await page.evaluate(() => {
-    const { doc, updateDoc } = window._fsFns;
-    return updateDoc(doc(window._db, 'events', 'e1', 'requests', 'REQ-1'), { guestId: 'WD-LATE' });
+    const { doc, setDoc } = window._fsFns;
+    return setDoc(doc(window._db, 'events', 'e1', 'requests', 'REQ-1'), { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-LATE', createdAt: 'x' });
   });
   await expect(page.locator('#card')).toContainText('تم تأكيد حضورك');
 });
@@ -453,4 +453,89 @@ test('HTML in the event name and welcome line is shown as text on the invitation
   await expect(page.locator('#card')).toContainText('<img id="xn"');
   await expect(page.locator('#card img[id^="x"]')).toHaveCount(0);
   expect(await page.evaluate(() => window.__x)).toBeUndefined();
+});
+
+const QR_STAND_IN = `window.QRCode = function (el) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 256, 256); x.fillStyle = '#fff'; x.fillRect(64, 64, 128, 128);
+  el.appendChild(c);
+};
+window.QRCode.CorrectLevel = { H: 2, M: 0, L: 1, Q: 3 };`;
+
+async function openApprovedInvite(page) {
+  await seedFakeFirebase(page, {
+    store: {
+      events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } },
+      'events/e1/requests': { 'REQ-1': { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABC', createdAt: 'x' } },
+    },
+  });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-1'); });
+}
+
+test('the invitation page never requests or imports the auth SDK, and still loads through the light bootstrap', async ({ page }) => {
+  const seen = [];
+  page.on('request', (r) => seen.push(r.url()));
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } } } });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#g-name')).toBeVisible();
+  expect(seen.some((u) => /firebase-auth/.test(u))).toBe(false);
+  expect(seen.some((u) => /firebase-init-lite\.js/.test(u))).toBe(true);
+  expect(seen.some((u) => /\/firebase-init\.js/.test(u))).toBe(false);
+  expect(await page.evaluate(() => typeof window._auth)).toBe('undefined');
+});
+
+test('the QR library is not requested until a card has to be drawn', async ({ page }) => {
+  const seen = [];
+  page.on('request', (r) => seen.push(r.url()));
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } } } });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#g-name')).toBeVisible();
+  expect(seen.some((u) => /qrcode/.test(u))).toBe(false);
+});
+
+test('a slow QR library: the card still appears once it arrives', async ({ page }) => {
+  await stubFirebase(page);
+  await page.route(/qrcodejs.*qrcode\.min\.js/, async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    route.fulfill({ contentType: 'text/javascript', body: QR_STAND_IN });
+  });
+  await openApprovedInvite(page);
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card-wrap img')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#save-btn')).toBeVisible();
+});
+
+test('a QR library that fails to download shows a clear message with retry, and retrying draws the card', async ({ page }) => {
+  await stubFirebase(page);
+  let fail = true;
+  await page.route(/qrcodejs.*qrcode\.min\.js/, (route) =>
+    fail ? route.abort() : route.fulfill({ contentType: 'text/javascript', body: QR_STAND_IN }));
+  await openApprovedInvite(page);
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#qr-retry')).toContainText('تعذّر تجهيز البطاقة');
+  await expect(page.locator('#card-wrap img')).toHaveCount(0);
+  fail = false;
+  await page.locator('#qr-retry').click();
+  await expect(page.locator('#card-wrap img')).toBeVisible();
+});
+
+test('every page that talks to Firestore preconnects to it; the service worker gives the network 1500 ms before the cache', async () => {
+  const fs = require('fs');
+  for (const f of ['invite.html', 'scan.html', 'app.html', 'event.html']) {
+    expect(fs.readFileSync(f, 'utf8')).toContain('<link rel="preconnect" href="https://firestore.googleapis.com">');
+  }
+  expect(fs.readFileSync('sw.js', 'utf8')).toContain("reject(new Error('timeout')), 1500)");
+});
+
+test('every Firestore function invite.html pulls from _fsFns is exported by the lite bootstrap', async () => {
+  const fs = require('fs');
+  const page = fs.readFileSync('invite.html', 'utf8');
+  const lite = fs.readFileSync('firebase-init-lite.js', 'utf8');
+  const exported = lite.match(/window\._fsFns\s*=\s*\{([^}]*)\}/)[1].split(',').map((s) => s.trim()).filter(Boolean);
+  const used = [...page.matchAll(/const\s*\{([^}]*)\}\s*=\s*window\._fsFns/g)]
+    .flatMap((m) => m[1].split(',').map((s) => s.trim()).filter(Boolean));
+  expect(used.length).toBeGreaterThan(0);
+  for (const name of used) expect(exported).toContain(name);
 });
