@@ -1424,3 +1424,53 @@ test('result overlay: honours reduced motion (no animation)', async ({ page }) =
   await scanManual(page, 'WD-D');
   await expect(page.locator('#result-overlay')).toHaveCSS('animation-name', 'none');
 });
+
+const holdCheckIn = (page) => page.evaluate(() => {
+  window._fsFns.runTransaction = () => new Promise((resolve, reject) => { window.__held = { resolve, reject }; });
+});
+
+for (const teardown of ['lockDevice()', 'resetScanState()', 'sessionRevoked()']) {
+  for (const settle of ['ok', 'dup', 'missing', 'fail']) {
+    test(`result overlay: a check-in still pending when ${teardown} runs never pops the overlay (${settle})`, async ({ page }) => {
+      await openOverlayScanner(page);
+      await holdCheckIn(page);
+      await scanManual(page, 'WD-A');
+      await expect(page.locator('#camera-status')).toHaveText('🔍 جاري التحقق...');
+      await page.evaluate((t) => { window.eval(t); }, teardown);
+      await page.waitForTimeout(300);
+      await page.evaluate((s) => { if (s === 'fail') window.__held.reject(new Error('network')); else window.__held.resolve(s); }, settle);
+      await page.waitForTimeout(500);
+      await expect(page.locator('#result-overlay')).toBeHidden();
+      expect(await page.evaluate(() => resultUp)).toBe(false);
+      if (teardown === 'resetScanState()') await expect(page.locator('#start-cam-btn')).toBeVisible();
+      else await expect(page.locator('#scanner-view')).toBeHidden();
+    });
+  }
+}
+
+test('result overlay: showResult is a no-op while the scanner view is hidden', async ({ page }) => {
+  await openOverlayScanner(page);
+  await page.evaluate(() => { document.getElementById('scanner-view').style.display = 'none'; showResult('error', 'x', false, 'y'); });
+  await expect(page.locator('#result-overlay')).toBeHidden();
+});
+
+test('audio: the camera-start tap unlocks a suspended AudioContext and each beep resumes it again without throwing', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__ac = { made: 0, resumes: 0 };
+    class FakeAC {
+      constructor() { window.__ac.made++; this.state = 'suspended'; this.currentTime = 0; this.destination = {}; }
+      resume() { window.__ac.resumes++; return Promise.reject(new Error('blocked')); }
+      createOscillator() { return { connect() {}, start() {}, stop() {}, frequency: {} }; }
+      createGain() { return { connect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } }; }
+    }
+    window.AudioContext = FakeAC;
+  });
+  await openOverlayScanner(page);
+  await page.locator('#start-cam-btn').click();
+  expect(await page.evaluate(() => window.__ac)).toEqual({ made: 1, resumes: 1 });
+  await scanManual(page, 'WD-A');
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  const ac = await page.evaluate(() => window.__ac);
+  expect(ac.made).toBe(1);
+  expect(ac.resumes).toBeGreaterThanOrEqual(3);
+});

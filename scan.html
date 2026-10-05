@@ -335,11 +335,29 @@ const RESULT_UI = {
 // Audible feedback for busy door staff who can't watch the screen every
 // scan: one short high beep for allowed, a low double buzz for
 // duplicate/denied, one long low tone for a connection error.
+// iOS Safari starts an AudioContext suspended, so one shared context is
+// created and resumed on the supervisor's own taps (start camera, manual
+// check) and resumed again before each beep.
+function unlockAudio() {
+  try {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state !== 'running' && audioCtx.resume) {
+      const p = audioCtx.resume();
+      if (p && p.catch) p.catch(() => {});
+    }
+  } catch (e) {}
+}
+
 function playBeep(kind) {
   try {
     const def = RESULT_UI[kind];
     if (!def) return;
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    unlockAudio();
+    if (!audioCtx) return;
     const t0 = audioCtx.currentTime;
     def.tones.forEach(t => {
       const o = audioCtx.createOscillator();
@@ -357,9 +375,12 @@ function playBeep(kind) {
 
 let resultTimer = null, lastClearTimer = null, resultShownAt = 0, resultUp = false;
 
+let scanEpoch = 0;
+
 function showResult(kind, name, vip, message) {
   const def = RESULT_UI[kind];
   const ov = document.getElementById('result-overlay');
+  if (document.getElementById('scanner-view').style.display === 'none') return;
   clearTimeout(resultTimer); clearTimeout(lastClearTimer);
   document.getElementById('manual-code').blur();
   ov.className = def.cls;
@@ -554,6 +575,7 @@ function sessionRevoked() {
     try { qrScanner.destroy(); } catch (_) {}
     qrScanner = null;
   }
+  scanEpoch++;
   hideResult(true);
   scanCooldown = false; lastScanned = null;
   document.getElementById('scanner-view').style.display = 'none';
@@ -659,6 +681,7 @@ async function lockOrClose() {
   const user = window._auth.currentUser;
   if (!user || user.isAnonymous) return lockDevice();
   lockingDevice = true;
+  scanEpoch++;
   hideResult(true);
   stopSessionWatch();
   if (eventUnsub) { eventUnsub(); eventUnsub = null; }
@@ -678,6 +701,7 @@ async function lockOrClose() {
 // identity it's signed in with (anonymous, admin, or owner).
 async function lockDevice() {
   lockingDevice = true;
+  scanEpoch++;
   hideResult(true);
   usesSessionDoc = false;
   stopSessionWatch();
@@ -872,6 +896,7 @@ function resetScanState() {
     try { qrScanner.destroy(); } catch (_) {}
     qrScanner = null;
   }
+  scanEpoch++;
   hideResult(true);
   scanCooldown = false;
   lastScanned = null;
@@ -882,6 +907,7 @@ function resetScanState() {
 }
 
 function submitManualCode() {
+  unlockAudio();
   const input = document.getElementById('manual-code');
   input.blur();
   const raw = input.value.trim();
@@ -1038,6 +1064,7 @@ function startDebugPanel() {
 startDebugPanel();
 
 async function startCamera() {
+  unlockAudio();
   const video = document.getElementById('camera-video');
   const status = document.getElementById('camera-status');
   status.textContent = 'جاري تشغيل الكاميرا...';
@@ -1109,6 +1136,7 @@ async function handleScan(raw) {
   const val = match[0];
   if (val === lastScanned) return;
   hideResult(true);
+  const epoch = scanEpoch;
   lastScanned = val;
   scanCooldown = true;
 
@@ -1145,6 +1173,7 @@ async function handleScan(raw) {
     // scanCooldown stuck on true — the scanner silently ignored every
     // barcode after one network hiccup until "مسح جديد" was pressed.
     console.error('check-in failed:', e);
+    if (epoch !== scanEpoch) return;
     if (e && e.code === 'permission-denied') { sessionRevoked(); return; }
     if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
       status.textContent = '⏳ انقطع الاتصال — جاري تحديث الصفحة...';
@@ -1156,9 +1185,12 @@ async function handleScan(raw) {
     showResult('error', 'تعذّر تسجيل الدخول', false, 'تأكد من الإنترنت وحاول مرة ثانية');
     return;
   }
+  const stale = epoch !== scanEpoch;
   if (outcome === 'ok') {
-    showResult('allowed', guestName, guestVip);
-    status.textContent = RESULT_UI.allowed.camera;
+    if (!stale) {
+      showResult('allowed', guestName, guestVip);
+      status.textContent = RESULT_UI.allowed.camera;
+    }
     // The counter itself updates from startEventCounterWatch(), moments
     // after this transaction commits. The name list was only read once, at
     // open — keep its offline copy in step with scans this device does.
@@ -1167,6 +1199,8 @@ async function handleScan(raw) {
     else guests.push({ docId: val, id: val, name: guestName, scanned: true });
     cacheGuestsOffline();
     if (document.getElementById('offline-list-section').style.display === 'block') renderOfflineList();
+  } else if (stale) {
+    return;
   } else if (outcome === 'dup') {
     showResult('duplicate', guestName, guestVip);
     status.textContent = RESULT_UI.duplicate.camera;
