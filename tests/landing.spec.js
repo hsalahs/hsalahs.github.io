@@ -139,7 +139,7 @@ test('"why Dawaat" has the six cards, each with its own line icon and title, in 
   for (let i = 0; i < FEATURES.length; i++) {
     const svg = await cards.nth(i).locator('.f-icon svg').innerHTML();
     expect(svg).toBe(await page.evaluate((n) => { const d = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); d.innerHTML = ICON_PATHS[n]; return d.innerHTML; }, FEATURES[i][0]));
-    await expect(cards.nth(i).locator('h4')).toHaveText(FEATURES[i][1]);
+    await expect(cards.nth(i).locator('h3')).toHaveText(FEATURES[i][1]);
     expect((await cards.nth(i).locator('p').innerText()).length).toBeGreaterThan(30);
   }
   // No two cards share an icon.
@@ -261,4 +261,39 @@ test('the splash leaves the page after it hides, so its endless animations stop'
   await page.goto('/index.html');
   await expect(page.locator('#splash')).toHaveCount(1);
   await expect(page.locator('#splash')).toHaveCount(0, { timeout: 6000 });
+});
+
+async function watchSplash(page) {
+  await page.addInitScript(() => {
+    window.__t0 = performance.now();
+    document.addEventListener('DOMContentLoaded', () => {
+      const s = document.getElementById('splash');
+      if (!s) return;
+      new MutationObserver(() => {
+        if (s.classList.contains('hide') && window.__hideAt === undefined) window.__hideAt = performance.now() - window.__t0;
+      }).observe(s, { attributes: true });
+    });
+    window.addEventListener('load', () => { window.__loadAt = performance.now() - window.__t0; });
+  });
+}
+
+test('the landing splash hides no earlier than 1.6 s and not before the page loaded, and is gone before 3.2 s', async ({ page }) => {
+  await stubFirebase(page);
+  await watchSplash(page);
+  await page.goto('/index.html');
+  await expect(page.locator('#splash')).toHaveCount(0, { timeout: 4000 });
+  const t = await page.evaluate(() => ({ hide: window.__hideAt, load: window.__loadAt }));
+  expect(t.hide).toBeGreaterThanOrEqual(1550);
+  expect(t.hide).toBeGreaterThanOrEqual(t.load);
+  expect(t.hide).toBeLessThan(3200);
+  expect(fs.readFileSync(repoFile('index.html'), 'utf8')).toContain('transition:opacity 0.4s ease, visibility 0.4s ease');
+});
+
+test('the landing page has a main landmark and its headings never skip a level', async ({ page }) => {
+  await page.goto('/index.html');
+  await expect(page.locator('main')).toHaveCount(1);
+  await expect(page.locator('main h1')).toHaveCount(1);
+  const levels = await page.evaluate(() => [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((h) => +h.tagName[1]));
+  expect(levels[0]).toBe(1);
+  for (let i = 1; i < levels.length; i++) expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
 });

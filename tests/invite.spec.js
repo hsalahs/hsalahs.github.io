@@ -539,3 +539,39 @@ test('every Firestore function invite.html pulls from _fsFns is exported by the 
   expect(used.length).toBeGreaterThan(0);
   for (const name of used) expect(exported).toContain(name);
 });
+
+async function watchInviteSplash(page) {
+  await page.addInitScript(() => {
+    window.__t0 = performance.now();
+    document.addEventListener('DOMContentLoaded', () => {
+      const s = document.getElementById('splash');
+      new MutationObserver(() => {
+        if (s.classList.contains('hide') && window.__hideAt === undefined) window.__hideAt = performance.now() - window.__t0;
+      }).observe(s, { attributes: true });
+    });
+  });
+}
+
+test('the invitation splash stays at least 1.6 s even when the data is instant, then hides with a 0.4 s fade', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: { name: 'حفل تجريبي', date: '2026-10-29', venue: 'الرياض', theme: 'gold' } } } });
+  await watchInviteSplash(page);
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#splash')).toHaveClass(/hide/, { timeout: 4000 });
+  const t = await page.evaluate(() => window.__hideAt);
+  expect(t).toBeGreaterThanOrEqual(1550);
+  expect(t).toBeLessThan(3000);
+  expect(await page.locator('#splash').evaluate((el) => getComputedStyle(el).transitionDuration)).toBe('0.4s, 0.4s');
+});
+
+test('the invitation splash still hides within 3.5 s when the event data never arrives', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: { name: 'حفل تجريبي', date: '2026-10-29', venue: 'الرياض', theme: 'gold' } } } });
+  await page.addInitScript(() => { window.__hangGetDoc = true; });
+  await watchInviteSplash(page);
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#splash')).toHaveClass(/hide/, { timeout: 5000 });
+  const t = await page.evaluate(() => window.__hideAt);
+  expect(t).toBeGreaterThanOrEqual(3400);
+  expect(t).toBeLessThan(4200);
+});
