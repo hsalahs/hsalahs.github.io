@@ -2080,7 +2080,6 @@ async function addGuest() {
     });
     nameInput.value = '';
     nameInput.focus();
-    scheduleRosterWrite();
     // If this is the add that hits the free-guest cap, that more important
     // notification (fired separately by the live event listener) should
     // own the toast instead of racing this generic one for the same slot.
@@ -2151,7 +2150,6 @@ async function importGuestNames(names) {
 
   let msg = 'تم استيراد ' + added + ' ' + guestWord(added) + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' ' + arPlural(duplicates, 'اسم مكرر', 'اسمين مكررين', 'أسماء مكررة') + ')' : '');
   if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + capForMsg + ' ' + guestWord(capForMsg) + '، وما انضاف ' + blockedByGate + ' ' + arPlural(blockedByGate, 'اسم', 'اسمين', 'أسماء') + '. تواصل معنا لزيادة العدد.';
-  if (added > 0) scheduleRosterWrite();
   alert(msg);
   if (blockedByGate > 0) openPaymentWhatsapp();
 }
@@ -2260,7 +2258,6 @@ async function approveRequest(reqDocId) {
       // read the guests collection itself (that's no longer world-readable).
       tx.update(reqRef, { status: 'approved', guestId });
     });
-    scheduleRosterWrite();
     showToast('✅ تمت الموافقة — ' + req.name);
   } catch (e) {
     if (e.message === 'GATE') { openPaymentWhatsapp(); return; }
