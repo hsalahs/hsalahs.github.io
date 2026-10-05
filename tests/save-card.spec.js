@@ -63,9 +63,20 @@ for (const p of pages) {
     test.use({ userAgent: ANDROID });
     test('saves the PNG directly and never opens the share sheet', async ({ page }) => {
       await p.open(page);
-      const [dl] = await Promise.all([page.waitForEvent('download'), page.locator(p.btn).click()]);
-            expect(await page.evaluate(() => window.__shared)).toBe(0);
+      await Promise.all([page.waitForEvent('download'), page.locator(p.btn).click()]);
+      expect(await page.evaluate(() => window.__shared)).toBe(0);
       await expect(page.locator('#toast')).toContainText('تم حفظ صورة الدعوة في جوالك');
+    });
+  });
+  test.describe(p.name + ' in an Android in-app browser', () => {
+    test.use({ userAgent: ANDROID.replace('Android 13; Pixel 7', 'Android 13; Pixel 7; wv') });
+    test('keeps the share sheet because <a download> is unreliable there', async ({ page }) => {
+      await p.open(page);
+      let downloaded = false;
+      page.on('download', () => { downloaded = true; });
+      await page.locator(p.btn).click();
+      await expect.poll(() => page.evaluate(() => window.__shared)).toBe(1);
+      expect(downloaded).toBe(false);
     });
   });
   test.describe(p.name + ' on iPhone', () => {
@@ -89,8 +100,8 @@ for (const p of pages) {
     test('downloads when files cannot be shared', async ({ page }) => {
       await p.open(page);
       await page.evaluate(() => { navigator.canShare = () => false; });
-      const [dl] = await Promise.all([page.waitForEvent('download'), page.locator(p.btn).click()]);
-            expect(await page.evaluate(() => window.__shared)).toBe(0);
+      await Promise.all([page.waitForEvent('download'), page.locator(p.btn).click()]);
+      expect(await page.evaluate(() => window.__shared)).toBe(0);
     });
   });
 }
