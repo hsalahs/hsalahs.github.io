@@ -190,6 +190,10 @@ function resolveIncrements(existing, patch) {
 }
 
 export function setDoc(ref, data, opts) {
+  if (window.__setDocDelay && !ref.__delayed) {
+    const ms = window.__setDocDelay;
+    return new Promise((r) => setTimeout(r, ms)).then(() => setDoc({ ...ref, __delayed: true }, data, opts));
+  }
   if (isDenied(ref.path)) return Promise.reject(permissionDenied(ref.path));
   const coll = ensureColl(ref.collPath);
   coll[ref.id] = opts && opts.merge ? resolveIncrements(coll[ref.id] || {}, data) : { ...data };
@@ -217,6 +221,9 @@ export function getDoc(ref) {
   }
   // ...and a read that never answers at all (the stuck-loading case).
   if (window.__hangGetDoc) return new Promise(() => {});
+  if (window.__getDocDelays && window.__getDocDelays[ref.path] && !ref.__delayed) {
+    return new Promise((r) => setTimeout(r, window.__getDocDelays[ref.path])).then(() => getDoc({ ...ref, __delayed: true }));
+  }
   if (isDenied(ref.path)) return Promise.reject(permissionDenied(ref.path));
   const coll = F().store[ref.collPath] || {};
   return Promise.resolve(makeDocSnap(ref.collPath, ref.id, coll[ref.id]));

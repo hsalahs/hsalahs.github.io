@@ -56,6 +56,13 @@ function _signIn(email) {
 // Firebase console) with auth.nextSignInError.
 export function signInAnonymously(auth) {
   const a = F().auth;
+  if (!a.anonRetry) a.anonCalls = (a.anonCalls || 0) + 1;
+  if (a.alwaysSignInError) return Promise.reject(a.alwaysSignInError);
+  if (window.__signInDelay) {
+    const ms = window.__signInDelay;
+    window.__signInDelay = 0;
+    return new Promise((r) => setTimeout(r, ms)).then(() => { a.anonRetry = true; const p = signInAnonymously(auth); a.anonRetry = false; return p; });
+  }
   if (a.nextSignInError) {
     const err = a.nextSignInError;
     a.nextSignInError = null;
