@@ -579,3 +579,23 @@ test('the create form limits the name, venue and map link to 80, 100 and 300 cha
   await expect(page.locator('#ev-venue')).toHaveAttribute('maxlength', '100');
   await expect(page.locator('#ev-maps')).toHaveAttribute('maxlength', '300');
 });
+
+test('the events list remembers each event\'s kind for its splash, with no extra reads', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: {
+      events: {
+        e1: { name: 'زفاف', ownerUid: 'u1', date: '', venue: '', createdAt: { seconds: 1 }, guestCount: 0 },
+        e2: { name: 'تخرج', ownerUid: 'u1', type: 'graduation', date: '', venue: '', createdAt: { seconds: 2 }, guestCount: 0 },
+        e3: { name: 'فعالية', ownerUid: 'u1', type: 'event', date: '', venue: '', createdAt: { seconds: 3 }, guestCount: 0 },
+      },
+      'events/e1/guests': {}, 'events/e2/guests': {}, 'events/e3/guests': {},
+    },
+  });
+  await page.goto('/app.html');
+  await expect(page.locator('#events-list')).toContainText('تخرج');
+  const kinds = await page.evaluate(() => ['e1', 'e2', 'e3'].map(i => localStorage.getItem('ev_kind_' + i)));
+  expect(kinds).toEqual(['wedding', 'graduation', 'event']);
+  await expect.poll(() => page.evaluate(() => (window.__fakeFirebase.getDocsPaths || []).filter(x => x === 'events/e1/guests').length)).toBe(1);
+});

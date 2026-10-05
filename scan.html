@@ -250,7 +250,7 @@ setTimeout(() => {
          shift. This lets whoever is holding the device end their own
          session; it's not shown for an admin, since their access comes
          back automatically from their own account either way. -->
-    <button class="btn ghost" id="lock-device-btn" style="margin-top:16px; display:none; opacity:0.7; font-size:12px;" onclick="lockDevice()"><i data-ic="log-out" data-size="14"></i> تسجيل خروج من هذا الجهاز</button>
+    <button class="btn ghost" id="lock-device-btn" style="margin-top:16px; display:none; opacity:0.7; font-size:12px;" onclick="lockOrClose()"><i data-ic="log-out" data-size="14"></i> تسجيل خروج من هذا الجهاز</button>
   </div>
 </div>
 
@@ -565,10 +565,32 @@ function showScanner() {
   // hide the button selectively. Hiding it meant that once an admin
   // reloaded a borrowed phone, the only way to end that session vanished
   // from the UI entirely.
-  document.getElementById('lock-device-btn').style.display = 'block';
+  const lockBtn = document.getElementById('lock-device-btn');
+  lockBtn.style.display = 'block';
+  const lockLabel = usesSessionDoc ? 'تسجيل خروج من هذا الجهاز' : 'إغلاق الماسح';
+  lockBtn.innerHTML = ic(usesSessionDoc ? 'log-out' : 'x', 14) + ' ' + lockLabel;
+  lockBtn.setAttribute('aria-label', lockLabel);
   loadGuestsOnce();
   startEventCounterWatch();
   if (usesSessionDoc) startSessionWatch();
+}
+
+// Door-code devices sign out; the organizer or admin only closes the scanner
+// and goes back to the dashboard, keeping the sign-in (it is shared with the
+// organizer's other tabs of this browser).
+async function lockOrClose() {
+  if (usesSessionDoc) return lockDevice();
+  const user = window._auth.currentUser;
+  if (!user || user.isAnonymous) return lockDevice();
+  lockingDevice = true;
+  stopSessionWatch();
+  if (eventUnsub) { eventUnsub(); eventUnsub = null; }
+  if (qrScanner) {
+    try { qrScanner.stop(); } catch (_) {}
+    try { qrScanner.destroy(); } catch (_) {}
+    qrScanner = null;
+  }
+  location.href = 'event.html?id=' + encodeURIComponent(eventId);
 }
 
 // Lets whoever is holding an unlocked device end their own session — e.g.
@@ -594,7 +616,6 @@ async function lockDevice() {
   document.getElementById('pin-gate').style.display = 'block';
   hideAdminLogin();
   lockingDevice = false;
-  warmIdentity();
 }
 
 function offlineCacheKey() { return 'scan_offline_cache_' + eventId; }

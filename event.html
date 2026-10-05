@@ -296,6 +296,47 @@
   </div>
 </div>
 <script>
+// The opening splash shows the picture of this event's kind. The kind is only
+// known once the event loads, so it starts from the kind this device saw last
+// for this event id (ev_kind_<id>, also written by app.html's list), otherwise
+// the neutral logo, and showEventKind() fades the right one in. It never
+// delays or gates the hide script below. Inline, guarded, and tiny.
+(function () {
+  try {
+    const KINDS = {
+      wedding:    ['دعوة زفاف', 'Wedding Invitation', 'kind-wedding.svg'],
+      graduation: ['دعوة حفل تخرج', 'Graduation Invitation', 'kind-graduation.svg'],
+      event:      ['دعوة فعالية', 'Event Invitation', 'kind-event.svg'],
+    };
+    const LOGO = ['دعوات', 'Digital Invitations', 'logo.svg'];
+    const kindOf = (t) => Object.prototype.hasOwnProperty.call(KINDS, t) ? KINDS[t] : null;
+    const inner = document.querySelector('#splash .splash-inner');
+    const key = 'ev_kind_' + (new URLSearchParams(location.search).get('id') || '');
+    let shown = null;
+    const paint = (k) => {
+      shown = k;
+      inner.querySelector('.splash-title').textContent = k[0];
+      inner.querySelector('.splash-subtitle').textContent = k[1];
+      const img = inner.querySelector('.splash-rings img');
+      img.src = 'icons/' + k[2];
+      img.style.height = k[2] === 'logo.svg' ? '104px' : '96px';
+      img.style.width = k[2] === 'logo.svg' ? '104px' : 'auto';
+    };
+    let saved = null;
+    try { saved = localStorage.getItem(key); } catch (e) {}
+    paint(kindOf(saved) || LOGO);
+    window.showEventKind = function (t) {
+      try { localStorage.setItem(key, t); } catch (e) {}
+      const k = kindOf(t);
+      if (!k || k === shown) return;
+      inner.style.transition = 'opacity 0.25s ease';
+      inner.style.opacity = '0';
+      setTimeout(() => { paint(k); inner.style.opacity = '1'; }, 250);
+    };
+  } catch (e) {}
+})();
+</script>
+<script>
 // Isolated on purpose, and NOT gated on window.load — if this lived inside
 // the big application script below and something earlier in that script
 // threw (a slow/failed CDN script, a bug, a bad connection), the splash
@@ -992,6 +1033,8 @@ function doLogout() {
   signOut(window._auth).then(() => { window.location.href = 'app.html'; });
 }
 
+let dashboardStarted = false;
+let sessionEnded = false;
 async function init() {
   if (!eventId) {
     document.getElementById('loading-msg').textContent = '⚠️ رابط غير صحيح — ما فيه رقم مناسبة';
@@ -1003,11 +1046,25 @@ async function init() {
     // on the same browser it would otherwise look like "someone is logged
     // in" here.
     if (!user || user.isAnonymous) {
+      if (dashboardStarted) {
+        // Sign-in is shared by every tab of this browser: another tab (the
+        // scanner's lock button) ended it. Listeners would only fail with
+        // permission-denied, so stop showing data instead of a fake outage.
+        sessionEnded = true;
+        document.getElementById('dashboard').style.display = 'none';
+        document.getElementById('loading-msg').style.display = 'none';
+        document.getElementById('denied-msg').style.display = 'block';
+        document.getElementById('denied-msg').innerHTML = 'انتهت جلسة الدخول على هذا المتصفح — <a href="app.html" style="color:#E0BC7A">اضغط هنا لتسجيل الدخول</a>';
+        refreshConnectionBanner();
+        return;
+      }
       document.getElementById('loading-msg').style.display = 'none';
       document.getElementById('denied-msg').style.display = 'block';
       document.getElementById('denied-msg').innerHTML = 'لازم تسجّل دخول الأول — <a href="app.html" style="color:#E0BC7A">اضغط هنا</a>';
       return;
     }
+    if (sessionEnded) { window.location.reload(); return; }
+    if (dashboardStarted) return;
     currentUser = user;
     const { doc, getDoc } = window._fsFns;
     let snap;
@@ -1030,6 +1087,7 @@ async function init() {
       return;
     }
     eventData = snap.data();
+    if (window.showEventKind) window.showEventKind(eventTypeOf(eventData));
 
     pinReady = loadScanPin().then(() => {
       document.getElementById('scan-pin-display').textContent = currentScanPin || '—';
@@ -1045,6 +1103,7 @@ async function init() {
     applyTheme(eventData.theme || 'gold');
     renderPaymentGate();
     updateNotifButtonLabel();
+    dashboardStarted = true;
     startListeners();
     watchPaymentStatus();
     backfillRequestGuestIds();
@@ -1107,7 +1166,7 @@ let guestsListenerOK = true;
 let requestsListenerOK = true;
 function refreshConnectionBanner() {
   const b = document.getElementById('connection-banner');
-  if (b) b.style.display = (guestsListenerOK && requestsListenerOK) ? 'none' : 'block';
+  if (b) b.style.display = (guestsListenerOK && requestsListenerOK) || sessionEnded ? 'none' : 'block';
 }
 
 // Tracks which pending request IDs we've already seen, so a newly-added

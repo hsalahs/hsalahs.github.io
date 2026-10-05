@@ -480,6 +480,7 @@ function renderEvents(events, showOwner, changedIds) {
     list.innerHTML = '<div class="empty">' + (ownerFilter ? 'هذا الحساب ما عنده مناسبات' : 'لسه ما أنشأت أي مناسبة') + '</div>';
     return;
   }
+  events.forEach(ev => { try { localStorage.setItem('ev_kind_' + ev.id, eventTypeOf(ev)); } catch (e) {} });
   list.innerHTML = events.map(ev => `
     <div class="card event-card">
       <div class="event-card-top">

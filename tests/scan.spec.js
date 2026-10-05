@@ -503,10 +503,7 @@ test('an admin can sign in with their real account on a borrowed device, instead
 
   await expect(page.locator('#scanner-view')).toBeVisible();
   await expect(page.locator('#lock-device-btn')).toBeVisible();
-
-  await page.locator('#lock-device-btn').click();
-  await expect(page.locator('#pin-gate')).toBeVisible();
-  await expect(page.locator('#scanner-view')).toBeHidden();
+  await expect(page.locator('#lock-device-btn')).toContainText('إغلاق الماسح');
 });
 
 test('signing in with a non-admin account on the admin-login form is rejected and signed back out', async ({ page }) => {
@@ -1020,20 +1017,45 @@ test('scanner batch 2: an admin sign-in during a slow warm-up ends with the admi
   expect(u.isAnonymous).toBeFalsy();
 });
 
-test('scanner batch 2: a device that already has a user does not sign in again, and locking the device warms a new identity', async ({ page }) => {
+test('scanner batch 2: a device that already has a user does not sign in again', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { user: { uid: 'owner-x', isAnonymous: false, email: 'o@x.com' }, store: FRESH_STORE });
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#pin-gate')).toBeVisible();
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => window.__fakeFirebase.auth.anonCalls || 0)).toBe(0);
+});
 
+test('cross-tab auth: locking the device as a signed-in organizer signs out and does not sign in anonymously', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'owner-x', isAnonymous: false, email: 'o@x.com' }, store: FRESH_STORE });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#pin-gate')).toBeVisible();
   await page.locator('#pin-input').fill('1234');
   await page.getByRole('button', { name: 'دخول' }).first().click();
   await expect(page.locator('#scanner-view')).toBeVisible();
   await page.locator('#lock-device-btn').click();
   await expect(page.locator('#pin-gate')).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.auth.anonCalls || 0)).toBe(1);
+  await page.waitForTimeout(500);
+  const st = await page.evaluate(() => ({ user: window.__fakeFirebase.auth.user, calls: window.__fakeFirebase.auth.anonCalls || 0 }));
+  expect(st.user).toBeNull();
+  expect(st.calls).toBe(0);
+});
+
+test('cross-tab auth: a door-code device that locks returns to the code screen and a later tap signs in once', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.evaluate(() => { window.__fakeFirebase.auth.anonCalls = 0; });
+  await page.locator('#lock-device-btn').click();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.__fakeFirebase.auth.anonCalls || 0)).toBe(0);
+  await page.locator('#pin-input').fill('1234');
+  await page.getByRole('button', { name: 'دخول' }).first().click();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  expect(await page.evaluate(() => window.__fakeFirebase.auth.anonCalls || 0)).toBe(1);
 });
 
 test('scanner batch 2: the scanner view does not wait for the roster or the counter', async ({ page }) => {
@@ -1148,4 +1170,50 @@ test('scanner debug panel: appears only with debug=1', async ({ page }) => {
   await expect(panel).toContainText('hasCamera');
   await expect(panel).toContainText('قراءات ناجحة: 0');
   await expect(panel).toContainText('QrScanner بدأ: no');
+});
+
+
+async function clickCloseAndProbe(page) {
+  await page.route('**/event.html*', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>x</title>' }));
+  await page.evaluate(() => {
+    window.addEventListener('beforeunload', () => {
+      const a = window.__fakeFirebase.auth;
+      sessionStorage.setItem('probe', JSON.stringify({ uid: a.user && a.user.uid, out: a.signOutCalls || 0, anon: a.anonCalls || 0 }));
+    });
+  });
+  await page.locator('#lock-device-btn').click();
+  await page.waitForURL(/event\.html\?id=e1/);
+  return JSON.parse(await page.evaluate(() => sessionStorage.getItem('probe')));
+}
+
+test('close scanner: the organizer sees "إغلاق الماسح", returns to the dashboard and stays signed in', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: OWNER, store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  const btn = page.locator('#lock-device-btn');
+  await expect(btn).toContainText('إغلاق الماسح');
+  await expect(btn).toHaveAttribute('aria-label', 'إغلاق الماسح');
+  const probe = await clickCloseAndProbe(page);
+  expect(probe).toEqual({ uid: 'u1', out: 0, anon: 0 });
+});
+
+test('close scanner: an admin signed in on the page gets the same button and keeps the sign-in', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'admin-1', email: 'hsallah@outlook.sa', isAnonymous: false }, store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await expect(page.locator('#lock-device-btn')).toHaveAttribute('aria-label', 'إغلاق الماسح');
+  const probe = await clickCloseAndProbe(page);
+  expect(probe).toEqual({ uid: 'admin-1', out: 0, anon: 0 });
+});
+
+test('close scanner: a door-code device keeps "تسجيل خروج من هذا الجهاز"', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: unlockedStore() });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  const btn = page.locator('#lock-device-btn');
+  await expect(btn).toContainText('تسجيل خروج من هذا الجهاز');
+  await expect(btn).toHaveAttribute('aria-label', 'تسجيل خروج من هذا الجهاز');
 });

@@ -1332,3 +1332,71 @@ test('a failed welcome save tells the owner and still closes the modal', async (
   await expect(page.locator('#share-modal')).toBeHidden();
   await expect(page.locator('#toast')).toContainText('ما انحفظت رسالة الترحيب');
 });
+
+for (const [kind, title, file] of [['wedding', 'دعوة زفاف', 'kind-wedding.svg'], ['graduation', 'دعوة حفل تخرج', 'kind-graduation.svg'], ['event', 'دعوة فعالية', 'kind-event.svg']]) {
+  test(`the organizer splash shows the remembered ${kind} kind at once`, async ({ page }) => {
+    await stubFirebase(page);
+    await page.addInitScript((k) => { try { localStorage.setItem('ev_kind_nope', k); } catch (e) {} }, kind);
+    await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: {} } });
+    await page.goto('/event.html?id=nope');
+    await expect(page.locator('#splash .splash-title')).toHaveText(title);
+    await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/' + file);
+  });
+}
+
+test('the organizer splash starts neutral with nothing remembered, then switches to the event kind and remembers it', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: { ...baseStore([]), events: { e1: { ...EVENT, type: 'graduation' } } },
+  });
+  await page.addInitScript(() => { window.__firstKind = null; document.addEventListener('DOMContentLoaded', () => { const i = document.querySelector('#splash .splash-rings img'); window.__firstKind = i && i.getAttribute('src'); }); });
+  await page.goto('/event.html?id=e1');
+  expect(await page.evaluate(() => window.__firstKind)).toBe('icons/logo.svg');
+  await expect(page.locator('#splash .splash-title')).toHaveText('دعوة حفل تخرج');
+  await expect(page.locator('#splash .splash-rings img')).toHaveAttribute('src', 'icons/kind-graduation.svg');
+  expect(await page.evaluate(() => localStorage.getItem('ev_kind_e1'))).toBe('graduation');
+});
+
+test('an event with no type remembers as a wedding', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([]) });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('ev_kind_e1'))).toBe('wedding');
+});
+
+for (const [label, next] of [['anonymous', { uid: 'anon-9', isAnonymous: true, email: null }], ['signed out', null]]) {
+  test('cross-tab auth: when another tab leaves the user ' + label + ', the dashboard shows the session-ended message and no connection banner, and returning reloads', async ({ page }) => {
+    await stubFirebase(page);
+    await seedFakeFirebase(page, {
+      user: { uid: 'u1', email: 'customer@example.com' },
+      store: baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }]),
+    });
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('#dashboard')).toBeVisible();
+    await page.evaluate(() => { window.__marker = 1; });
+
+    await page.evaluate((u) => {
+      const a = window.__fakeFirebase.auth;
+      a.user = u;
+      a.listeners.slice().forEach(cb => cb(a.user));
+    }, next);
+    await expect(page.locator('#denied-msg')).toContainText('انتهت جلسة الدخول على هذا المتصفح');
+    await expect(page.locator('#denied-msg a')).toHaveAttribute('href', 'app.html');
+    await expect(page.locator('#dashboard')).toBeHidden();
+    await page.waitForTimeout(300);
+    await expect(page.locator('#connection-banner')).toBeHidden();
+    expect(await page.evaluate(() => window.__marker)).toBe(1);
+
+    const reloaded = page.waitForEvent('load');
+    await page.evaluate(() => {
+      const a = window.__fakeFirebase.auth;
+      a.user = { uid: 'u1', email: 'customer@example.com' };
+      a.listeners.slice().forEach(cb => cb(a.user));
+    });
+    await reloaded;
+    expect(await page.evaluate(() => window.__marker)).toBeUndefined();
+    await expect(page.locator('#dashboard')).toBeVisible();
+  });
+}

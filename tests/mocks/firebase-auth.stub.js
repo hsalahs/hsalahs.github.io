@@ -76,6 +76,7 @@ export function signInAnonymously(auth) {
 }
 
 export function signOut() {
+  F().auth.signOutCalls = (F().auth.signOutCalls || 0) + 1;
   F().auth.user = null;
   notifyAuth();
   return Promise.resolve();
