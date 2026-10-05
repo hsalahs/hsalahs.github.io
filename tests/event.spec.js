@@ -958,7 +958,7 @@ test('approving a guest request copies the new barcode id onto the request, for 
   expect(state.docKey).toBe(state.guestId);
 });
 
-test('guests approved before the invite page stopped reading the guests collection get their barcode id backfilled onto their request', async ({ page }) => {
+test('opening the dashboard does not read the approved requests (no backfill query)', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: { uid: 'u1', email: 'customer@example.com' },
@@ -971,7 +971,8 @@ test('guests approved before the invite page stopped reading the guests collecti
   });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store['events/e1/requests'].r1.guestId)).toBe('WD-OLD1');
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => (window.__fakeFirebase.getDocsPaths || []).filter(p => p === 'events/e1/requests').length)).toBe(0);
 });
 
 test('the dashboard shows the event date as words with Western digits', async ({ page }) => {

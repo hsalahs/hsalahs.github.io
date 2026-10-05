@@ -845,27 +845,6 @@ async function regenerateScanPin() {
   } catch (e) { showErr(e); }
 }
 
-// invite.html can no longer read the guests collection (it isn't
-// world-readable anymore), so an approved guest's barcode id is copied onto
-// their request doc at approval time. Guests approved before that change
-// have no guestId on their request yet — fill it in once, so their invite
-// page can still show their card. No-op for events with nothing to fix.
-async function backfillRequestGuestIds() {
-  const { collection, query, where, getDocs, doc, updateDoc } = window._fsFns;
-  try {
-    const approved = await getDocs(query(collection(window._db, 'events', eventId, 'requests'), where('status', '==', 'approved')));
-    const missing = approved.docs.filter(d => !d.data().guestId && d.data().reqId);
-    if (missing.length === 0) return;
-    const guestsSnap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
-    const byReq = new Map();
-    guestsSnap.docs.forEach(g => { const data = g.data(); if (data.reqId) byReq.set(data.reqId, data.id); });
-    for (const d of missing) {
-      const guestId = byReq.get(d.data().reqId);
-      if (guestId) await updateDoc(doc(window._db, 'events', eventId, 'requests', d.id), { guestId });
-    }
-  } catch (e) { console.error('backfill of request guestIds failed:', e); }
-}
-
 function toggleEditEvent() {
   const el = document.getElementById('edit-event-card');
   const opening = el.style.display !== 'block';
@@ -1106,7 +1085,6 @@ async function init() {
     dashboardStarted = true;
     startListeners();
     watchPaymentStatus();
-    backfillRequestGuestIds();
     autoClaimSlug();
   });
 }
