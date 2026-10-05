@@ -352,6 +352,23 @@ test('guest list sorts numeric names first (in numeric order), then alphabetical
   expect(names).toEqual(['2', '10', 'أحمد', 'زينب']);
 });
 
+test('names that end in a number sort by that number, not letter by letter (2 before 10 before 100)', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: baseStore([
+      { id: 'WD-1', name: 'ضيف 100', scanned: false },
+      { id: 'WD-2', name: 'ضيف 10', scanned: false },
+      { id: 'WD-3', name: 'ضيف 2', scanned: false },
+      { id: 'WD-4', name: 'ضيف 1', scanned: false },
+    ]),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  const names = await page.locator('.guest-item .name').allTextContents();
+  expect(names).toEqual(['ضيف 1', 'ضيف 2', 'ضيف 10', 'ضيف 100']);
+});
+
 test('a burst of near-simultaneous guest updates collapses into one render instead of one per update', async ({ page }) => {
   // Simulates a bulk import or several door scanners checking guests in
   // around the same moment — the guest list used to do a full DOM rebuild
