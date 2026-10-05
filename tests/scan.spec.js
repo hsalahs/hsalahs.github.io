@@ -1294,23 +1294,23 @@ for (const vp of [{ width: 320, height: 568 }, { width: 390, height: 844 }]) {
   });
 }
 
-test('result overlay: allowed closes by itself after about 1.5 s, duplicate and denied after about 3 s', async ({ page }) => {
+test('result overlay: allowed closes by itself after about 5 s, duplicate and denied after about 6 s', async ({ page }) => {
   await openOverlayScanner(page);
   const ov = page.locator('#result-overlay');
   const timeIt = async (code, cls) => {
     await scanManual(page, code);
     await expect(page.locator('#result-overlay.' + cls)).toBeVisible();
     const t0 = Date.now();
-    await expect(ov).toBeHidden({ timeout: 5000 });
+    await expect(ov).toBeHidden({ timeout: 8000 });
     return Date.now() - t0;
   };
   const a = await timeIt('WD-A', 'rs-allowed');
-  expect(a).toBeGreaterThan(1000); expect(a).toBeLessThan(2100);
+  expect(a).toBeGreaterThan(4000); expect(a).toBeLessThan(5600);
   const d = await timeIt('WD-D', 'rs-duplicate');
-  expect(d).toBeGreaterThan(2500); expect(d).toBeLessThan(3600);
+  expect(d).toBeGreaterThan(5000); expect(d).toBeLessThan(6600);
   await page.waitForTimeout(700);
   const n = await timeIt('WD-GHOST', 'rs-denied');
-  expect(n).toBeGreaterThan(2500); expect(n).toBeLessThan(3600);
+  expect(n).toBeGreaterThan(5000); expect(n).toBeLessThan(6600);
   expect(await page.evaluate(() => scanCooldown)).toBe(false);
   await expect(page.locator('#camera-status')).toHaveText('وجّه الكاميرا نحو الباركود');
 });
@@ -1346,7 +1346,7 @@ test('result overlay: the same card re-read within 600 ms of closing is ignored,
   await page.evaluate(() => handleScan('WD-B'));
   await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
   await expect(page.locator('#result-name')).toHaveText('ب');
-  await expect(ov).toBeHidden({ timeout: 3000 });
+  await expect(ov).toBeHidden({ timeout: 8000 });
   await page.waitForTimeout(800);
   await page.evaluate(() => handleScan('WD-A'));
   await expect(page.locator('#result-overlay.rs-duplicate')).toBeVisible();

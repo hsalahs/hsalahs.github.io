@@ -216,3 +216,13 @@ function showToast(msg) {
   clearTimeout(showToast._t);
   showToast._t = setTimeout(() => t.classList.remove('show'), 5000);
 }
+
+// Android's share sheet buries "save", so the card buttons download the
+// PNG directly there; iPhone and desktop keep the share sheet when it can take files.
+function prefersDirectSave() {
+  const ua = navigator.userAgent || '';
+  // In-app browsers (Android WebView, Facebook, Instagram, Line) often ignore
+  // <a download>, so there the share sheet stays the way to get the image out.
+  if (/; wv\)|FBAN|FBAV|Instagram|Line\//i.test(ua)) return false;
+  return /Android/i.test(ua);
+}
