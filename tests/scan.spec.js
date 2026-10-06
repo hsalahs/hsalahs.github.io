@@ -1819,3 +1819,53 @@ test('names list: a long name wraps at 320 px without sideways scroll', async ({
   await expect(listRow(page, 'WD-LONG1').getByRole('button', { name: 'تأكيد الدخول' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test('names list: a QR scan of a guest missing from the saved-copy fallback does not shrink the list or the counter total', async ({ page }) => {
+  await openList(page, LIST);
+  await page.evaluate(() => {
+    guests = [];
+    listFallback = { guests: [{ id: 'WD-OLD1', name: 'قديم', scanned: false }, { id: 'WD-OLD2', name: 'قديم ثاني', scanned: false }], savedAt: new Date().toISOString() };
+    listCacheSavedAt = listFallback.savedAt;
+    renderOfflineList();
+  });
+  await expect(page.locator('#offline-list-results .ol-name')).toHaveCount(2);
+  await page.evaluate(() => handleScan('WD-AB12X'));
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  expect(await page.evaluate(() => guests.length)).toBe(0);
+  await expect(page.locator('#offline-list-results .ol-name')).toHaveCount(2);
+});
+
+test('names list: tapping "تسجيل" within 200 ms of typing keeps the new confirm state open', async ({ page }) => {
+  await openList(page, LIST);
+  await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' }).click();
+  await page.evaluate(() => {
+    const el = document.getElementById('offline-search');
+    el.value = 'ا';
+    el.dispatchEvent(new Event('input'));
+    armListRow('WD-CD34Y');
+  });
+  await page.waitForTimeout(400);
+  await expect(page.locator('.ol-confirm')).toHaveCount(1);
+  await expect(listRow(page, 'WD-CD34Y')).toHaveClass(/ol-confirm/);
+});
+
+test('names list: a guest name with HTML renders as text in the row and in the confirm state', async ({ page }) => {
+  await openList(page, { 'WD-XSS01': { name: '<img src=x onerror=alert(1)>', id: 'WD-XSS01', scanned: false } });
+  await expect(listRow(page, 'WD-XSS01')).toContainText('<img src=x onerror=alert(1)>');
+  await expect(page.locator('#offline-list-results img')).toHaveCount(0);
+  await listRow(page, 'WD-XSS01').getByRole('button', { name: 'تسجيل' }).click();
+  await expect(listRow(page, 'WD-XSS01')).toHaveClass(/ol-confirm/);
+  await expect(listRow(page, 'WD-XSS01')).toContainText('<img src=x onerror=alert(1)>');
+  await expect(page.locator('#offline-list-results img')).toHaveCount(0);
+});
+
+for (const fn of ['lockDevice', 'lockOrClose', 'resetScanState']) {
+  test('names list: ' + fn + ' clears the open confirm state', async ({ page }) => {
+    await openList(page, LIST);
+    await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' }).click();
+    await expect(page.locator('.ol-confirm')).toHaveCount(1);
+    await page.evaluate((f) => { window[f](); }, fn);
+    await expect.poll(() => page.evaluate(() => [pendingListId, listBusyId])).toEqual([null, null]);
+    await expect(page.locator('.ol-confirm')).toHaveCount(0);
+  });
+}

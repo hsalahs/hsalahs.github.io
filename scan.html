@@ -817,9 +817,12 @@ function toggleOfflineList() {
   if (!showing) { prepareListSource(); renderOfflineList(); }
 }
 
+let listLastQuery = '';
 function onListSearchInput() {
   clearTimeout(listSearchTimer);
-  listSearchTimer = setTimeout(() => { pendingListId = null; renderOfflineList(); }, 200);
+  const q = document.getElementById('offline-search').value;
+  if (q !== listLastQuery) { listLastQuery = q; pendingListId = null; }
+  listSearchTimer = setTimeout(renderOfflineList, 200);
 }
 
 function listTime(d) {
@@ -1368,10 +1371,17 @@ async function handleScan(raw) {
     // open — keep its offline copy in step with what this device learned
     // (a duplicate means the guest is already in, whoever checked them in).
     if (outcome === 'ok') localCheckinTimes[val] = listTime(new Date());
-    const cached = guests.find(g => g.id === val);
-    if (cached) cached.scanned = true;
-    else guests.push({ docId: val, id: val, name: guestName, scanned: true });
-    cacheGuestsOffline();
+    if (!guests.length && listFallback) {
+      // The list is showing the saved copy: keep it as is (no one-guest `guests`
+      // array, which would shrink the list and the counter total).
+      const fb = listFallback.guests.find(g => g.id === val);
+      if (fb) fb.scanned = true;
+    } else {
+      const cached = guests.find(g => g.id === val);
+      if (cached) cached.scanned = true;
+      else guests.push({ docId: val, id: val, name: guestName, scanned: true });
+      cacheGuestsOffline();
+    }
     if (document.getElementById('offline-list-section').style.display === 'block') renderOfflineList();
   }
 }
