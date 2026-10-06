@@ -525,7 +525,8 @@ async function loadEventStats(ev) {
 }
 
 async function deleteEvent(eventId, name, ownerUid, slug) {
-  if (!confirm('حذف "' + name + '" نهائيًا؟\n\nراح ينحذف كل الضيوف والطلبات المرتبطة فيها، وما تقدر ترجعها بعدين.')) return;
+  const stats = eventStatsCache[eventId];
+  if (!(await confirmEventDelete({ name, guestCount: stats ? stats.total : undefined }))) return;
   const { collection, getDocs, deleteDoc, doc, runTransaction } = window._fsFns;
   try {
     const guestsSnap = await getDocs(collection(window._db, 'events', eventId, 'guests'));

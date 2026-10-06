@@ -216,3 +216,59 @@ function showToast(msg) {
   clearTimeout(showToast._t);
   showToast._t = setTimeout(() => t.classList.remove('show'), 5000);
 }
+
+// Asks the owner to type «حذف» before an event is deleted. The old single
+// confirm() was one tap away from wiping every guest; this window can't be
+// passed by a stray double tap. Resolves true only when the word is typed
+// and the red button is pressed; Escape, «إلغاء» or tapping outside give false.
+// Styles are inline (with fallbacks) because app.html and event.html don't
+// share CSS variables. To go back to the old dialog, make this return
+// Promise.resolve(confirm(...)).
+const DELETE_WORD = 'حذف';
+function confirmEventDelete({ name, guestCount }) {
+  return new Promise((resolve) => {
+    const prevFocus = document.activeElement;
+    const overlay = document.createElement('div');
+    overlay.id = 'delete-event-modal';
+    overlay.setAttribute('dir', 'rtl');
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px;';
+    const count = typeof guestCount === 'number' && guestCount > 0
+      ? ' (' + guestCount + ' ' + guestWord(guestCount) + ')' : '';
+    overlay.innerHTML = `
+      <div role="dialog" aria-modal="true" aria-labelledby="del-ev-title" style="background:var(--bg-1,#0C0C0C); color:var(--text-main,#FAF8F4); border:1px solid rgba(255,120,120,0.45); border-radius:18px; padding:18px; max-width:420px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,0.5); font-family:inherit; text-align:right;">
+        <h3 id="del-ev-title" style="margin:0 0 10px; color:#ff9d9d; font-size:17px;">حذف المناسبة نهائيًا</h3>
+        <p style="margin:0 0 8px; font-size:14px; line-height:1.7;">«<b class="del-ev-name"></b>»</p>
+        <p style="margin:0 0 14px; font-size:13px; line-height:1.7; opacity:0.85;">راح ينحذف كل الضيوف${count} والطلبات المرتبطة فيها، وما تقدر ترجعها بعدين.</p>
+        <label for="del-ev-input" style="display:block; font-size:13px; margin-bottom:6px;">للتأكيد اكتب كلمة <b style="color:#ff9d9d;">${DELETE_WORD}</b></label>
+        <input id="del-ev-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:11px 12px; border-radius:10px; border:1px solid rgba(255,120,120,0.45); background:rgba(255,255,255,0.06); color:inherit; font-size:16px; font-family:inherit; margin-bottom:14px;">
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="del-ev-confirm" disabled style="flex:1; padding:12px; border-radius:10px; border:none; background:#E5484D; color:#fff; font-weight:700; font-size:14px; font-family:inherit; cursor:pointer;">حذف نهائي</button>
+          <button type="button" class="del-ev-cancel" style="flex:1; padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.25); background:transparent; color:inherit; font-weight:700; font-size:14px; font-family:inherit; cursor:pointer;">إلغاء</button>
+        </div>
+      </div>`;
+    // textContent, not the template: the event name is user text.
+    overlay.querySelector('.del-ev-name').textContent = name || '';
+    const input = overlay.querySelector('#del-ev-input');
+    const okBtn = overlay.querySelector('.del-ev-confirm');
+    const matches = () => input.value.trim() === DELETE_WORD;
+    const sync = () => { okBtn.disabled = !matches(); okBtn.style.opacity = okBtn.disabled ? '0.4' : '1'; };
+    sync();
+    const close = (result) => {
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      if (prevFocus && prevFocus.focus) { try { prevFocus.focus(); } catch (e) {} }
+      resolve(result);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); close(false); }
+      else if (e.key === 'Enter' && matches()) { e.preventDefault(); close(true); }
+    };
+    input.addEventListener('input', sync);
+    okBtn.addEventListener('click', () => { if (matches()) close(true); });
+    overlay.querySelector('.del-ev-cancel').addEventListener('click', () => close(false));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(overlay);
+    input.focus();
+  });
+}
