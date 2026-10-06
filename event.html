@@ -135,6 +135,14 @@
   /* iOS Safari ignores placeholder on date inputs (an empty one shows blank), so the field gets a visible label. */
   .date-label { display:block; font-size:12px; color:var(--text-soft); margin:0 4px 4px; }
   .btn { padding:11px 16px; border:none; border-radius:10px; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; font-weight:700; font-size:13px; cursor:pointer; }
+  .btn:disabled, .approve-btn:disabled, .reject-btn:disabled { opacity:0.55; cursor:default; }
+  .accept-all { width:100%; margin:0; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+  .accept-all .cnt { background:rgba(0,0,0,0.18); border-radius:999px; padding:1px 9px; font-size:13px; }
+  .accept-all-hint { text-align:center; font-size:12px; opacity:0.65; margin:8px 0 12px; }
+  #approve-all-modal { z-index:510; }
+  #approve-all-modal h3 { display:flex; align-items:center; gap:6px; }
+  .aa-names { display:flex; flex-wrap:wrap; gap:8px; max-height:40vh; overflow-y:auto; margin:12px 0 14px; }
+  .aa-names span { border:1px solid var(--glass-border); background:rgba(var(--accent-rgb),0.08); border-radius:999px; padding:5px 11px; font-size:13px; max-width:100%; overflow-wrap:anywhere; }
   .btn.ghost { background:transparent; border:1px solid rgba(var(--accent-rgb),0.3); color:var(--gold); }
   .btn.danger { background:transparent; border:1px solid rgba(255,120,120,0.4); color:#ff9d9d; }
   .row { display:flex; gap:8px; flex-wrap:wrap; }
@@ -538,7 +546,21 @@ setTimeout(() => {
         <h3><i data-ic="inbox" data-size="18"></i> الطلبات</h3>
         <button class="icon-btn" onclick="closeRequestsModal()" aria-label="إغلاق"><i data-ic="x" data-size="20"></i></button>
       </div>
+      <div id="requests-head"></div>
       <div class="guest-list" id="requests-list"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="approve-all-modal" onclick="if (event.target === this) closeApproveAllModal();">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3><i data-ic="user-check" data-size="18"></i> <span id="aa-title">تقبل كل الطلبات؟</span></h3>
+      </div>
+      <div id="aa-body"></div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn" style="flex:1;" onclick="approveAllRequests()">اقبل الكل</button>
+        <button class="btn ghost" style="flex:1;" onclick="closeApproveAllModal()">إلغاء</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1229,7 +1251,7 @@ function startListeners() {
   // only ever displays the pending ones.
   const pendingRequests = query(collection(window._db, 'events', eventId, 'requests'), where('status', '==', 'pending'));
   onSnapshot(pendingRequests, (snap) => {
-    requests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+    requests = sortRequestsOldestFirst(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
     updateRequestsBadge();
     renderRequests();
     requestsListenerOK = true;
@@ -1800,6 +1822,7 @@ function sheetDeleteGuest() {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('guest-sheet').classList.contains('active')) closeGuestSheet();
   if (e.key === 'Escape' && document.getElementById('share-modal').classList.contains('active')) closeShareModal();
+  if (e.key === 'Escape' && document.getElementById('approve-all-modal').classList.contains('active')) closeApproveAllModal();
 });
 
 function openRequestsModal() {
@@ -2015,18 +2038,148 @@ async function toggleRequestNotifications() {
   }
 }
 
+// createdAt is an ISO string on new requests; older or hand-made ones may
+// hold a Timestamp-like value, and a missing one counts as the oldest.
+function requestTime(r) {
+  const c = r.createdAt;
+  if (!c) return 0;
+  if (typeof c === 'string') { const t = Date.parse(c); return isNaN(t) ? 0 : t; }
+  if (typeof c === 'number') return c;
+  if (typeof c.toMillis === 'function') return c.toMillis();
+  if (typeof c.seconds === 'number') return c.seconds * 1000;
+  return 0;
+}
+function sortRequestsOldestFirst(list) {
+  return list.slice().sort((a, b) => (requestTime(a) - requestTime(b)) || (a.docId < b.docId ? -1 : a.docId > b.docId ? 1 : 0));
+}
+
+let bulkApproving = false;
+let bulkDone = 0;
+let bulkTotal = 0;
+let approveAllQueue = [];
+
 function renderRequests() {
   const el = document.getElementById('requests-list');
-  if (requests.length === 0) { el.innerHTML = '<div class="empty">ما فيه طلبات جديدة</div>'; return; }
+  const headEl = document.getElementById('requests-head');
+  if (requests.length === 0) { headEl.innerHTML = ''; el.innerHTML = '<div class="empty">ما فيه طلبات جديدة</div>'; return; }
+  const dis = bulkApproving ? ' disabled' : '';
+  const head = (requests.length >= 2 || bulkApproving)
+    ? `<button class="btn accept-all" onclick="openApproveAllModal()"${dis}>${bulkApproving ? 'جاري القبول... ' + bulkDone + ' / ' + bulkTotal : ic('user-check', 18) + ' اقبل الكل <span class="cnt">' + requests.length + '</span>'}</button>
+       <div class="accept-all-hint">أو اقبل وارفض كل طلب لحاله تحت</div>`
+    : '';
+  headEl.innerHTML = head;
   el.innerHTML = requests.map(r => `
     <div class="pending-item">
       <div class="pending-info">
         <div class="pname">${escapeHtml(r.name)}</div>
       </div>
-      <button class="approve-btn" onclick="approveRequest('${r.docId}')">${ic('check', 13)} قبول</button>
-      <button class="reject-btn" onclick="rejectRequest('${r.docId}')">${ic('x', 13)} رفض</button>
+      <button class="approve-btn" onclick="approveRequest('${r.docId}')"${dis}>${ic('check', 13)} قبول</button>
+      <button class="reject-btn" onclick="rejectRequest('${r.docId}')"${dis}>${ic('x', 13)} رفض</button>
     </div>
   `).join('');
+}
+
+// How many of n pending requests the guest limit lets through right now.
+function approveAllFit(n) {
+  return isAdmin(currentUser) ? n : Math.max(0, Math.min(n, guestCapOf(eventData) - guestCount()));
+}
+
+function openApproveAllModal() {
+  if (bulkApproving || requests.length < 2) return;
+  if (paymentGateActive()) { openPaymentWhatsapp(); return; }
+  approveAllQueue = sortRequestsOldestFirst(requests);
+  const n = approveAllQueue.length;
+  const fit = approveAllFit(n);
+  if (fit === 0) { openPaymentWhatsapp(); return; }
+  let html = '<div style="font-size:13px; opacity:0.75; line-height:1.7;">' + n + ' ' + arPlural(n, 'طلب', 'طلبين', 'طلبات') + '. تأكد من الأسماء قبل القبول، وكل واحد بتطلع له بطاقة الدخول في نفس الرابط.</div>';
+  html += '<div class="aa-names">' + approveAllQueue.map(r => '<span>' + escapeHtml(r.name) + '</span>').join('') + '</div>';
+  document.getElementById('aa-title').textContent = fit < n ? 'قبول الطلبات؟' : 'تقبل كل الطلبات؟';
+  if (fit < n) html += '<div style="font-size:13px; color:var(--gold); margin:-4px 0 14px; line-height:1.7;">' + (fit === 1 ? 'بيتقبل الأقدم فقط' : 'بيتقبل أول ' + fit + ' (الأقدم)') + '، والباقي ' + (n - fit) + ' يظل معلّق لأنك وصلت حد الضيوف.</div>';
+  document.getElementById('aa-body').innerHTML = html;
+  document.getElementById('approve-all-modal').classList.add('active');
+}
+function closeApproveAllModal() {
+  document.getElementById('approve-all-modal').classList.remove('active');
+}
+
+// Approves the frozen queue in chunks of 25, one transaction per chunk (same
+// shape as importGuestNames), so a request approved elsewhere in the meantime
+// is skipped and the guest cap is re-checked against the live counter.
+async function approveAllRequests() {
+  if (bulkApproving) return;
+  const queue = approveAllQueue.slice();
+  closeApproveAllModal();
+  if (queue.length === 0) return;
+  if (paymentGateActive()) { openPaymentWhatsapp(); return; }
+  const fit = approveAllFit(queue.length);
+  if (fit === 0) { openPaymentWhatsapp(); return; }
+  const { doc, runTransaction } = window._fsFns;
+  const eventRef = doc(window._db, 'events', eventId);
+  const admin = isAdmin(currentUser);
+  let accepted = 0;
+  let skipped = 0;
+  let capped = false;
+  let failed = false;
+  bulkApproving = true;
+  bulkDone = 0;
+  bulkTotal = fit;
+  renderRequests();
+  showToast('⏳ جاري القبول... 0 / ' + fit);
+  try {
+    const chunkSize = 25;
+    for (let i = 0; i < queue.length && !capped; i += chunkSize) {
+      const ids = queue.slice(i, i + chunkSize).map(r => r.docId);
+      const res = await runTransaction(window._db, async (tx) => {
+        const evSnap = await tx.get(eventRef);
+        const data = evSnap.data() || {};
+        const count = data.guestCount || 0;
+        const cap = guestCapOf(data);
+        const refs = ids.map(id => doc(window._db, 'events', eventId, 'requests', id));
+        const snaps = await Promise.all(refs.map(r => tx.get(r)));
+        const live = [];
+        let gone = 0;
+        snaps.forEach((snap, k) => {
+          const d = snap.exists() ? snap.data() : null;
+          if (!d || d.status !== 'pending') { gone++; return; }
+          live.push({ ref: refs[k], d });
+        });
+        const allowed = admin ? live.length : Math.max(0, Math.min(live.length, cap - count));
+        live.slice(0, allowed).forEach(({ ref, d }) => {
+          const guestId = newGuestId();
+          const guestRef = doc(window._db, 'events', eventId, 'guests', guestId);
+          tx.set(guestRef, { id: guestId, name: d.name, ...(d.reqId !== undefined ? { reqId: d.reqId } : {}), scanned: false, registeredAt: new Date().toISOString() });
+          tx.update(ref, { status: 'approved', guestId });
+        });
+        if (allowed > 0) tx.update(eventRef, { guestCount: count + allowed });
+        return { allowed, gone, capped: allowed < live.length };
+      });
+      accepted += res.allowed;
+      skipped += res.gone;
+      capped = res.capped;
+      bulkDone = accepted;
+      renderRequests();
+      showToast('⏳ جاري القبول... ' + accepted + ' / ' + fit);
+    }
+  } catch (e) {
+    failed = true;
+    const left = queue.length - accepted - skipped;
+    showToast('⚠️ تم قبول ' + accepted + ' وتبقى ' + left + ' — حدّث الصفحة وتأكد');
+    showErr(e);
+  } finally {
+    bulkApproving = false;
+    renderRequests();
+  }
+  if (failed) return;
+  const remaining = queue.length - accepted - skipped;
+  showToast('✅ تم قبول ' + accepted + (remaining > 0 ? ' — وتبقى ' + remaining : ''));
+  if (capped && remaining > 0) {
+    // After awaits a window.open is blocked on iOS Safari, so show the
+    // in-page limit banner and let the user tap its WhatsApp button.
+    closeRequestsModal();
+    const gate = document.getElementById('payment-gate');
+    gate.style.display = 'block';
+    gate.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 // The guest's barcode text ("WD-...") IS the Firestore document ID — not a

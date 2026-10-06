@@ -204,6 +204,29 @@ await check('a stranger cannot delete someone else\'s signup record', () => asse
 await check('the admin can delete a signup record (tidying the list)', () => assertSucceeds(admin().doc('users/signee1').delete()));
 await check('the admin can list every signup record', () => assertSucceeds(admin().collection('users').get()));
 
+console.log('\naccept-all (n guests + n request updates + one counter bump, one transaction):');
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  for (const [id, extra] of [['aa_cap25', { guestLimit: 25 }], ['aa_over', { guestLimit: 25 }], ['aa_stranger', { guestLimit: 25 }], ['aa_admin', { guestLimit: 25 }], ['aa_50', { guestLimit: 50 }]]) {
+    await db.doc('events/' + id).set({ name: 'A', ownerUid: 'owner1', paid: true, guestCount: 0, ...extra });
+    for (let i = 0; i < 51; i++) await db.doc('events/' + id + '/requests/q' + i).set({ name: 'R' + i, reqId: 'REQ-' + i, status: 'pending', createdAt: 'x' });
+  }
+});
+const approveMany = (db, eventId, n, newCount) => db.runTransaction(async (tx) => {
+  for (let i = 0; i < n; i++) {
+    const gid = 'WD-' + i + Math.random().toString(36).slice(2, 8).toUpperCase();
+    tx.set(db.doc('events/' + eventId + '/guests/' + gid), { id: gid, name: 'R' + i, reqId: 'REQ-' + i, scanned: false, registeredAt: new Date().toISOString() });
+    tx.update(db.doc('events/' + eventId + '/requests/q' + i), { status: 'approved', guestId: gid });
+  }
+  tx.update(db.doc('events/' + eventId), { guestCount: newCount });
+});
+await check('the owner can accept 25 requests at once up to exactly the cap', () => assertSucceeds(approveMany(owner(), 'aa_cap25', 25, 25)));
+await check('the owner cannot accept one over the cap', () => assertFails(approveMany(owner(), 'aa_over', 26, 26)));
+await check('a stranger cannot accept requests in bulk', () => assertFails(approveMany(user('u9', 'other@example.com'), 'aa_stranger', 5, 5)));
+await check('the admin can accept beyond the cap', () => assertSucceeds(approveMany(admin(), 'aa_admin', 30, 30)));
+await check('50 requests at once up to a cap of 50 pass', () => assertSucceeds(approveMany(owner(), 'aa_50', 50, 50)));
+
+
 console.log('\nguest limits (5 free; beyond that the number the admin sets; nothing else):');
 await testEnv.withSecurityRulesDisabled(async (ctx) => {
   const db = ctx.firestore();
