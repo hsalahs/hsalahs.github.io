@@ -399,8 +399,10 @@ test('the guest list is cached locally as it syncs, and can be searched read-onl
   await expect(page.locator('#offline-list-btn')).toBeVisible();
 
   await page.locator('#offline-list-btn').click();
-  await expect(page.locator('#offline-list-results')).toContainText('أحمد العتيبي');
   await expect(page.locator('#offline-list-results')).toContainText('سارة القحطاني');
+  await expect(page.locator('#offline-list-results')).not.toContainText('أحمد العتيبي');
+  await page.locator('#offline-search').fill('أحمد');
+  await expect(page.locator('#offline-list-results')).toContainText('أحمد العتيبي');
   await expect(page.locator('#offline-list-results')).toContainText('✓ دخل');
 
   await page.locator('#offline-search').fill('سارة');
@@ -786,6 +788,7 @@ test('a successful scan updates the counter and the offline cache right away', a
   expect(ev.scannedCount).toBe(1);
 
   await page.getByRole('button', { name: /عرض الأسماء/ }).click();
+  await page.locator('#offline-search').fill('أ');
   await expect(page.locator('#offline-list-results')).toContainText('✓ دخل');
 });
 
@@ -804,6 +807,8 @@ test('the names list, if already open, shows a scan from this device straight aw
   await page.locator('#manual-code').fill('WD-A');
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
   await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  await expect(page.locator('#offline-list-results')).toContainText('الكل دخلوا');
+  await page.locator('#offline-search').fill('أ');
   await expect(page.locator('#offline-list-results')).toContainText('✓ دخل');
 });
 
@@ -888,7 +893,7 @@ test('the offline name list is sorted (numbers by value, then Arabic alphabetica
   await page.goto('/scan.html?event=e1');
   await page.locator('#offline-list-btn').click();
   const names = await page.locator('#offline-list-results .ol-name').allTextContents();
-  expect(names).toEqual(['1', '2', '3', '4', '5']);
+  expect(names).toEqual(['2', '3', '4', '5']);
 });
 
 // A door phone reopens scan.html often (lock/unlock, the iOS reload in
@@ -897,7 +902,7 @@ function seedOfflineCache(page, ageMs) {
   return page.addInitScript((ageMs) => {
     const t = new Date(Date.now() - ageMs).toISOString();
     localStorage.setItem('scan_offline_cache_e1', JSON.stringify({
-      eventName: 'x', guests: [{ name: 'من النسخة المحفوظة', id: 'WD-OLD', scanned: false }], savedAt: t, loadedAt: t,
+      eventName: 'x', guests: [{ name: 'من النسخة المحفوظة', id: 'WD-OLD', scanned: false }], savedAt: t, loadedAt: t, syncedAt: t, syncedOn: t,
     }));
   }, ageMs);
 }
@@ -947,9 +952,11 @@ test('the names list comes from the dashboard\'s roster document when there is o
   await expect(page.locator('#scanner-view')).toBeVisible();
   await page.getByRole('button', { name: /عرض الأسماء/ }).click();
   const list = page.locator('#offline-list-results');
-  await expect(list).toContainText('من القائمة | المجمّعة');
   await expect(list).toContainText('ضيف ثاني');
+  await expect(list).not.toContainText('من القائمة | المجمّعة');
   await expect(list).not.toContainText('من الخادم');
+  await page.locator('#offline-search').fill('المجمّعة');
+  await expect(list).toContainText('من القائمة | المجمّعة');
   await expect(list.locator('div', { hasText: 'من القائمة | المجمّعة' })).toContainText('✓ دخل');
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 2');
 });
@@ -1134,7 +1141,7 @@ test('scanner batch 2: qr-scanner is served locally, precached by sw.js, and a f
   expect(html).toContain('<script src="vendor/qr-scanner.umd.min.js"></script>');
   const sw = fs.readFileSync('sw.js', 'utf8');
   expect(sw).toMatch(/SHELL_FILES = \[[^\]]*'vendor\/qr-scanner\.umd\.min\.js'/);
-  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v15'");
+  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v16'");
   expect(fs.readFileSync('vendor/qr-scanner.umd.min.js', 'utf8')).toContain('QrScanner');
 
   const requested = [];
@@ -1636,11 +1643,11 @@ async function openList(page, guests, count = 0, user = DEVICE) {
 
 test('names list: every unscanned row has a register button and a code tag; scanned rows show "✓ دخل" and no button; meta line explains', async ({ page }) => {
   await openList(page, LIST, 1);
-  await expect(page.locator('#offline-list-meta')).toContainText('اضغط «تسجيل» لتسجيل دخول ضيف');
-  await expect(page.locator('#offline-list-meta')).toContainText('اضغط تحديث القائمة');
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 2 من 3');
   await expect(page.locator('#offline-list-meta')).not.toContainText('للقراءة فقط');
   await expect(listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' })).toBeVisible();
   await expect(listRow(page, 'WD-AB12X').locator('.ol-tag')).toHaveText('AB12');
+  await page.locator('#offline-search').fill('فهد');
   await expect(listRow(page, 'WD-EF56Z')).toContainText('✓ دخل');
   await expect(listRow(page, 'WD-EF56Z').locator('button')).toHaveCount(0);
 });
@@ -1676,6 +1683,8 @@ test('names list: confirm flow — cancel writes nothing; confirm checks in thro
   expect(await page.evaluate(() => window.__fakeFirebase.store['events/e1/guests']['WD-AB12X'].scanned)).toBe(true);
   expect(await storeCount(page)).toBe(1);
   await closeOverlay(page);
+  await expect(listRow(page, 'WD-AB12X')).toHaveCount(0);
+  await page.locator('#offline-search').fill('خالد');
   await expect(listRow(page, 'WD-AB12X')).toContainText(/✓ دخل \d\d:\d\d/);
   await expect(listRow(page, 'WD-AB12X').locator('button')).toHaveCount(0);
 });
@@ -1722,6 +1731,8 @@ test('names list: a stale row (already scanned elsewhere) gives a duplicate and 
   await page.waitForTimeout(450);
   await listRow(page, 'WD-CD34Y').getByRole('button', { name: 'تأكيد الدخول' }).click();
   await expect(page.locator('#result-overlay.rs-duplicate')).toBeVisible();
+  await expect(listRow(page, 'WD-CD34Y')).toHaveCount(0);
+  await page.locator('#offline-search').fill('نورة');
   await expect(listRow(page, 'WD-CD34Y')).toContainText('✓ دخل');
   await expect(listRow(page, 'WD-CD34Y').locator('button')).toHaveCount(0);
   expect(await storeCount(page)).toBe(0);
@@ -1748,6 +1759,7 @@ test('names list: two guests with the same name show different code tags and con
   await listRow(page, 'WD-BBBB2').getByRole('button', { name: 'تأكيد الدخول' }).click();
   await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
   await closeOverlay(page);
+  await page.locator('#offline-search').fill('محمد');
   await expect(listRow(page, 'WD-BBBB2')).toContainText('✓ دخل');
   await expect(listRow(page, 'WD-AAAA1').getByRole('button', { name: 'تسجيل' })).toBeVisible();
 });
@@ -1786,7 +1798,7 @@ test('names list: permission-denied on the write takes the session-revoked path 
 test('names list: 700 guests render at most 60 rows, show the rest note, and fast typing renders once', async ({ page }) => {
   await openList(page, manyGuests(700));
   await expect(page.locator('#offline-list-results .ol-row')).toHaveCount(60);
-  await expect(page.locator('#offline-list-results .ol-note')).toContainText('اكتب للبحث لعرض الباقي (640 ضيف)');
+  await expect(page.locator('#offline-list-results .ol-note')).toContainText('يوجد 640 ضيف آخر لم يدخل — اكتب للبحث');
   await page.evaluate(() => {
     window.__renders = 0;
     const real = window.renderOfflineList;
@@ -1869,3 +1881,350 @@ for (const fn of ['lockDevice', 'lockOrClose', 'resetScanState']) {
     await expect(page.locator('.ol-confirm')).toHaveCount(0);
   });
 }
+
+// ---- Names list delta sync (who entered on other phones) ----
+const ROSTER_MS = Date.now() - 6 * 3600 * 1000;
+function rosterStore(rosterEntries, guestDocs) {
+  const store = counterStore(guestDocs, 0);
+  store['events/e1/roster'] = { list: { guests: rosterEntries, updatedAt: { __timestampMs: ROSTER_MS } } };
+  return store;
+}
+async function openRosterList(page, rosterEntries, guestDocs, init, initArg) {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: DEVICE, store: rosterStore(rosterEntries, guestDocs) });
+  if (init) await page.addInitScript(init, initArg);
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+}
+const guestQueries = (page) => page.evaluate(() => (window.__fakeFirebase.getDocsQueries || []).filter(q => q.path === 'events/e1/guests'));
+const NOW_ISO = () => new Date().toISOString();
+
+test('delta sync: opening the list issues exactly one scannedAt range query and never reads the whole guests collection', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد', 'WD-B|0|بدر'], {
+    'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false },
+    'WD-B': { name: 'بدر', id: 'WD-B', scanned: false },
+  });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  const [q] = await guestQueries(page);
+  expect(q.filters).toHaveLength(1);
+  expect(q.filters[0].field).toBe('scannedAt');
+  expect(q.filters[0].op).toBe('>');
+  expect(q.filters[0].value).toMatch(/^\d{4}-\d\d-\d\dT.*Z$/);
+  expect(q.filters[0].value).toBe(new Date(ROSTER_MS - 5 * 60 * 1000).toISOString());
+  expect(q.returned).toBe(0);
+});
+
+test('delta sync: a guest admitted on another phone shows as entered (with the time); null and old scannedAt are not returned', async ({ page }) => {
+  const at = '2026-10-06T17:14:00.000Z';
+  await openRosterList(page, ['WD-A|0|أحمد', 'WD-B|0|بدر', 'WD-C|0|جاسم'], {
+    'WD-A': { name: 'أحمد', id: 'WD-A', scanned: true, scannedAt: at },
+    'WD-B': { name: 'بدر', id: 'WD-B', scanned: false, scannedAt: null },
+    'WD-C': { name: 'جاسم', id: 'WD-C', scanned: false },
+  });
+  await page.locator('#offline-list-btn').click();
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 2 من 3');
+  const [q] = await guestQueries(page);
+  expect(q.returned).toBe(1);
+  await expect(listRow(page, 'WD-A')).toHaveCount(0);
+  await page.locator('#offline-search').fill('أحمد');
+  const expected = await page.evaluate((iso) => listTime(new Date(iso)), at);
+  await expect(listRow(page, 'WD-A')).toContainText('✓ دخل ' + expected);
+});
+
+test('delta sync: a guest admitted but missing from the roster is added and the total grows', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], {
+    'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false },
+    'WD-N': { name: 'ضيف جديد', id: 'WD-N', scanned: true, scannedAt: NOW_ISO() },
+  });
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 1');
+  await page.locator('#offline-list-btn').click();
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 2');
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 1 من 2');
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect(page.getByRole('button', { name: /تحديث القائمة/ })).toBeEnabled();
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 2');
+});
+
+test('delta sync: a failed query keeps the list, says "تعذّر التحديث" and does not show the connection banner', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  await page.evaluate(() => { window.__failNextGetDocs = true; });
+  await page.locator('#offline-list-btn').click();
+  await expect(page.locator('#offline-list-meta')).toContainText('تعذّر التحديث — الأسماء من');
+  await expect(listRow(page, 'WD-A')).toBeVisible();
+  await expect(page.locator('#connection-banner')).toBeHidden();
+});
+
+test('delta sync: a query that never answers times out after 8 seconds with the same message', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  await page.evaluate(() => { window.__getDocsDelay = 20000; });
+  await page.locator('#offline-list-btn').click();
+  await expect(page.locator('#offline-list-meta')).toContainText('تعذّر التحديث', { timeout: 12000 });
+  await expect(listRow(page, 'WD-A')).toBeVisible();
+  await expect(page.locator('#connection-banner')).toBeHidden();
+});
+
+test('delta sync: permission-denied on the query leads to the session-revoked screen', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  await page.evaluate(() => { window.__fakeFirebase.denyLists.push('events/e1/guests'); });
+  await page.locator('#offline-list-btn').click();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+});
+
+test('delta sync: an open confirm card turns into "✓ دخل" when the guest was admitted elsewhere', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد', 'WD-B|0|بدر'], {
+    'WD-A': { name: 'أحمد', id: 'WD-A', scanned: true, scannedAt: NOW_ISO() },
+    'WD-B': { name: 'بدر', id: 'WD-B', scanned: false },
+  }, () => { window.__getDocsDelay = 1200; });
+  await page.locator('#offline-list-btn').click();
+  await listRow(page, 'WD-A').getByRole('button', { name: 'تسجيل' }).click();
+  await expect(listRow(page, 'WD-A')).toHaveClass(/ol-confirm/);
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 1 من 2', { timeout: 6000 });
+  await expect(page.locator('.ol-confirm')).toHaveCount(0);
+  expect(await page.evaluate(() => pendingListId)).toBeNull();
+  await page.locator('#offline-search').fill('أحمد');
+  await expect(listRow(page, 'WD-A')).toContainText('✓ دخل');
+});
+
+test('delta sync: "تحديث القائمة" re-reads the roster and runs the delta, without reading the whole guests collection', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد', 'WD-B|0|بدر'], {
+    'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false },
+    'WD-B': { name: 'بدر', id: 'WD-B', scanned: false },
+  });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  await page.evaluate(() => {
+    const c = window.__fakeFirebase.store['events/e1/guests'];
+    c['WD-B'] = { ...c['WD-B'], scanned: true, scannedAt: new Date().toISOString() };
+  });
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 1 من 2');
+  const qs = await guestQueries(page);
+  expect(qs).toHaveLength(2);
+  expect(qs.every(q => q.filters && q.filters[0].field === 'scannedAt')).toBe(true);
+});
+
+test('delta sync: a refresh never turns a guest this device admitted back into "not entered"', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد', 'WD-B|0|بدر'], {
+    'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false },
+    'WD-B': { name: 'بدر', id: 'WD-B', scanned: false },
+  });
+  await page.locator('#offline-list-btn').click();
+  await page.evaluate(() => { guests.find(g => g.id === 'WD-A').scanned = true; });
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 1 من 2');
+});
+
+test('delta sync: a saved copy without syncedAt (old format) is reloaded once from the roster', async ({ page }) => {
+  await openRosterList(page, ['WD-R|0|من القائمة'], { 'WD-R': { name: 'من القائمة', id: 'WD-R', scanned: false } }, () => {
+    const t = new Date().toISOString();
+    localStorage.setItem('scan_offline_cache_e1', JSON.stringify({
+      eventName: 'x', guests: [{ name: 'نسخة قديمة', id: 'WD-OLD', scanned: false }], savedAt: t, loadedAt: t,
+    }));
+  });
+  await page.locator('#offline-list-btn').click();
+  await expect(page.locator('#offline-list-results')).toContainText('من القائمة');
+  await expect(page.locator('#offline-list-results')).not.toContainText('نسخة قديمة');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('scan_offline_cache_e1')));
+  expect(saved.syncedAt).toMatch(/Z$/);
+});
+
+test('delta sync: a recent saved copy with syncedAt is reused, and the query uses its cursor', async ({ page }) => {
+  const cursor = '2026-01-01T00:00:00.000Z';
+  await openRosterList(page, [], {}, (c) => {
+    const t = new Date(Date.now() - 3600000).toISOString();
+    localStorage.setItem('scan_offline_cache_e1', JSON.stringify({
+      eventName: 'x', guests: [{ name: 'من النسخة المحفوظة', id: 'WD-OLD', scanned: false }], savedAt: t, loadedAt: t, syncedAt: '2026-01-01T00:00:00.000Z', syncedOn: t,
+    }));
+  });
+  await page.locator('#offline-list-btn').click();
+  await expect(page.locator('#offline-list-results')).toContainText('من النسخة المحفوظة');
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  expect((await guestQueries(page))[0].filters[0].value).toBe(cursor);
+});
+
+test('names list view: empty search shows only who has not entered; search shows everyone; meta says how many', async ({ page }) => {
+  await openList(page, LIST, 1);
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 2 من 3');
+  await expect(page.locator('#offline-list-meta')).toContainText('آخر تحديث');
+  await expect(listRow(page, 'WD-AB12X')).toBeVisible();
+  await expect(listRow(page, 'WD-EF56Z')).toHaveCount(0);
+  await expect(page.locator('#offline-search')).toHaveAttribute('placeholder', 'ابحث بالاسم أو الكود — لإظهار من دخل');
+  await page.locator('#offline-search').fill('فهد');
+  await expect(listRow(page, 'WD-EF56Z')).toContainText('✓ دخل');
+});
+
+test('names list view: more than 60 unscanned shows the "N ضيف آخر لم يدخل" note; everyone entered shows "الكل دخلوا"', async ({ page }) => {
+  await openList(page, manyGuests(70));
+  await expect(page.locator('#offline-list-results .ol-row')).toHaveCount(60);
+  await expect(page.locator('#offline-list-results .ol-note')).toHaveText('يوجد 10 ضيف آخر لم يدخل — اكتب للبحث');
+});
+test('names list view: when everyone entered the list says "الكل دخلوا ✓ (M من M)"; a search with no match says no results', async ({ page }) => {
+  await openList(page, { 'WD-E1': { name: 'أ', id: 'WD-E1', scanned: true }, 'WD-E2': { name: 'ب', id: 'WD-E2', scanned: true } }, 2);
+  await expect(page.locator('#offline-list-results')).toContainText('الكل دخلوا ✓ (2 من 2)');
+  await page.locator('#offline-search').fill('زززز');
+  await expect(page.locator('#offline-list-results')).toContainText('ما فيه نتائج');
+});
+
+test('names list view: after 10 minutes without a sync the meta line turns amber and asks for a refresh', async ({ page }) => {
+  await openList(page, LIST, 1);
+  await expect(page.locator('#offline-list-meta')).not.toHaveClass(/ol-stale/);
+  await page.evaluate(() => { lastSyncAt = Date.now() - 11 * 60 * 1000; renderOfflineList(); });
+  await expect(page.locator('#offline-list-meta')).toHaveClass(/ol-stale/);
+  await expect(page.locator('#offline-list-meta')).toContainText('اضغط تحديث القائمة');
+});
+
+test('delta sync regression: a guest checked in by name stays "✓ دخل" (with the time) after "تحديث القائمة" even when the roster still says not entered', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد', 'WD-B|0|بدر'], {
+    'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false },
+    'WD-B': { name: 'بدر', id: 'WD-B', scanned: false },
+  });
+  await page.locator('#offline-list-btn').click();
+  await listRow(page, 'WD-A').getByRole('button', { name: 'تسجيل' }).click();
+  await page.waitForTimeout(450);
+  await listRow(page, 'WD-A').getByRole('button', { name: 'تأكيد الدخول' }).click();
+  await expect(page.locator('#result-overlay')).toHaveClass(/rs-allowed/);
+  await closeOverlay(page);
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 1 من 2');
+  const time = await page.evaluate(() => localCheckinTimes['WD-A']);
+  expect(time).toMatch(/^\d\d:\d\d$/);
+  for (let i = 0; i < 2; i++) {
+    await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+    await expect(page.getByRole('button', { name: /تحديث القائمة/ })).toBeEnabled();
+    await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 1 من 2');
+    await expect(listRow(page, 'WD-A')).toHaveCount(0);
+    await expect(listRow(page, 'WD-B').getByRole('button', { name: 'تسجيل' })).toHaveCount(1);
+  }
+  await page.locator('#offline-search').fill('أحمد');
+  await expect(listRow(page, 'WD-A')).toContainText('✓ دخل ' + time);
+  await expect(listRow(page, 'WD-A').getByRole('button')).toHaveCount(0);
+  await page.locator('#offline-list-btn').click();
+  await page.locator('#offline-list-btn').click();
+  await page.locator('#offline-search').fill('أحمد');
+  await expect(listRow(page, 'WD-A')).toContainText('✓ دخل ' + time);
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 من 2');
+});
+
+test('delta sync: a refresh after a first sync never moves the cursor back and reads almost nothing', async ({ page }) => {
+  const old = new Date(ROSTER_MS + 3600 * 1000).toISOString();
+  await openRosterList(page, ['WD-A|0|أحمد', 'WD-B|0|بدر', 'WD-C|0|جاسم'], {
+    'WD-A': { name: 'أحمد', id: 'WD-A', scanned: true, scannedAt: old },
+    'WD-B': { name: 'بدر', id: 'WD-B', scanned: true, scannedAt: old },
+    'WD-C': { name: 'جاسم', id: 'WD-C', scanned: false },
+  });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 1 من 3');
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(2);
+  const [q1, q2] = await guestQueries(page);
+  expect(q1.returned).toBe(2);
+  expect(q2.filters[0].value >= q1.filters[0].value).toBe(true);
+  expect(q2.returned).toBe(0);
+});
+
+test('delta sync: a failed roster read on refresh keeps the old list, shows the failure and downloads no guests', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  await page.evaluate(() => { window.__failNextGetDoc = true; });
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect(page.locator('#offline-list-meta')).toContainText('تعذّر التحديث — الأسماء من');
+  await expect(page.getByRole('button', { name: /تحديث القائمة/ })).toBeEnabled();
+  await expect(listRow(page, 'WD-A')).toBeVisible();
+  await expect(page.locator('#connection-banner')).toBeHidden();
+  const qs = await guestQueries(page);
+  expect(qs.filter(q => !q.filters)).toHaveLength(0);
+  expect(qs).toHaveLength(1);
+});
+
+for (const fn of ['lockDevice', 'lockOrClose', 'resetScanState']) {
+  test('delta sync: ' + fn + ' during a sync resets the busy flag and the late answer touches nothing', async ({ page }) => {
+    await openRosterList(page, ['WD-A|0|أحمد'], {
+      'WD-A': { name: 'أحمد', id: 'WD-A', scanned: true, scannedAt: NOW_ISO() },
+    }, () => { window.__getDocsDelay = 1500; });
+    await page.locator('#offline-list-btn').click();
+    await expect.poll(() => page.evaluate(() => deltaBusy)).toBe(true);
+    const cursor = await page.evaluate(() => syncCursor);
+    await page.evaluate((f) => { window[f](); }, fn);
+    expect(await page.evaluate(() => deltaBusy)).toBe(false);
+    await page.waitForTimeout(2200);
+    expect(await page.evaluate(() => [guests.find(g => g.id === 'WD-A').scanned, syncCursor, deltaBusy])).toEqual([false, cursor, false]);
+  });
+}
+
+test('delta sync: a terminated Firestore client during the sync reloads the page', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  await page.evaluate(() => { window.__marker = 1; window.__failNextGetDocs = true; window._isFirestoreTerminated = () => true; });
+  await Promise.all([page.waitForEvent('load'), page.locator('#offline-list-btn').click()]);
+  expect(await page.evaluate(() => window.__marker)).toBeUndefined();
+});
+
+test('delta sync: a refresh tap during the automatic sync still runs its own forced sync', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } }, () => { window.__getDocsDelay = 800; });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => page.evaluate(() => deltaBusy)).toBe(true);
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect.poll(() => guestQueries(page), { timeout: 8000 }).toHaveLength(2);
+  await expect(page.getByRole('button', { name: /تحديث القائمة/ })).toBeEnabled();
+});
+
+test('delta sync: a cache-served roster read on refresh keeps the list, no whole-collection read, cursor not advanced', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  await expect(page.locator('#offline-list-meta')).toContainText('آخر تحديث');
+  const before = await page.evaluate(() => [syncCursor, lastSyncAt]);
+  await page.evaluate(() => { window.__rosterFromCache = true; });
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect(page.locator('#offline-list-meta')).toContainText('تعذّر التحديث — الأسماء من');
+  await expect(listRow(page, 'WD-A')).toBeVisible();
+  expect(await page.evaluate(() => [syncCursor, lastSyncAt])).toEqual(before);
+  const qs = await guestQueries(page);
+  expect(qs.filter(q => !q.filters)).toHaveLength(0);
+  expect(qs).toHaveLength(1);
+});
+
+test('delta sync: an expired saved copy with syncedAt keeps its cursor (not older than the copy) and its entered guests', async ({ page }) => {
+  const syncedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const loaded = new Date(Date.now() - 4 * 3600 * 1000).toISOString();
+  await openRosterList(page, ['WD-A|0|أحمد', 'WD-B|0|بدر'], {
+    'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false },
+    'WD-B': { name: 'بدر', id: 'WD-B', scanned: false },
+  }, ([s, l]) => {
+    localStorage.setItem('scan_offline_cache_e1', JSON.stringify({
+      eventName: 'x', guests: [{ name: 'أحمد', id: 'WD-A', scanned: true }, { name: 'بدر', id: 'WD-B', scanned: false }],
+      savedAt: l, loadedAt: l, syncedAt: s, syncedOn: s,
+    }));
+  }, [syncedAt, loaded]);
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  const [q] = await guestQueries(page);
+  expect(q.filters[0].value >= syncedAt).toBe(true);
+  expect(q.filters[0].value).toBe(syncedAt);
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 1 من 2');
+  await expect(listRow(page, 'WD-A')).toHaveCount(0);
+});
+
+test('delta sync: a roster document that exists without a guests list keeps the list on refresh and downloads nothing', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  await page.evaluate(() => { delete window.__fakeFirebase.store['events/e1/roster'].list.guests; });
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect(page.locator('#offline-list-meta')).toContainText('تعذّر التحديث — الأسماء من');
+  await expect(listRow(page, 'WD-A')).toBeVisible();
+  expect((await guestQueries(page)).filter(q => !q.filters)).toHaveLength(0);
+});
+
+test('delta sync: a roster read that never answers times out after 8 seconds on refresh and keeps the list', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  await page.evaluate(() => { window.__getDocDelays = { 'events/e1/roster/list': 20000 }; });
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect(page.locator('#offline-list-meta')).toContainText('تعذّر التحديث', { timeout: 12000 });
+  await expect(page.getByRole('button', { name: /تحديث القائمة/ })).toBeEnabled();
+  await expect(listRow(page, 'WD-A')).toBeVisible();
+  expect((await guestQueries(page)).filter(q => !q.filters)).toHaveLength(0);
+});

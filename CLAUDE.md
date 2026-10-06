@@ -67,8 +67,8 @@ These are standing instructions the user gave in chat for how to respond, not pr
 
 ## Tests
 
-- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 13 minutes, 463 tests). Run a single file while developing, the full suite once before pushing.
-- Rules tests (real emulator): `npm run test:rules` (160 checks; `RULES_PATH` overrides the rules file).
+- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 15 minutes, 490 tests). Run a single file while developing, the full suite once before pushing.
+- Rules tests (real emulator): `npm run test:rules` (161 checks; `RULES_PATH` overrides the rules file).
 - Playwright uses in-memory Firebase stubs (`tests/mocks/*.stub.js`, `tests/helpers.js`: `stubFirebase`, `seedFakeFirebase`). The store resets on navigation. JSZip is served from `node_modules` via `page.route`. See `tests/README.md`.
 - Tool quirks: heredocs expand `\uXXXX` (use the Write tool for escapes); avoid `pkill -f`; foreground `sleep` is blocked (use until-loops).
 

@@ -104,6 +104,7 @@
   .ol-ccode { font-size:13px; color:#B8B4AC; margin:6px 0 12px; }
   .ol-cbtns { display:flex; gap:8px; }
   .ol-cbtns .btn, .ol-cbtns .btn.ghost { flex:1; min-width:0; width:auto; padding:12px 6px; }
+  .ol-stale { color:#E0A030; }
   .ol-note { text-align:center; color:#8a857a; font-size:12px; padding:12px 0; }
   .counter { text-align:center; color:var(--gold); font-size:15px; font-weight:700; margin-bottom:14px; }
   .manual-divider { display:flex; align-items:center; gap:10px; color:#6f6a62; font-size:12px; margin:16px 0 12px; }
@@ -258,7 +259,7 @@
     <div id="offline-list-section" style="display:none; margin-top:14px; text-align:right;">
       <div class="sub" id="offline-list-meta"></div>
       <button class="btn ghost" id="offline-refresh-btn" style="margin-top:4px; padding:8px; font-size:13px;" onclick="refreshOfflineList()"><i data-ic="refresh-cw" data-size="14"></i> تحديث القائمة</button>
-      <input type="text" id="offline-search" class="text-input" placeholder="ابحث بالاسم أو الكود" style="margin-top:8px;">
+      <input type="text" id="offline-search" class="text-input" placeholder="ابحث بالاسم أو الكود — لإظهار من دخل" style="margin-top:8px;">
       <div id="offline-list-results" style="max-height:320px; overflow-y:auto; margin-top:8px;"></div>
     </div>
 
@@ -756,6 +757,10 @@ function cacheGuestsOffline() {
       // When the list last came from the server — unlike savedAt, a scan on
       // this device doesn't move it (see loadGuestsOnce).
       loadedAt: guestsLoadedAt,
+      // Cursor for the delta sync of who entered (see syncEnteredGuests) and
+      // when that last ran; like loadedAt, a scan on this device leaves them.
+      syncedAt: syncCursor,
+      syncedOn: lastSyncAt ? new Date(lastSyncAt).toISOString() : null,
     }));
   } catch (e) {}
 }
@@ -769,14 +774,22 @@ function readOfflineCache() {
 
 async function refreshOfflineList() {
   const btn = document.getElementById('offline-refresh-btn');
+  const epoch = scanEpoch;
   btn.disabled = true;
   btn.textContent = '⏳ جاري التحديث...';
   pendingListId = null;
-  await loadGuestsOnce(true);
-  prepareListSource();
-  btn.disabled = false;
-  btn.innerHTML = ic('refresh-cw', 14) + ' تحديث القائمة';
-  renderOfflineList();
+  try {
+    const loaded = await loadGuestsOnce(true);
+    if (epoch !== scanEpoch) return;
+    // 'full' = every guest was just downloaded, so there is nothing newer to ask for.
+    if (loaded === 'ok') await syncEnteredGuests(true);
+    if (epoch !== scanEpoch) return;
+    prepareListSource();
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = ic('refresh-cw', 14) + ' تحديث القائمة';
+    if (epoch === scanEpoch) renderOfflineList();
+  }
 }
 
 // "Check in by name": the same handleScan path as a QR scan, started from a
@@ -789,6 +802,14 @@ const LIST_CONFIRM_GUARD_MS = 400;
 let pendingListId = null, listBusyId = null, listArmedAt = 0, listSearchTimer = null;
 let listCacheSavedAt = null, listFallback = null;
 const localCheckinTimes = {};
+const SYNC_AUTO_MS = 2 * 60 * 1000;
+// The cursor is compared with scannedAt written by OTHER phones' clocks: a
+// phone whose clock is more than 5 minutes behind can have its check-ins
+// missed until the saved copy is rebuilt (3 hours) or the roster is newer.
+const SYNC_OVERLAP_MS = 5 * 60 * 1000;
+const SYNC_TIMEOUT_MS = 8000;
+const SYNC_STALE_MS = 10 * 60 * 1000;
+let syncCursor = null, lastSyncAt = null, deltaBusy = false, deltaFailed = false, syncInFlight = null;
 
 function prepareListSource() {
   if (guests.length) return;
@@ -805,6 +826,7 @@ function resetListState() {
   clearTimeout(listSearchTimer);
   pendingListId = null;
   listBusyId = null;
+  deltaBusy = false;
   if (document.getElementById('offline-list-section').style.display === 'block') renderOfflineList();
 }
 
@@ -814,7 +836,11 @@ function toggleOfflineList() {
   section.style.display = showing ? 'none' : 'block';
   clearTimeout(listSearchTimer);
   pendingListId = null;
-  if (!showing) { prepareListSource(); renderOfflineList(); }
+  if (!showing) {
+    prepareListSource();
+    renderOfflineList();
+    syncEnteredGuests(false);
+  }
 }
 
 let listLastQuery = '';
@@ -827,6 +853,84 @@ function onListSearchInput() {
 
 function listTime(d) {
   return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function listIsOpen() {
+  return document.getElementById('offline-list-section').style.display === 'block';
+}
+
+// Who entered on other phones, without the dashboard being open: one query on
+// guests whose scannedAt is later than the cursor (single-field range, the
+// automatic index). The cursor trails the query by 5 minutes so a check-in
+// that committed while the previous query ran is never missed. Runs when the
+// list opens (if the last sync is over 2 minutes old) and on "تحديث القائمة";
+// there is deliberately no timer, it would multiply the reads.
+async function syncEnteredGuests(force) {
+  if (deltaBusy && force) {
+    // A tap on "تحديث القائمة" during an automatic sync waits for it, then
+    // runs its own forced one.
+    const epoch = scanEpoch;
+    if (syncInFlight) { try { await syncInFlight; } catch (_) {} }
+    if (epoch !== scanEpoch) return;
+  }
+  const p = runSync(force);
+  syncInFlight = p;
+  try { await p; } finally { if (syncInFlight === p) syncInFlight = null; }
+}
+
+async function runSync(force) {
+  if (deltaBusy || !guests.length || !syncCursor || !eventId) return;
+  if (!force && lastSyncAt && Date.now() - lastSyncAt < SYNC_AUTO_MS) return;
+  const epoch = scanEpoch;
+  const startedAt = Date.now();
+  deltaBusy = true;
+  let timer = null;
+  try {
+    const { collection, getDocs, query, where } = window._fsFns;
+    const q = query(collection(window._db, 'events', eventId, 'guests'), where('scannedAt', '>', syncCursor));
+    const snap = await Promise.race([
+      getDocs(q),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('sync timeout')), SYNC_TIMEOUT_MS); }),
+    ]);
+    if (epoch !== scanEpoch) return;
+    const byId = {};
+    guests.forEach(g => { byId[g.id] = g; });
+    snap.docs.forEach(d => {
+      const data = d.data() || {};
+      let g = byId[d.id];
+      if (!g) {
+        g = { docId: d.id, id: d.id, name: data.name || '', scanned: true };
+        guests.push(g);
+        byId[d.id] = g;
+      }
+      g.scanned = true;
+      if (!localCheckinTimes[d.id] && data.scannedAt) {
+        const when = new Date(data.scannedAt);
+        if (!isNaN(when.getTime())) localCheckinTimes[d.id] = listTime(when);
+      }
+      if (pendingListId === d.id) pendingListId = null;
+    });
+    syncCursor = new Date(startedAt - SYNC_OVERLAP_MS).toISOString();
+    lastSyncAt = startedAt;
+    deltaFailed = false;
+    updateScanCounter();
+    cacheGuestsOffline();
+  } catch (e) {
+    if (epoch !== scanEpoch) return;
+    console.error('names sync error:', e);
+    if (e && e.code === 'permission-denied') { sessionRevoked(); return; }
+    if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
+      setTimeout(() => location.reload(), 800);
+      return;
+    }
+    deltaFailed = true;
+  } finally {
+    clearTimeout(timer);
+    if (epoch === scanEpoch) {
+      deltaBusy = false;
+      if (listIsOpen()) renderOfflineList();
+    }
+  }
 }
 
 function listRowHtml(g, canCheckIn) {
@@ -864,25 +968,34 @@ function renderOfflineList() {
     return;
   }
   const canCheckIn = !!eventData;
-  const t = listCacheSavedAt || guestsLoadedAt;
+  const t = guests.length ? (lastSyncAt || guestsLoadedAt) : (listCacheSavedAt || guestsLoadedAt);
   const savedTime = t ? new Date(t).toLocaleTimeString('ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit' }) : '';
-  meta.textContent = canCheckIn
-    ? '📋 آخر نسخة محفوظة (' + savedTime + ') — اضغط «تسجيل» لتسجيل دخول ضيف. ضيف مضاف بعد التحميل؟ اضغط تحديث القائمة'
-    : '📋 آخر نسخة محفوظة (' + savedTime + ') — للقراءة فقط، ما تسجّل حضور';
+  const notIn = src.filter(g => !g.scanned);
+  const stale = !!t && Date.now() - new Date(t).getTime() > SYNC_STALE_MS;
+  meta.className = 'sub' + (canCheckIn && (stale || deltaFailed) ? ' ol-stale' : '');
+  if (!canCheckIn) {
+    meta.textContent = '📋 آخر نسخة محفوظة (' + savedTime + ') — للقراءة فقط، ما تسجّل حضور';
+  } else if (deltaFailed) {
+    meta.textContent = 'تعذّر التحديث — الأسماء من ' + savedTime + ' · لم يدخل: ' + notIn.length + ' من ' + src.length;
+  } else {
+    meta.textContent = 'لم يدخل: ' + notIn.length + ' من ' + src.length + ' · آخر تحديث ' + savedTime + (stale ? ' — اضغط تحديث القائمة' : '');
+  }
   const query = (document.getElementById('offline-search').value || '').trim();
   const ql = query.toLowerCase();
   const codeOk = query.length >= 3 || ql.indexOf('wd') === 0;
-  const filtered = query ? src.filter(g => (g.name || '').toLowerCase().includes(ql) || (codeOk && (g.id || '').toLowerCase().includes(ql))) : src;
+  const filtered = query ? src.filter(g => (g.name || '').toLowerCase().includes(ql) || (codeOk && (g.id || '').toLowerCase().includes(ql))) : notIn;
   const sorted = sortGuestsByName(filtered);
   const rows = sorted.slice(0, LIST_MAX_ROWS);
   let html = rows.map(g => listRowHtml(g, canCheckIn)).join('');
   if (sorted.length > rows.length) {
     html += '<div class="ol-note">' + (query
       ? 'اكتب أكثر لتضييق النتائج (' + sorted.length + ' نتيجة)'
-      : 'اكتب للبحث لعرض الباقي (' + (sorted.length - rows.length) + ' ضيف)') + '</div>';
+      : 'يوجد ' + (sorted.length - rows.length) + ' ضيف آخر لم يدخل — اكتب للبحث') + '</div>';
   }
   const top = results.scrollTop;
-  results.innerHTML = html || '<div class="sub" style="text-align:center; padding:16px 0;">ما فيه نتائج</div>';
+  if (html) results.innerHTML = html;
+  else if (!query && src.length) results.innerHTML = '<div class="sub" style="text-align:center; padding:16px 0;">الكل دخلوا ✓ (' + src.length + ' من ' + src.length + ')</div>';
+  else results.innerHTML = '<div class="sub" style="text-align:center; padding:16px 0;">ما فيه نتائج</div>';
   results.scrollTop = top;
 }
 
@@ -986,40 +1099,108 @@ const OFFLINE_LIST_MAX_AGE = 3 * 60 * 60 * 1000;
 let guestsLoadedAt = null;
 async function loadGuestsOnce(force) {
   const cached = readOfflineCache();
-  if (!force && cached && cached.loadedAt && Date.now() - new Date(cached.loadedAt).getTime() < OFFLINE_LIST_MAX_AGE) {
+  if (!force && cached && cached.loadedAt && cached.syncedAt && Date.now() - new Date(cached.loadedAt).getTime() < OFFLINE_LIST_MAX_AGE) {
     guests = cached.guests.map(g => ({ docId: g.id, ...g }));
     guestsLoadedAt = cached.loadedAt;
     listCacheSavedAt = cached.savedAt;
+    syncCursor = cached.syncedAt;
+    lastSyncAt = cached.syncedOn ? new Date(cached.syncedOn).getTime() : null;
     updateScanCounter();
     return;
   }
   const { collection, getDocs, doc, getDoc } = window._fsFns;
+  const epoch = scanEpoch;
+  const hadList = guests.length > 0;
   try {
     // The roster event.html keeps (one document, one read). Events whose
     // owner hasn't opened the dashboard since it existed — or too big for one
     // document — have none, and fall back to reading every guest.
     // A failed roster read (say, rules not yet allowing it) must not look
-    // like a revoked session — just fall back to the old way.
-    const roster = await getDoc(doc(window._db, 'events', eventId, 'roster', 'list')).catch(() => null);
-    if (roster && roster.exists() && Array.isArray(roster.data().guests)) {
+    // like a revoked session. With no list yet it falls back to the old way;
+    // with a list on screen (a refresh) the old list is kept and the failure
+    // is shown, never a download of every guest.
+    let roster = null, rosterErr = null, rosterTimer = null;
+    try {
+      roster = await Promise.race([
+        getDoc(doc(window._db, 'events', eventId, 'roster', 'list')),
+        new Promise((_, reject) => { rosterTimer = setTimeout(() => reject(new Error('roster timeout')), SYNC_TIMEOUT_MS); }),
+      ]);
+    } catch (e) { rosterErr = e; }
+    clearTimeout(rosterTimer);
+    if (epoch !== scanEpoch) return 'stale';
+    if (hadList && (rosterErr || (roster && roster.metadata && roster.metadata.fromCache))) {
+      if (rosterErr && rosterErr.code === 'permission-denied') { sessionRevoked(); return 'stale'; }
+      if (rosterErr && window._isFirestoreTerminated && window._isFirestoreTerminated(rosterErr)) {
+        setTimeout(() => location.reload(), 800);
+        return 'stale';
+      }
+      deltaFailed = true;
+      return 'failed';
+    }
+    const rosterExists = !!roster && roster.exists();
+    const rosterHasList = rosterExists && Array.isArray(roster.data().guests);
+    if (hadList && rosterExists && !rosterHasList) { deltaFailed = true; return 'failed'; }
+    const startedAt = Date.now();
+    // What this device already knows is kept: a refresh never turns an
+    // entered guest back into one who has not entered. With no list in memory
+    // (the saved copy expired, or the page reloaded) the saved copy, even an
+    // expired one, is that knowledge and its cursor is the floor for the
+    // new cursor, so the admissions it already holds are not read again. A
+    // copy without syncedAt (old format) is the one exception: it is rebuilt
+    // from the roster alone.
+    const prev = hadList ? guests : (cached && cached.syncedAt ? cached.guests : []);
+    const knownIn = {};
+    prev.forEach(g => { if (g.scanned) knownIn[g.id] = true; });
+    const baseCursor = syncCursor || (!hadList && cached && cached.syncedAt) || null;
+    const baseSyncOn = syncCursor ? lastSyncAt : (cached && cached.syncedOn ? new Date(cached.syncedOn).getTime() : null);
+    let result = 'ok';
+    if (rosterHasList) {
+      const seen = {};
       guests = roster.data().guests.map(entry => {
         const a = entry.indexOf('|');
         const b = entry.indexOf('|', a + 1);
         const id = entry.slice(0, a);
-        return { docId: id, id, scanned: entry.slice(a + 1, b) === '1', name: entry.slice(b + 1) };
+        seen[id] = true;
+        return { docId: id, id, scanned: entry.slice(a + 1, b) === '1' || !!knownIn[id], name: entry.slice(b + 1) };
       });
+      // Guests the delta sync added (admitted, newer than the roster) stay.
+      prev.forEach(g => { if (g.scanned && !seen[g.id]) guests.push({ docId: g.id || g.docId, id: g.id, name: g.name, scanned: true }); });
+      // The roster is only rewritten while the dashboard is open, so it can be
+      // hours old: the delta sync starts from its own time (epoch when it has none).
+      // The cursor never moves backwards, or every refresh would re-read all
+      // admissions since the old roster.
+      const upd = roster.data().updatedAt;
+      const updMs = upd && typeof upd.toDate === 'function' ? upd.toDate().getTime() : 0;
+      const fromRoster = new Date(Math.max(0, updMs - SYNC_OVERLAP_MS)).toISOString();
+      if (baseCursor && baseCursor >= fromRoster) {
+        syncCursor = baseCursor;
+        lastSyncAt = baseSyncOn;
+      } else {
+        syncCursor = fromRoster;
+        lastSyncAt = null;
+      }
     } else {
+      // Roster confirmed missing, or (first load only) unreadable or without a list.
       const snap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
-      guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+      if (epoch !== scanEpoch) return 'stale';
+      guests = snap.docs.map(d => ({ docId: d.id, ...d.data(), scanned: !!d.data().scanned || !!knownIn[d.id] }));
+      syncCursor = new Date(startedAt - SYNC_OVERLAP_MS).toISOString();
+      lastSyncAt = startedAt;
+      result = 'full';
     }
+    deltaFailed = false;
     guestsLoadedAt = new Date().toISOString();
     updateScanCounter();
     refreshConnectionBanner(true);
     cacheGuestsOffline();
+    return result;
   } catch (error) {
+    if (epoch !== scanEpoch) return 'stale';
     console.error('guests load error:', error);
-    if (error && error.code === 'permission-denied') { sessionRevoked(); return; }
+    if (error && error.code === 'permission-denied') { sessionRevoked(); return 'stale'; }
+    if (hadList) { deltaFailed = true; return 'failed'; }
     refreshConnectionBanner(false);
+    return 'failed';
   }
 }
 
