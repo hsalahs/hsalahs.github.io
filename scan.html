@@ -92,6 +92,19 @@
   .btn.ghost { width:100%; background:transparent; border:1px solid rgba(var(--accent-rgb),0.3); color:var(--gold); }
   .toggle-row { text-align:center; font-size:13px; color:#B8B4AC; margin-top:14px; }
   .toggle-row a { color:var(--gold); cursor:pointer; text-decoration:underline; }
+  .ol-row { display:flex; align-items:center; gap:8px; padding:10px 4px; border-bottom:1px solid rgba(var(--accent-rgb),0.15); }
+  .ol-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .ol-tag { flex:none; font-size:11px; color:#8a857a; letter-spacing:1px; direction:ltr; }
+  .ol-state { flex:none; width:92px; text-align:center; font-size:12px; color:#8a857a; }
+  .ol-state.ol-in { color:#4CAF50; }
+  .ol-btn { flex:none; width:92px; padding:8px 4px; border-radius:8px; background:transparent; border:1px solid rgba(var(--accent-rgb),0.3); color:var(--gold); font-family:inherit; font-size:13px; cursor:pointer; }
+  .ol-btn:disabled { opacity:0.6; cursor:default; }
+  .ol-confirm { display:block; padding:14px 8px; background:rgba(var(--accent-rgb),0.08); border-radius:10px; }
+  .ol-cname { font-size:20px; font-weight:700; color:#FAF8F4; overflow-wrap:anywhere; }
+  .ol-ccode { font-size:13px; color:#B8B4AC; margin:6px 0 12px; }
+  .ol-cbtns { display:flex; gap:8px; }
+  .ol-cbtns .btn, .ol-cbtns .btn.ghost { flex:1; min-width:0; width:auto; padding:12px 6px; }
+  .ol-note { text-align:center; color:#8a857a; font-size:12px; padding:12px 0; }
   .counter { text-align:center; color:var(--gold); font-size:15px; font-weight:700; margin-bottom:14px; }
   .manual-divider { display:flex; align-items:center; gap:10px; color:#6f6a62; font-size:12px; margin:16px 0 12px; }
   .manual-divider::before, .manual-divider::after { content:''; flex:1; height:1px; background:rgba(var(--accent-rgb),0.2); }
@@ -245,7 +258,7 @@
     <div id="offline-list-section" style="display:none; margin-top:14px; text-align:right;">
       <div class="sub" id="offline-list-meta"></div>
       <button class="btn ghost" id="offline-refresh-btn" style="margin-top:4px; padding:8px; font-size:13px;" onclick="refreshOfflineList()"><i data-ic="refresh-cw" data-size="14"></i> تحديث القائمة</button>
-      <input type="text" id="offline-search" class="text-input" placeholder="ابحث بالاسم" oninput="renderOfflineList()" style="margin-top:8px;">
+      <input type="text" id="offline-search" class="text-input" placeholder="ابحث بالاسم أو الكود" style="margin-top:8px;">
       <div id="offline-list-results" style="max-height:320px; overflow-y:auto; margin-top:8px;"></div>
     </div>
 
@@ -577,6 +590,7 @@ function sessionRevoked() {
   }
   scanEpoch++;
   hideResult(true);
+  resetListState();
   scanCooldown = false; lastScanned = null;
   document.getElementById('scanner-view').style.display = 'none';
   document.getElementById('pin-input').value = '';
@@ -683,6 +697,7 @@ async function lockOrClose() {
   lockingDevice = true;
   scanEpoch++;
   hideResult(true);
+  resetListState();
   stopSessionWatch();
   if (eventUnsub) { eventUnsub(); eventUnsub = null; }
   if (qrScanner) {
@@ -703,6 +718,7 @@ async function lockDevice() {
   lockingDevice = true;
   scanEpoch++;
   hideResult(true);
+  resetListState();
   usesSessionDoc = false;
   stopSessionWatch();
   if (eventUnsub) { eventUnsub(); eventUnsub = null; }
@@ -730,11 +746,13 @@ function offlineCacheKey() { return 'scan_offline_cache_' + eventId; }
 // guest list into localStorage on every update, so it survives a
 // disconnect (and even a page reload) independent of the network.
 function cacheGuestsOffline() {
+  const savedAt = new Date().toISOString();
+  listCacheSavedAt = savedAt;
   try {
     localStorage.setItem(offlineCacheKey(), JSON.stringify({
       eventName: eventData ? eventData.name : '',
       guests: guests.map(g => ({ name: g.name, id: g.id, scanned: !!g.scanned })),
-      savedAt: new Date().toISOString(),
+      savedAt: savedAt,
       // When the list last came from the server — unlike savedAt, a scan on
       // this device doesn't move it (see loadGuestsOnce).
       loadedAt: guestsLoadedAt,
@@ -753,39 +771,157 @@ async function refreshOfflineList() {
   const btn = document.getElementById('offline-refresh-btn');
   btn.disabled = true;
   btn.textContent = '⏳ جاري التحديث...';
+  pendingListId = null;
   await loadGuestsOnce(true);
+  prepareListSource();
   btn.disabled = false;
   btn.innerHTML = ic('refresh-cw', 14) + ' تحديث القائمة';
   renderOfflineList();
+}
+
+// "Check in by name": the same handleScan path as a QR scan, started from a
+// row of this list. Rows come from the in-memory `guests` array (the saved
+// copy only when that is empty, e.g. the event doc loaded but the guests did
+// not), so searching and registering add no reads. List-only mode (the event
+// doc could not be loaded, eventData null) never shows a register button.
+const LIST_MAX_ROWS = 60;
+const LIST_CONFIRM_GUARD_MS = 400;
+let pendingListId = null, listBusyId = null, listArmedAt = 0, listSearchTimer = null;
+let listCacheSavedAt = null, listFallback = null;
+const localCheckinTimes = {};
+
+function prepareListSource() {
+  if (guests.length) return;
+  listFallback = readOfflineCache();
+  if (listFallback) listCacheSavedAt = listFallback.savedAt;
+}
+
+function listSource() {
+  if (guests.length) return guests;
+  return listFallback ? listFallback.guests : [];
+}
+
+function resetListState() {
+  clearTimeout(listSearchTimer);
+  pendingListId = null;
+  listBusyId = null;
+  if (document.getElementById('offline-list-section').style.display === 'block') renderOfflineList();
 }
 
 function toggleOfflineList() {
   const section = document.getElementById('offline-list-section');
   const showing = section.style.display === 'block';
   section.style.display = showing ? 'none' : 'block';
-  if (!showing) renderOfflineList();
+  clearTimeout(listSearchTimer);
+  pendingListId = null;
+  if (!showing) { prepareListSource(); renderOfflineList(); }
+}
+
+function onListSearchInput() {
+  clearTimeout(listSearchTimer);
+  listSearchTimer = setTimeout(() => { pendingListId = null; renderOfflineList(); }, 200);
+}
+
+function listTime(d) {
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function listRowHtml(g, canCheckIn) {
+  const id = escapeHtml(g.id || '');
+  const name = escapeHtml(g.name || '');
+  if (canCheckIn && !g.scanned && pendingListId === g.id) {
+    return '<div class="ol-row ol-confirm" data-id="' + id + '">'
+      + '<div class="ol-cname">' + name + '</div>'
+      + '<div class="ol-ccode">الكود: <span dir="ltr">' + id + '</span></div>'
+      + '<div class="ol-cbtns"><button type="button" class="btn" data-act="confirm">تأكيد الدخول</button>'
+      + '<button type="button" class="btn ghost" data-act="cancel">إلغاء</button></div></div>';
+  }
+  const tag = escapeHtml(String(g.id || '').replace(/^WD-/i, '').slice(0, 4));
+  let right;
+  if (g.scanned) {
+    right = '<span class="ol-state ol-in">✓ دخل' + (localCheckinTimes[g.id] ? ' ' + localCheckinTimes[g.id] : '') + '</span>';
+  } else if (!canCheckIn) {
+    right = '<span class="ol-state">لسه</span>';
+  } else if (listBusyId === g.id) {
+    right = '<button type="button" class="ol-btn" disabled>جاري التسجيل…</button>';
+  } else {
+    right = '<button type="button" class="ol-btn" data-act="arm">تسجيل</button>';
+  }
+  return '<div class="ol-row" data-id="' + id + '"><span class="ol-name">' + name + '</span>'
+    + '<span class="ol-tag">' + tag + '</span>' + right + '</div>';
 }
 
 function renderOfflineList() {
-  const cache = readOfflineCache();
   const meta = document.getElementById('offline-list-meta');
   const results = document.getElementById('offline-list-results');
-  if (!cache) {
+  const src = listSource();
+  if (!src.length && !listCacheSavedAt) {
     meta.textContent = '⚠️ ما فيه نسخة محفوظة بعد — لازم تتصل بالإنترنت مرة وحدة أول عشان تتحفظ نسخة';
     results.innerHTML = '';
     return;
   }
-  const savedTime = new Date(cache.savedAt).toLocaleTimeString('ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit' });
-  meta.textContent = '📋 آخر نسخة محفوظة (' + savedTime + ') — للقراءة فقط، ما تسجّل حضور';
+  const canCheckIn = !!eventData;
+  const t = listCacheSavedAt || guestsLoadedAt;
+  const savedTime = t ? new Date(t).toLocaleTimeString('ar-SA-u-nu-latn', { hour: '2-digit', minute: '2-digit' }) : '';
+  meta.textContent = canCheckIn
+    ? '📋 آخر نسخة محفوظة (' + savedTime + ') — اضغط «تسجيل» لتسجيل دخول ضيف. ضيف مضاف بعد التحميل؟ اضغط تحديث القائمة'
+    : '📋 آخر نسخة محفوظة (' + savedTime + ') — للقراءة فقط، ما تسجّل حضور';
   const query = (document.getElementById('offline-search').value || '').trim();
-  const filtered = query ? cache.guests.filter(g => g.name.includes(query)) : cache.guests;
-  results.innerHTML = sortGuestsByName(filtered).map(g => `
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 4px; border-bottom:1px solid rgba(var(--accent-rgb),0.15);">
-      <span>${escapeHtml(g.name)}</span>
-      <span style="font-size:12px; color:${g.scanned ? '#4CAF50' : '#8a857a'};">${g.scanned ? '✓ دخل' : 'لسه'}</span>
-    </div>
-  `).join('') || '<div class="sub" style="text-align:center; padding:16px 0;">ما فيه نتائج</div>';
+  const ql = query.toLowerCase();
+  const codeOk = query.length >= 3 || ql.indexOf('wd') === 0;
+  const filtered = query ? src.filter(g => (g.name || '').toLowerCase().includes(ql) || (codeOk && (g.id || '').toLowerCase().includes(ql))) : src;
+  const sorted = sortGuestsByName(filtered);
+  const rows = sorted.slice(0, LIST_MAX_ROWS);
+  let html = rows.map(g => listRowHtml(g, canCheckIn)).join('');
+  if (sorted.length > rows.length) {
+    html += '<div class="ol-note">' + (query
+      ? 'اكتب أكثر لتضييق النتائج (' + sorted.length + ' نتيجة)'
+      : 'اكتب للبحث لعرض الباقي (' + (sorted.length - rows.length) + ' ضيف)') + '</div>';
+  }
+  const top = results.scrollTop;
+  results.innerHTML = html || '<div class="sub" style="text-align:center; padding:16px 0;">ما فيه نتائج</div>';
+  results.scrollTop = top;
 }
+
+function armListRow(id) {
+  if (!eventData || listBusyId) return;
+  const g = listSource().find(x => x.id === id);
+  if (!g || g.scanned) return;
+  pendingListId = id;
+  listArmedAt = Date.now();
+  renderOfflineList();
+}
+
+function cancelListRow() {
+  pendingListId = null;
+  renderOfflineList();
+}
+
+function checkInFromList(id) {
+  if (pendingListId !== id || listBusyId) return;
+  if (Date.now() - listArmedAt < LIST_CONFIRM_GUARD_MS) return;
+  pendingListId = null;
+  listBusyId = id;
+  renderOfflineList();
+  unlockAudio();
+  lastScanned = null;
+  handleScan(id).catch(() => {}).then(() => {
+    if (listBusyId === id) { listBusyId = null; renderOfflineList(); }
+  });
+}
+
+document.getElementById('offline-search').addEventListener('input', onListSearchInput);
+document.getElementById('offline-list-results').addEventListener('click', (e) => {
+  const btn = e.target.closest ? e.target.closest('button[data-act]') : null;
+  if (!btn || btn.disabled) return;
+  const row = btn.closest('[data-id]');
+  if (!row) return;
+  const id = row.getAttribute('data-id');
+  const act = btn.getAttribute('data-act');
+  if (act === 'arm') armListRow(id);
+  else if (act === 'confirm') checkInFromList(id);
+  else if (act === 'cancel') cancelListRow();
+});
 
 // Driven by eventData (events/{id}.guestCount / .scannedCount, kept live by
 // startEventCounterWatch below) rather than the once-loaded `guests` array —
@@ -850,6 +986,7 @@ async function loadGuestsOnce(force) {
   if (!force && cached && cached.loadedAt && Date.now() - new Date(cached.loadedAt).getTime() < OFFLINE_LIST_MAX_AGE) {
     guests = cached.guests.map(g => ({ docId: g.id, ...g }));
     guestsLoadedAt = cached.loadedAt;
+    listCacheSavedAt = cached.savedAt;
     updateScanCounter();
     return;
   }
@@ -898,6 +1035,7 @@ function resetScanState() {
   }
   scanEpoch++;
   hideResult(true);
+  resetListState();
   scanCooldown = false;
   lastScanned = null;
   document.getElementById('manual-code').value = '';
@@ -1212,27 +1350,29 @@ async function handleScan(raw) {
     }
   }
   const stale = epoch !== scanEpoch;
-  if (outcome === 'ok') {
-    if (!stale) {
+  if (!stale) {
+    if (outcome === 'ok') {
       showResult('allowed', guestName, guestVip);
       status.textContent = RESULT_UI.allowed.camera;
+    } else if (outcome === 'dup') {
+      showResult('duplicate', guestName, guestVip);
+      status.textContent = RESULT_UI.duplicate.camera;
+    } else {
+      showResult('denied', 'غير مسجّل', false);
+      status.textContent = RESULT_UI.denied.camera;
     }
+  }
+  if (outcome === 'ok' || outcome === 'dup') {
     // The counter itself updates from startEventCounterWatch(), moments
     // after this transaction commits. The name list was only read once, at
-    // open — keep its offline copy in step with scans this device does.
+    // open — keep its offline copy in step with what this device learned
+    // (a duplicate means the guest is already in, whoever checked them in).
+    if (outcome === 'ok') localCheckinTimes[val] = listTime(new Date());
     const cached = guests.find(g => g.id === val);
     if (cached) cached.scanned = true;
     else guests.push({ docId: val, id: val, name: guestName, scanned: true });
     cacheGuestsOffline();
     if (document.getElementById('offline-list-section').style.display === 'block') renderOfflineList();
-  } else if (stale) {
-    return;
-  } else if (outcome === 'dup') {
-    showResult('duplicate', guestName, guestVip);
-    status.textContent = RESULT_UI.duplicate.camera;
-  } else {
-    showResult('denied', 'غير مسجّل', false);
-    status.textContent = RESULT_UI.denied.camera;
   }
 }
 
