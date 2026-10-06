@@ -798,7 +798,8 @@ test('the names list, if already open, shows a scan from this device straight aw
   await page.goto('/scan.html?event=e1');
   await expect(page.locator('#scanner-view')).toBeVisible();
   await page.getByRole('button', { name: /عرض الأسماء/ }).click();
-  await expect(page.locator('#offline-list-results')).toContainText('لسه');
+  await expect(page.locator('#offline-list-results')).toContainText('تسجيل');
+  await expect(page.locator('#offline-list-results')).not.toContainText('✓ دخل');
 
   await page.locator('#manual-code').fill('WD-A');
   await page.getByRole('button', { name: 'تحقق ✓' }).click();
@@ -886,9 +887,7 @@ test('the offline name list is sorted (numbers by value, then Arabic alphabetica
   });
   await page.goto('/scan.html?event=e1');
   await page.locator('#offline-list-btn').click();
-  const names = await page.locator('#offline-list-results span').evaluateAll(
-    spans => spans.filter((_, i) => i % 2 === 0).map(s => s.textContent)
-  );
+  const names = await page.locator('#offline-list-results .ol-name').allTextContents();
   expect(names).toEqual(['1', '2', '3', '4', '5']);
 });
 
@@ -1135,7 +1134,7 @@ test('scanner batch 2: qr-scanner is served locally, precached by sw.js, and a f
   expect(html).toContain('<script src="vendor/qr-scanner.umd.min.js"></script>');
   const sw = fs.readFileSync('sw.js', 'utf8');
   expect(sw).toMatch(/SHELL_FILES = \[[^\]]*'vendor\/qr-scanner\.umd\.min\.js'/);
-  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v14'");
+  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v15'");
   expect(fs.readFileSync('vendor/qr-scanner.umd.min.js', 'utf8')).toContain('QrScanner');
 
   const requested = [];
@@ -1618,3 +1617,255 @@ test('check-in retry: locking the device during the backoff cancels the retry, n
   expect(await page.evaluate(() => window.__tries)).toBe(1);
   await expect(page.locator('#result-overlay')).toBeHidden();
 });
+
+// ---- Check-in by name (the names list) ----
+const LIST = {
+  'WD-AB12X': { name: 'خالد الزهراني', id: 'WD-AB12X', scanned: false },
+  'WD-CD34Y': { name: 'نورة السبيعي', id: 'WD-CD34Y', scanned: false },
+  'WD-EF56Z': { name: 'فهد المطيري', id: 'WD-EF56Z', scanned: true },
+};
+const listRow = (page, id) => page.locator('#offline-list-results [data-id="' + id + '"]');
+const closeOverlay = (page) => page.evaluate(() => hideResult());
+async function openList(page, guests, count = 0, user = DEVICE) {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user, store: counterStore(guests, count) });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.locator('#offline-list-btn').click();
+}
+
+test('names list: every unscanned row has a register button and a code tag; scanned rows show "✓ دخل" and no button; meta line explains', async ({ page }) => {
+  await openList(page, LIST, 1);
+  await expect(page.locator('#offline-list-meta')).toContainText('اضغط «تسجيل» لتسجيل دخول ضيف');
+  await expect(page.locator('#offline-list-meta')).toContainText('اضغط تحديث القائمة');
+  await expect(page.locator('#offline-list-meta')).not.toContainText('للقراءة فقط');
+  await expect(listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' })).toBeVisible();
+  await expect(listRow(page, 'WD-AB12X').locator('.ol-tag')).toHaveText('AB12');
+  await expect(listRow(page, 'WD-EF56Z')).toContainText('✓ دخل');
+  await expect(listRow(page, 'WD-EF56Z').locator('button')).toHaveCount(0);
+});
+
+test('names list: search by name and by code (code needs 3+ chars or a WD prefix)', async ({ page }) => {
+  await openList(page, LIST);
+  const rows = page.locator('#offline-list-results .ol-name');
+  await page.locator('#offline-search').fill('نورة');
+  await expect(rows).toHaveCount(1);
+  await page.locator('#offline-search').fill('cd3');
+  await expect(rows).toHaveText(['نورة السبيعي']);
+  await page.locator('#offline-search').fill('wd-ef');
+  await expect(rows).toHaveText(['فهد المطيري']);
+  await page.locator('#offline-search').fill('cd');
+  await expect(page.locator('#offline-list-results')).toContainText('ما فيه نتائج');
+});
+
+test('names list: confirm flow — cancel writes nothing; confirm checks in through the QR path', async ({ page }) => {
+  await openList(page, LIST);
+  await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' }).click();
+  await expect(listRow(page, 'WD-AB12X')).toContainText('الكود: WD-AB12X');
+  await expect(listRow(page, 'WD-AB12X').getByRole('button', { name: 'تأكيد الدخول' })).toBeVisible();
+  await listRow(page, 'WD-AB12X').getByRole('button', { name: 'إلغاء' }).click();
+  await expect(listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' })).toBeVisible();
+  expect(await page.evaluate(() => window.__fakeFirebase.store['events/e1/guests']['WD-AB12X'].scanned)).toBe(false);
+  expect(await storeCount(page)).toBe(0);
+
+  await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' }).click();
+  await page.waitForTimeout(450);
+  await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تأكيد الدخول' }).click();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  await expect(page.locator('#result-name')).toHaveText('خالد الزهراني');
+  expect(await page.evaluate(() => window.__fakeFirebase.store['events/e1/guests']['WD-AB12X'].scanned)).toBe(true);
+  expect(await storeCount(page)).toBe(1);
+  await closeOverlay(page);
+  await expect(listRow(page, 'WD-AB12X')).toContainText(/✓ دخل \d\d:\d\d/);
+  await expect(listRow(page, 'WD-AB12X').locator('button')).toHaveCount(0);
+});
+
+test('names list: a tap on "تأكيد الدخول" in the first 400 ms is ignored', async ({ page }) => {
+  await openList(page, LIST);
+  await page.evaluate(() => { armListRow('WD-AB12X'); checkInFromList('WD-AB12X'); });
+  await page.waitForTimeout(300);
+  expect(await storeCount(page)).toBe(0);
+  await expect(listRow(page, 'WD-AB12X').getByRole('button', { name: 'تأكيد الدخول' })).toBeVisible();
+});
+
+test('names list: only one row is open at a time; a new search, a row tap elsewhere or closing the list clears it', async ({ page }) => {
+  await openList(page, LIST);
+  await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' }).click();
+  await listRow(page, 'WD-CD34Y').getByRole('button', { name: 'تسجيل' }).click();
+  await expect(page.locator('.ol-confirm')).toHaveCount(1);
+  await expect(listRow(page, 'WD-CD34Y')).toHaveClass(/ol-confirm/);
+  await page.locator('#offline-search').fill('نورة');
+  await expect(page.locator('.ol-confirm')).toHaveCount(0);
+  await listRow(page, 'WD-CD34Y').getByRole('button', { name: 'تسجيل' }).click();
+  await page.locator('#offline-list-btn').click();
+  await page.locator('#offline-list-btn').click();
+  await expect(page.locator('.ol-confirm')).toHaveCount(0);
+});
+
+test('names list: second check-in via list, QR path or manual code is a duplicate and the counter stays 1', async ({ page }) => {
+  await openList(page, LIST);
+  await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' }).click();
+  await page.waitForTimeout(450);
+  await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تأكيد الدخول' }).click();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  await closeOverlay(page);
+  await page.locator('#manual-code').fill('WD-AB12X');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+  await expect(page.locator('#result-overlay.rs-duplicate')).toBeVisible();
+  expect(await storeCount(page)).toBe(1);
+});
+
+test('names list: a stale row (already scanned elsewhere) gives a duplicate and the row flips', async ({ page }) => {
+  await openList(page, LIST);
+  await page.evaluate(() => { window.__fakeFirebase.store['events/e1/guests']['WD-CD34Y'].scanned = true; });
+  await listRow(page, 'WD-CD34Y').getByRole('button', { name: 'تسجيل' }).click();
+  await page.waitForTimeout(450);
+  await listRow(page, 'WD-CD34Y').getByRole('button', { name: 'تأكيد الدخول' }).click();
+  await expect(page.locator('#result-overlay.rs-duplicate')).toBeVisible();
+  await expect(listRow(page, 'WD-CD34Y')).toContainText('✓ دخل');
+  await expect(listRow(page, 'WD-CD34Y').locator('button')).toHaveCount(0);
+  expect(await storeCount(page)).toBe(0);
+});
+
+test('names list: a VIP guest shows the VIP flag after a list check-in', async ({ page }) => {
+  await openList(page, { 'WD-VIP1': { name: 'ضيف مهم', id: 'WD-VIP1', scanned: false, vip: true } });
+  await listRow(page, 'WD-VIP1').getByRole('button', { name: 'تسجيل' }).click();
+  await page.waitForTimeout(450);
+  await listRow(page, 'WD-VIP1').getByRole('button', { name: 'تأكيد الدخول' }).click();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  await expect(page.locator('#result-vip')).toBeVisible();
+});
+
+test('names list: two guests with the same name show different code tags and confirming one flips only that row', async ({ page }) => {
+  await openList(page, {
+    'WD-AAAA1': { name: 'محمد العتيبي', id: 'WD-AAAA1', scanned: false },
+    'WD-BBBB2': { name: 'محمد العتيبي', id: 'WD-BBBB2', scanned: false },
+  });
+  await expect(listRow(page, 'WD-AAAA1').locator('.ol-tag')).toHaveText('AAAA');
+  await expect(listRow(page, 'WD-BBBB2').locator('.ol-tag')).toHaveText('BBBB');
+  await listRow(page, 'WD-BBBB2').getByRole('button', { name: 'تسجيل' }).click();
+  await page.waitForTimeout(450);
+  await listRow(page, 'WD-BBBB2').getByRole('button', { name: 'تأكيد الدخول' }).click();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  await closeOverlay(page);
+  await expect(listRow(page, 'WD-BBBB2')).toContainText('✓ دخل');
+  await expect(listRow(page, 'WD-AAAA1').getByRole('button', { name: 'تسجيل' })).toBeVisible();
+});
+
+test('names list: list-only mode (event doc failed to load) has no register buttons and stays read-only', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EVENT }, 'events/e1/guests': {} } });
+  await page.addInitScript(() => {
+    localStorage.setItem('scan_offline_cache_e1', JSON.stringify({
+      eventName: 'حفل تجريبي',
+      guests: [{ name: 'محمد الشمري', id: 'WD-9', scanned: false }, { name: 'سارة', id: 'WD-8', scanned: true }],
+      savedAt: new Date().toISOString(),
+    }));
+    window.__failNextGetDoc = true;
+  });
+  await page.goto('/scan.html?event=e1');
+  await page.getByRole('button', { name: 'عرض آخر نسخة محفوظة بدون إنترنت' }).click();
+  await expect(page.locator('#offline-list-results')).toContainText('محمد الشمري');
+  await expect(page.locator('#offline-list-results button')).toHaveCount(0);
+  await expect(page.locator('#offline-list-meta')).toContainText('للقراءة فقط');
+});
+
+test('names list: permission-denied on the write takes the session-revoked path and clears the confirm state', async ({ page }) => {
+  await openList(page, LIST);
+  await page.evaluate(() => {
+    delete window.__fakeFirebase.store['events/e1/scanSessions']['anon-1'];
+    window._fsFns.runTransaction = () => { const e = new Error('denied'); e.code = 'permission-denied'; return Promise.reject(e); };
+  });
+  await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' }).click();
+  await page.waitForTimeout(450);
+  await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تأكيد الدخول' }).click();
+  await expect(page.locator('#pin-gate')).toBeVisible();
+  expect(await page.evaluate(() => [pendingListId, listBusyId])).toEqual([null, null]);
+});
+
+test('names list: 700 guests render at most 60 rows, show the rest note, and fast typing renders once', async ({ page }) => {
+  await openList(page, manyGuests(700));
+  await expect(page.locator('#offline-list-results .ol-row')).toHaveCount(60);
+  await expect(page.locator('#offline-list-results .ol-note')).toContainText('اكتب للبحث لعرض الباقي (640 ضيف)');
+  await page.evaluate(() => {
+    window.__renders = 0;
+    const real = window.renderOfflineList;
+    renderOfflineList = function () { window.__renders++; return real.apply(this, arguments); };
+  });
+  await page.evaluate(() => {
+    const el = document.getElementById('offline-search');
+    'ضيف70'.split('').forEach((_, i, a) => { el.value = a.slice(0, i + 1).join(''); el.dispatchEvent(new Event('input')); });
+  });
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.__renders)).toBe(1);
+  await expect(page.locator('#offline-list-results .ol-row')).toHaveCount(2);
+});
+
+test('names list: the organizer (no door code) can check in by name too', async ({ page }) => {
+  await openList(page, LIST, 0, OWNER);
+  await listRow(page, 'WD-CD34Y').getByRole('button', { name: 'تسجيل' }).click();
+  await page.waitForTimeout(450);
+  await listRow(page, 'WD-CD34Y').getByRole('button', { name: 'تأكيد الدخول' }).click();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  expect(await storeCount(page)).toBe(1);
+});
+
+test('names list: a long name wraps at 320 px without sideways scroll', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await openList(page, { 'WD-LONG1': { name: 'عبدالرحمن بن محمد بن عبدالعزيز بن سلطان الشمري القحطاني الدوسري'.repeat(2), id: 'WD-LONG1', scanned: false } });
+  await expect(listRow(page, 'WD-LONG1').getByRole('button', { name: 'تسجيل' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await listRow(page, 'WD-LONG1').getByRole('button', { name: 'تسجيل' }).click();
+  await expect(listRow(page, 'WD-LONG1').getByRole('button', { name: 'تأكيد الدخول' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('names list: a QR scan of a guest missing from the saved-copy fallback does not shrink the list or the counter total', async ({ page }) => {
+  await openList(page, LIST);
+  await page.evaluate(() => {
+    guests = [];
+    listFallback = { guests: [{ id: 'WD-OLD1', name: 'قديم', scanned: false }, { id: 'WD-OLD2', name: 'قديم ثاني', scanned: false }], savedAt: new Date().toISOString() };
+    listCacheSavedAt = listFallback.savedAt;
+    renderOfflineList();
+  });
+  await expect(page.locator('#offline-list-results .ol-name')).toHaveCount(2);
+  await page.evaluate(() => handleScan('WD-AB12X'));
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  expect(await page.evaluate(() => guests.length)).toBe(0);
+  await expect(page.locator('#offline-list-results .ol-name')).toHaveCount(2);
+});
+
+test('names list: tapping "تسجيل" within 200 ms of typing keeps the new confirm state open', async ({ page }) => {
+  await openList(page, LIST);
+  await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' }).click();
+  await page.evaluate(() => {
+    const el = document.getElementById('offline-search');
+    el.value = 'ا';
+    el.dispatchEvent(new Event('input'));
+    armListRow('WD-CD34Y');
+  });
+  await page.waitForTimeout(400);
+  await expect(page.locator('.ol-confirm')).toHaveCount(1);
+  await expect(listRow(page, 'WD-CD34Y')).toHaveClass(/ol-confirm/);
+});
+
+test('names list: a guest name with HTML renders as text in the row and in the confirm state', async ({ page }) => {
+  await openList(page, { 'WD-XSS01': { name: '<img src=x onerror=alert(1)>', id: 'WD-XSS01', scanned: false } });
+  await expect(listRow(page, 'WD-XSS01')).toContainText('<img src=x onerror=alert(1)>');
+  await expect(page.locator('#offline-list-results img')).toHaveCount(0);
+  await listRow(page, 'WD-XSS01').getByRole('button', { name: 'تسجيل' }).click();
+  await expect(listRow(page, 'WD-XSS01')).toHaveClass(/ol-confirm/);
+  await expect(listRow(page, 'WD-XSS01')).toContainText('<img src=x onerror=alert(1)>');
+  await expect(page.locator('#offline-list-results img')).toHaveCount(0);
+});
+
+for (const fn of ['lockDevice', 'lockOrClose', 'resetScanState']) {
+  test('names list: ' + fn + ' clears the open confirm state', async ({ page }) => {
+    await openList(page, LIST);
+    await listRow(page, 'WD-AB12X').getByRole('button', { name: 'تسجيل' }).click();
+    await expect(page.locator('.ol-confirm')).toHaveCount(1);
+    await page.evaluate((f) => { window[f](); }, fn);
+    await expect.poll(() => page.evaluate(() => [pendingListId, listBusyId])).toEqual([null, null]);
+    await expect(page.locator('.ol-confirm')).toHaveCount(0);
+  });
+}
