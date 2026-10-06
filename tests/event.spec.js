@@ -1489,18 +1489,18 @@ test('cancel, Escape and tapping outside the delete modal all close it and keep 
 
 test('typing «حذف» and confirming deletes the event and its guests and goes back to app.html', async ({ page }) => {
   await openEventDeleteModal(page, twoGuestStore());
-  // The page leaves for app.html, whose fresh load re-seeds the fake store,
-  // so the store is reported from the leaving page.
-  let afterDelete = null;
-  await page.exposeFunction('__reportStore', (counts) => { afterDelete = counts; });
-  await page.evaluate(() => window.addEventListener('pagehide', () => window.__reportStore({
+  // app.html's fresh load would re-seed the fake store, so the leaving page
+  // saves what its store holds in sessionStorage (written synchronously, so
+  // it survives the navigation) and app.html is replaced by a blank page.
+  await page.route(/\/app\.html/, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>app</title>' }));
+  await page.evaluate(() => window.addEventListener('pagehide', () => sessionStorage.setItem('afterDelete', JSON.stringify({
     event: !!window.__fakeFirebase.store.events.e1,
     guests: Object.keys(window.__fakeFirebase.store['events/e1/guests'] || {}).length,
-  })));
+  }))));
   await page.locator('#del-ev-input').fill('حذف');
   await page.locator('#delete-event-modal .del-ev-confirm').click();
   await page.waitForURL(/app\.html/);
-  await expect.poll(() => afterDelete).toEqual({ event: false, guests: 0 });
+  expect(JSON.parse(await page.evaluate(() => sessionStorage.getItem('afterDelete')))).toEqual({ event: false, guests: 0 });
 });
 
 test('an event name with quotes and tags is shown as plain text in the delete modal', async ({ page }) => {
