@@ -975,6 +975,237 @@ test('approving a guest request copies the new barcode id onto the request, for 
   expect(state.docKey).toBe(state.guestId);
 });
 
+function pendingStore(reqs, eventExtra) {
+  const r = {};
+  reqs.forEach((x, i) => { r['r' + String(i).padStart(2, '0')] = { reqId: 'REQ-' + i, status: 'pending', createdAt: '2026-01-01T00:00:00.000Z', ...x }; });
+  return {
+    events: { e1: { ...EVENT, paid: true, ...eventExtra } },
+    'events/e1/guests': {},
+    'events/e1/private': { scan: { scanPin: '1234' } },
+    'events/e1/requests': r,
+  };
+}
+async function openRequests(page, store) {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store });
+  await page.addInitScript(() => { window.__opened = 0; window.open = () => { window.__opened++; return null; }; });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('button', { name: /^الطلبات/ }).click();
+}
+const fbState = (page) => page.evaluate(() => {
+  const s = window.__fakeFirebase.store;
+  return { guests: s['events/e1/guests'] || {}, requests: s['events/e1/requests'], count: s.events.e1.guestCount || 0, opened: window.__opened };
+});
+
+test('accept-all button is hidden with one request', async ({ page }) => {
+  await openRequests(page, pendingStore([{ name: 'أحمد' }]));
+  await expect(page.locator('.pending-item')).toHaveCount(1);
+  await expect(page.locator('.accept-all')).toHaveCount(0);
+});
+
+test('accept-all shows with 2 requests, the modal lists the names, and cancel changes nothing', async ({ page }) => {
+  await openRequests(page, pendingStore([{ name: 'أحمد' }, { name: 'سارة <b>x</b>' }]));
+  const btn = page.locator('.accept-all');
+  await expect(btn).toBeVisible();
+  await expect(btn).toContainText('اقبل الكل');
+  await expect(btn.locator('.cnt')).toHaveText('2');
+  await btn.click();
+  const modal = page.locator('#approve-all-modal');
+  await expect(modal).toHaveClass(/active/);
+  await expect(modal).toContainText('تقبل كل الطلبات؟');
+  await expect(modal.locator('.aa-names span')).toHaveText(['أحمد', 'سارة <b>x</b>']);
+  await expect(modal.locator('.aa-names b')).toHaveCount(0);
+  await modal.getByRole('button', { name: 'إلغاء' }).click();
+  await expect(modal).not.toHaveClass(/active/);
+  let st = await fbState(page);
+  expect(Object.keys(st.guests)).toHaveLength(0);
+  expect(st.count).toBe(0);
+  await btn.click();
+  await page.keyboard.press('Escape');
+  await expect(modal).not.toHaveClass(/active/);
+  await btn.click();
+  await modal.click({ position: { x: 3, y: 3 } });
+  await expect(modal).not.toHaveClass(/active/);
+  st = await fbState(page);
+  expect(Object.keys(st.guests)).toHaveLength(0);
+});
+
+test('accept-all creates guests oldest first, marks requests approved with guestId, bumps guestCount', async ({ page }) => {
+  await openRequests(page, pendingStore([
+    { name: 'ثالث', createdAt: '2026-03-01T00:00:00.000Z' },
+    { name: 'أول', createdAt: '2026-01-01T00:00:00.000Z' },
+    { name: 'ثاني', createdAt: '2026-02-01T00:00:00.000Z' },
+  ], { guestCount: 1 }));
+  await expect(page.locator('.pending-item .pname')).toHaveText(['أول', 'ثاني', 'ثالث']);
+  await page.locator('.accept-all').click();
+  await expect(page.locator('#approve-all-modal .aa-names span')).toHaveText(['أول', 'ثاني', 'ثالث']);
+  await page.locator('#approve-all-modal').getByRole('button', { name: 'اقبل الكل' }).click();
+  await expect(page.locator('#toast')).toContainText('تم قبول 3');
+  const st = await fbState(page);
+  const entries = Object.entries(st.guests);
+  expect(entries).toHaveLength(3);
+  entries.forEach(([key, g]) => { expect(key).toBe(g.id); expect(g.id).toMatch(/^WD-/); expect(g.scanned).toBe(false); });
+  expect(entries.map(([, g]) => g.name)).toEqual(['أول', 'ثاني', 'ثالث']);
+  Object.values(st.requests).forEach(r => {
+    expect(r.status).toBe('approved');
+    expect(st.guests[r.guestId]).toBeTruthy();
+    expect(st.guests[r.guestId].reqId).toBe(r.reqId);
+  });
+  expect(st.count).toBe(4);
+  await expect(page.locator('.pending-item')).toHaveCount(0);
+});
+
+test('accept-all on the free plan stops at the guest cap and leaves the oldest-first remainder pending', async ({ page }) => {
+  await openRequests(page, pendingStore([
+    { name: 'د', createdAt: '2026-01-04T00:00:00.000Z' },
+    { name: 'ب', createdAt: '2026-01-02T00:00:00.000Z' },
+    { name: 'أ', createdAt: '2026-01-01T00:00:00.000Z' },
+    { name: 'ج', createdAt: '2026-01-03T00:00:00.000Z' },
+  ], { paid: false, guestCount: 3 }));
+  await page.locator('.accept-all').click();
+  await expect(page.locator('#approve-all-modal')).toContainText('بيتقبل أول 2 (الأقدم)، والباقي 2 يظل معلّق');
+  await page.locator('#approve-all-modal').getByRole('button', { name: 'اقبل الكل' }).click();
+  await expect(page.locator('#toast')).toContainText('تم قبول 2 — وتبقى 2');
+  const st = await fbState(page);
+  expect(Object.values(st.guests).map(g => g.name)).toEqual(['أ', 'ب']);
+  expect(st.count).toBe(5);
+  expect(Object.values(st.requests).filter(r => r.status === 'pending').map(r => r.name).sort()).toEqual(['ج', 'د']);
+  await expect(page.locator('#payment-gate')).toBeVisible();
+  expect(st.opened).toBe(0);
+});
+
+test('accept-all with the cap already reached writes nothing and opens the payment gate', async ({ page }) => {
+  await openRequests(page, pendingStore([{ name: 'أ' }, { name: 'ب' }], { paid: false, guestCount: 5 }));
+  await page.locator('.accept-all').click();
+  await expect(page.locator('#approve-all-modal')).not.toHaveClass(/active/);
+  const st = await fbState(page);
+  expect(Object.keys(st.guests)).toHaveLength(0);
+  expect(st.count).toBe(5);
+  expect(Object.values(st.requests).every(r => r.status === 'pending')).toBe(true);
+  expect(st.opened).toBeGreaterThan(0);
+});
+
+test('accept-all handles 30 pending requests (two chunks)', async ({ page }) => {
+  const reqs = Array.from({ length: 30 }, (_, i) => ({ name: 'ضيف ' + i, createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, 30 - i)).toISOString() }));
+  await openRequests(page, pendingStore(reqs, { guestLimit: 100 }));
+  await page.locator('.accept-all').click();
+  await page.locator('#approve-all-modal').getByRole('button', { name: 'اقبل الكل' }).click();
+  await expect(page.locator('#toast')).toContainText('تم قبول 30');
+  const st = await fbState(page);
+  expect(Object.keys(st.guests)).toHaveLength(30);
+  expect(st.count).toBe(30);
+  expect(Object.values(st.requests).every(r => r.status === 'approved' && r.guestId)).toBe(true);
+  expect(Object.values(st.guests)[0].name).toBe('ضيف 29');
+});
+
+test('accept-all skips a request that is no longer pending', async ({ page }) => {
+  await openRequests(page, pendingStore([{ name: 'أ' }, { name: 'ب' }, { name: 'ج' }]));
+  await page.locator('.accept-all').click();
+  await page.evaluate(() => { window.__fakeFirebase.store['events/e1/requests'].r01.status = 'rejected'; });
+  await page.locator('#approve-all-modal').getByRole('button', { name: 'اقبل الكل' }).click();
+  await expect(page.locator('#toast')).toContainText('تم قبول 2');
+  const st = await fbState(page);
+  expect(Object.values(st.guests).map(g => g.name).sort()).toEqual(['أ', 'ج']);
+  expect(st.requests.r01.status).toBe('rejected');
+  expect(st.requests.r01.guestId).toBeUndefined();
+  expect(st.count).toBe(2);
+});
+
+test('accept-all: a double tap starts one run only (one transaction, two guests)', async ({ page }) => {
+  await openRequests(page, pendingStore([{ name: 'أ' }, { name: 'ب' }]));
+  await page.evaluate(() => { window.__fakeFirebase.txCalls = 0; window.__fakeFirebase.txDelay = 400; });
+  await page.locator('.accept-all').click();
+  await page.locator('#approve-all-modal').getByRole('button', { name: 'اقبل الكل' }).evaluate((b) => { b.click(); b.click(); });
+  await expect(page.locator('#toast')).toContainText('تم قبول 2');
+  expect(await page.evaluate(() => window.__fakeFirebase.txCalls)).toBe(1);
+  const st = await fbState(page);
+  expect(Object.keys(st.guests)).toHaveLength(2);
+  expect(st.count).toBe(2);
+});
+
+test('accept-all while running: progress button and per-row buttons are disabled', async ({ page }) => {
+  await openRequests(page, pendingStore([{ name: 'أ' }, { name: 'ب' }, { name: 'ج' }]));
+  await page.evaluate(() => { window.__fakeFirebase.txDelay = 1200; });
+  await page.locator('.accept-all').click();
+  await page.locator('#approve-all-modal').getByRole('button', { name: 'اقبل الكل' }).click();
+  await expect(page.locator('.accept-all')).toBeDisabled();
+  await expect(page.locator('.accept-all')).toContainText('جاري القبول... 0 / 3');
+  await expect(page.locator('.approve-btn').first()).toBeDisabled();
+  await expect(page.locator('.reject-btn').first()).toBeDisabled();
+  expect(await page.locator('.approve-btn:disabled').count()).toBe(3);
+  await expect(page.locator('#toast')).toContainText('تم قبول 3');
+});
+
+test('accept-all: a failing second chunk reports what was accepted and what is left', async ({ page }) => {
+  const reqs = Array.from({ length: 30 }, (_, i) => ({ name: 'ضيف ' + i, createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString() }));
+  await openRequests(page, pendingStore(reqs, { guestLimit: 100 }));
+  page.on('dialog', d => d.dismiss());
+  await page.evaluate(() => { window.__fakeFirebase.txCalls = 0; window.__fakeFirebase.failTxOnCall = 2; });
+  await page.locator('.accept-all').click();
+  await page.locator('#approve-all-modal').getByRole('button', { name: 'اقبل الكل' }).click();
+  await expect(page.locator('#toast')).toContainText('تم قبول 25 وتبقى 5');
+  await expect(page.locator('#toast')).toContainText('حدّث الصفحة وتأكد');
+  const st = await fbState(page);
+  expect(Object.keys(st.guests)).toHaveLength(25);
+  expect(st.count).toBe(25);
+  expect(Object.values(st.requests).filter(r => r.status === 'pending')).toHaveLength(5);
+  await expect(page.locator('.accept-all')).toBeEnabled();
+});
+
+test('accept-all: the admin accepts beyond the guest cap', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'admin1', email: 'hsallah@outlook.sa' },
+    store: pendingStore([{ name: 'أ' }, { name: 'ب' }, { name: 'ج' }], { paid: false, guestCount: 5 }),
+  });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('button', { name: /^الطلبات/ }).click();
+  await page.locator('.accept-all').click();
+  await expect(page.locator('#approve-all-modal')).not.toContainText('يظل معلّق');
+  await page.locator('#approve-all-modal').getByRole('button', { name: 'اقبل الكل' }).click();
+  await expect(page.locator('#toast')).toContainText('تم قبول 3');
+  const st = await fbState(page);
+  expect(Object.keys(st.guests)).toHaveLength(3);
+  expect(st.count).toBe(8);
+});
+
+test('accept-all: the cap is reached inside the second chunk and the in-page limit banner shows', async ({ page }) => {
+  const reqs = Array.from({ length: 30 }, (_, i) => ({ name: 'ضيف ' + i, createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString() }));
+  await openRequests(page, pendingStore(reqs, { guestLimit: 27 }));
+  await page.locator('.accept-all').click();
+  await expect(page.locator('#approve-all-modal')).toContainText('بيتقبل أول 27 (الأقدم)، والباقي 3 يظل معلّق');
+  await expect(page.locator('#aa-title')).toHaveText('قبول الطلبات؟');
+  await page.locator('#approve-all-modal').getByRole('button', { name: 'اقبل الكل' }).click();
+  await expect(page.locator('#payment-gate')).toBeVisible();
+  const st = await fbState(page);
+  expect(Object.keys(st.guests)).toHaveLength(27);
+  expect(st.count).toBe(27);
+  expect(Object.values(st.requests).filter(r => r.status === 'pending')).toHaveLength(3);
+  expect(st.opened).toBe(0);
+});
+
+test('accept-all wording: a single fitting request says oldest only; all fitting keeps the full heading', async ({ page }) => {
+  await openRequests(page, pendingStore([{ name: 'أ' }, { name: 'ب' }, { name: 'ج' }], { paid: false, guestCount: 4 }));
+  await page.locator('.accept-all').click();
+  await expect(page.locator('#approve-all-modal')).toContainText('بيتقبل الأقدم فقط، والباقي 2 يظل معلّق');
+  await expect(page.locator('#approve-all-modal')).not.toContainText('أول 1');
+  await page.locator('#approve-all-modal').getByRole('button', { name: 'إلغاء' }).click();
+});
+
+test('requests are ordered oldest first, with Timestamp-like and missing createdAt handled', async ({ page }) => {
+  await openRequests(page, pendingStore([
+    { name: 'iso-2026', createdAt: '2026-01-01T00:00:00.000Z' },
+    { name: 'ts-2023', createdAt: { seconds: 1700000000 } },
+    { name: 'missing-b', createdAt: undefined },
+    { name: 'missing-a', createdAt: undefined },
+  ]));
+  await expect(page.locator('.pending-item .pname')).toHaveText(['missing-b', 'missing-a', 'ts-2023', 'iso-2026']);
+});
+
 test('opening the dashboard does not read the approved requests (no backfill query)', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {

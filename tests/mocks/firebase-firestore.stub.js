@@ -328,6 +328,14 @@ export function onSnapshot(refOrQuery, cb, errCb) {
 }
 
 export function runTransaction(db, updateFn) {
+  const f = F();
+  f.txCalls = (f.txCalls || 0) + 1;
+  if (f.failTxOnCall && f.txCalls === f.failTxOnCall) return Promise.reject(Object.assign(new Error('simulated failure'), { code: 'unavailable' }));
+  if (f.txDelay) return new Promise(r => setTimeout(r, f.txDelay)).then(() => runTransactionNow(updateFn));
+  return runTransactionNow(updateFn);
+}
+
+function runTransactionNow(updateFn) {
   const touched = new Set();
   const tx = {
     get(ref) {
