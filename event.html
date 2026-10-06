@@ -991,7 +991,7 @@ function updateInviteLink() {
 }
 
 async function deleteThisEvent() {
-  if (!confirm('حذف "' + eventData.name + '" نهائيًا؟\n\nراح ينحذف كل الضيوف والطلبات المرتبطة فيها، وما تقدر ترجعها بعدين.')) return;
+  if (!(await confirmEventDelete({ name: eventData.name, guestCount: eventData.guestCount }))) return;
   const { collection, getDocs, deleteDoc, doc, runTransaction } = window._fsFns;
   try {
     const guestsSnap = await getDocs(collection(window._db, 'events', eventId, 'guests'));

@@ -599,3 +599,40 @@ test('the events list remembers each event\'s kind for its splash, with no extra
   expect(kinds).toEqual(['wedding', 'graduation', 'event']);
   await expect.poll(() => page.evaluate(() => (window.__fakeFirebase.getDocsPaths || []).filter(x => x === 'events/e1/guests').length)).toBe(1);
 });
+
+const DEL_EVENT = { name: 'زفاف "سارة" <b>x</b>', ownerUid: 'u1', date: '', venue: '', createdAt: { seconds: 1 } };
+const DEL_STORE = () => ({
+  events: { e1: { ...DEL_EVENT } },
+  'events/e1/guests': { g1: { id: 'g1', name: 'أحمد' } },
+  'events/e1/requests': {},
+});
+
+test('the trash button on an event card asks for «حذف» in a modal; cancelling keeps the event', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: DEL_STORE() });
+  await page.goto('/app.html');
+  await page.locator('.event-card').getByRole('button', { name: 'حذف' }).click();
+  const modal = page.locator('#delete-event-modal');
+  await expect(modal).toBeVisible();
+  // The name is text, not markup.
+  await expect(modal.locator('.del-ev-name')).toHaveText('زفاف "سارة" <b>x</b>');
+  await expect(modal.locator('.del-ev-name b')).toHaveCount(0);
+  await expect(modal.locator('.del-ev-confirm')).toBeDisabled();
+  await modal.locator('.del-ev-cancel').click();
+  await expect(modal).toHaveCount(0);
+  const store = await page.evaluate(() => window.__fakeFirebase.store);
+  expect(store.events.e1).toBeTruthy();
+  expect(Object.keys(store['events/e1/guests'])).toEqual(['g1']);
+});
+
+test('typing «حذف» in the modal and confirming removes the event from the store and the list', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: DEL_STORE() });
+  await page.goto('/app.html');
+  await page.locator('.event-card').getByRole('button', { name: 'حذف' }).click();
+  await page.locator('#del-ev-input').fill('حذف');
+  await page.locator('#delete-event-modal .del-ev-confirm').click();
+  await expect.poll(() => page.evaluate(() => !!window.__fakeFirebase.store.events.e1)).toBe(false);
+  expect(await page.evaluate(() => Object.keys(window.__fakeFirebase.store['events/e1/guests'] || {}).length)).toBe(0);
+  await expect(page.locator('.event-card')).toHaveCount(0);
+});
