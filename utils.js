@@ -231,11 +231,11 @@ function confirmEventDelete({ name, guestCount }) {
     const overlay = document.createElement('div');
     overlay.id = 'delete-event-modal';
     overlay.setAttribute('dir', 'rtl');
-    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px;';
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
     const count = typeof guestCount === 'number' && guestCount > 0
       ? ' (' + guestCount + ' ' + guestWord(guestCount) + ')' : '';
     overlay.innerHTML = `
-      <div role="dialog" aria-modal="true" aria-labelledby="del-ev-title" style="background:var(--bg-1,#0C0C0C); color:var(--text-main,#FAF8F4); border:1px solid rgba(255,120,120,0.45); border-radius:18px; padding:18px; max-width:420px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,0.5); font-family:inherit; text-align:right;">
+      <div role="dialog" aria-modal="true" aria-labelledby="del-ev-title" style="margin:auto; background:var(--bg-1,#0C0C0C); color:var(--text-main,#FAF8F4); border:1px solid rgba(255,120,120,0.45); border-radius:18px; padding:18px; max-width:420px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,0.5); font-family:inherit; text-align:right;">
         <h3 id="del-ev-title" style="margin:0 0 10px; color:#ff9d9d; font-size:17px;">حذف المناسبة نهائيًا</h3>
         <p style="margin:0 0 8px; font-size:14px; line-height:1.7;">«<b class="del-ev-name"></b>»</p>
         <p style="margin:0 0 14px; font-size:13px; line-height:1.7; opacity:0.85;">راح ينحذف كل الضيوف${count} والطلبات المرتبطة فيها، وما تقدر ترجعها بعدين.</p>
@@ -261,7 +261,8 @@ function confirmEventDelete({ name, guestCount }) {
     };
     const onKey = (e) => {
       if (e.key === 'Escape') { e.preventDefault(); close(false); }
-      else if (e.key === 'Enter' && matches()) { e.preventDefault(); close(true); }
+      // Only from the text field: Enter on a focused «إلغاء» must still cancel.
+      else if (e.key === 'Enter' && e.target === input && matches()) { e.preventDefault(); close(true); }
     };
     input.addEventListener('input', sync);
     okBtn.addEventListener('click', () => { if (matches()) close(true); });

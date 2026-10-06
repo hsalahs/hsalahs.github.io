@@ -1476,6 +1476,13 @@ test('cancel, Escape and tapping outside the delete modal all close it and keep 
   await modal.click({ position: { x: 3, y: 3 } });
   await expect(modal).toHaveCount(0);
 
+  // Word typed, then Enter on a focused «إلغاء»: cancels, never deletes.
+  await page.getByRole('button', { name: 'حذف المناسبة نهائيًا' }).click();
+  await page.locator('#del-ev-input').fill('حذف');
+  await modal.locator('.del-ev-cancel').focus();
+  await page.keyboard.press('Enter');
+  await expect(modal).toHaveCount(0);
+
   expect(await storeCounts(page)).toEqual({ event: true, guests: 2 });
   await expect(page.locator('#dashboard')).toBeVisible();
 });
