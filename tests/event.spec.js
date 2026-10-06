@@ -1418,3 +1418,96 @@ for (const [label, next] of [['anonymous', { uid: 'anon-9', isAnonymous: true, e
     await expect(page.locator('#dashboard')).toBeVisible();
   });
 }
+
+// Deleting an event asks the owner to type «حذف» (confirmEventDelete in utils.js).
+async function openEventDeleteModal(page, store) {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await page.getByRole('button', { name: 'القائمة' }).click();
+  await page.getByRole('button', { name: /تعديل المناسبة/ }).click();
+  await page.getByRole('button', { name: 'حذف المناسبة نهائيًا' }).click();
+}
+
+function twoGuestStore() {
+  const s = baseStore([{ id: 'WD-1', name: 'أحمد', scanned: false }, { id: 'WD-2', name: 'سارة', scanned: false }]);
+  s.events = { e1: { ...EVENT, guestCount: 2 } };
+  return s;
+}
+
+const storeCounts = (page) => page.evaluate(() => ({
+  event: !!window.__fakeFirebase.store.events.e1,
+  guests: Object.keys(window.__fakeFirebase.store['events/e1/guests'] || {}).length,
+}));
+
+test('deleting an event opens a modal with its name and guest count; the red button stays disabled until «حذف» is typed', async ({ page }) => {
+  await openEventDeleteModal(page, twoGuestStore());
+  const modal = page.locator('#delete-event-modal');
+  await expect(modal).toBeVisible();
+  await expect(modal).toContainText('حفل تجريبي');
+  await expect(modal).toContainText('2 ضيفين');
+  const ok = modal.locator('.del-ev-confirm');
+  await expect(ok).toBeDisabled();
+  await page.locator('#del-ev-input').fill('حذف المناسبة');
+  await expect(ok).toBeDisabled();
+  await page.locator('#del-ev-input').fill('حفل تجريبي');
+  await expect(ok).toBeDisabled();
+  await page.locator('#del-ev-input').fill('حذف');
+  await expect(ok).toBeEnabled();
+  expect(await storeCounts(page)).toEqual({ event: true, guests: 2 });
+});
+
+test('cancel, Escape and tapping outside the delete modal all close it and keep the event and its guests', async ({ page }) => {
+  await openEventDeleteModal(page, twoGuestStore());
+  const modal = page.locator('#delete-event-modal');
+
+  await page.locator('#del-ev-input').fill('حذف');
+  await modal.locator('.del-ev-cancel').click();
+  await expect(modal).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'حذف المناسبة نهائيًا' }).click();
+  await expect(modal).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'حذف المناسبة نهائيًا' }).click();
+  await expect(modal).toBeVisible();
+  await modal.click({ position: { x: 3, y: 3 } });
+  await expect(modal).toHaveCount(0);
+
+  // Word typed, then Enter on a focused «إلغاء»: cancels, never deletes.
+  await page.getByRole('button', { name: 'حذف المناسبة نهائيًا' }).click();
+  await page.locator('#del-ev-input').fill('حذف');
+  await modal.locator('.del-ev-cancel').focus();
+  await page.keyboard.press('Enter');
+  await expect(modal).toHaveCount(0);
+
+  expect(await storeCounts(page)).toEqual({ event: true, guests: 2 });
+  await expect(page.locator('#dashboard')).toBeVisible();
+});
+
+test('typing «حذف» and confirming deletes the event and its guests and goes back to app.html', async ({ page }) => {
+  await openEventDeleteModal(page, twoGuestStore());
+  // app.html's fresh load would re-seed the fake store, so the leaving page
+  // saves what its store holds in sessionStorage (written synchronously, so
+  // it survives the navigation) and app.html is replaced by a blank page.
+  await page.route(/\/app\.html/, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>app</title>' }));
+  await page.evaluate(() => window.addEventListener('pagehide', () => sessionStorage.setItem('afterDelete', JSON.stringify({
+    event: !!window.__fakeFirebase.store.events.e1,
+    guests: Object.keys(window.__fakeFirebase.store['events/e1/guests'] || {}).length,
+  }))));
+  await page.locator('#del-ev-input').fill('حذف');
+  await page.locator('#delete-event-modal .del-ev-confirm').click();
+  await page.waitForURL(/app\.html/);
+  expect(JSON.parse(await page.evaluate(() => sessionStorage.getItem('afterDelete')))).toEqual({ event: false, guests: 0 });
+});
+
+test('an event name with quotes and tags is shown as plain text in the delete modal', async ({ page }) => {
+  const s = twoGuestStore();
+  s.events = { e1: { ...EVENT, name: 'زفاف "سارة" <b>x</b>', guestCount: 2 } };
+  await openEventDeleteModal(page, s);
+  const name = page.locator('#delete-event-modal .del-ev-name');
+  await expect(name).toHaveText('زفاف "سارة" <b>x</b>');
+  await expect(name.locator('b')).toHaveCount(0);
+});
