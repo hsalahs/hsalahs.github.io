@@ -242,7 +242,7 @@ function confirmEventDelete({ name, guestCount }) {
         <label for="del-ev-input" style="display:block; font-size:13px; margin-bottom:6px;">للتأكيد اكتب كلمة <b style="color:#ff9d9d;">${DELETE_WORD}</b></label>
         <input id="del-ev-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%; box-sizing:border-box; padding:11px 12px; border-radius:10px; border:1px solid rgba(255,120,120,0.45); background:rgba(255,255,255,0.06); color:inherit; font-size:16px; font-family:inherit; margin-bottom:14px;">
         <div style="display:flex; gap:8px;">
-          <button type="button" class="del-ev-confirm" disabled style="flex:1; padding:12px; border-radius:10px; border:none; background:#E5484D; color:#fff; font-weight:700; font-size:14px; font-family:inherit; cursor:pointer;">حذف نهائي</button>
+          <button type="button" class="del-ev-confirm" disabled style="flex:1; padding:12px; border-radius:10px; border:none; background:#E5484D; color:#fff; font-weight:700; font-size:14px; font-family:inherit; cursor:pointer;">${typeof ic === 'function' ? ic('trash-2', 15) : ''} حذف نهائي</button>
           <button type="button" class="del-ev-cancel" style="flex:1; padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.25); background:transparent; color:inherit; font-weight:700; font-size:14px; font-family:inherit; cursor:pointer;">إلغاء</button>
         </div>
       </div>`;

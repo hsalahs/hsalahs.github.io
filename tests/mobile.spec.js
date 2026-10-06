@@ -28,6 +28,8 @@ const PAGES = [
   ['event dashboard', '/event.html?id=e1', OWNER, (p) => p.locator('.guest-item').first().waitFor()],
   ['event menu', '/event.html?id=e1', OWNER, async (p) => { await p.locator('.guest-item').first().waitFor(); await p.getByRole('button', { name: 'القائمة' }).click(); }],
   ['guest sheet', '/event.html?id=e1', OWNER, async (p) => { await p.locator('.guest-item .more-btn').first().click(); await p.locator('#guest-sheet').waitFor(); }],
+  ['event delete modal', '/event.html?id=e1', OWNER, async (p) => { await p.locator('.guest-item').first().waitFor(); await p.getByRole('button', { name: 'القائمة' }).click(); await p.getByRole('button', { name: /تعديل المناسبة/ }).click(); await p.getByRole('button', { name: 'حذف المناسبة نهائيًا' }).click(); await p.locator('#delete-event-modal').waitFor(); }],
+  ['organizer delete modal', '/app.html', OWNER, async (p) => { await p.locator('#events-list .event-card').waitFor(); await p.locator('#events-list .event-card').getByRole('button', { name: 'حذف' }).click(); await p.locator('#delete-event-modal').waitFor(); }],
   ['invitation', '/invite.html?event=e1', null, (p) => p.locator('#g-name').waitFor()],
   ['scanner code screen', '/scan.html?event=e1', null, (p) => p.locator('#pin-input').waitFor()],
 ];
