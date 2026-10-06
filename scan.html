@@ -774,15 +774,22 @@ function readOfflineCache() {
 
 async function refreshOfflineList() {
   const btn = document.getElementById('offline-refresh-btn');
+  const epoch = scanEpoch;
   btn.disabled = true;
   btn.textContent = '⏳ جاري التحديث...';
   pendingListId = null;
-  await loadGuestsOnce(true);
-  await syncEnteredGuests(true);
-  prepareListSource();
-  btn.disabled = false;
-  btn.innerHTML = ic('refresh-cw', 14) + ' تحديث القائمة';
-  renderOfflineList();
+  try {
+    const loaded = await loadGuestsOnce(true);
+    if (epoch !== scanEpoch) return;
+    // 'full' = every guest was just downloaded, so there is nothing newer to ask for.
+    if (loaded === 'ok') await syncEnteredGuests(true);
+    if (epoch !== scanEpoch) return;
+    prepareListSource();
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = ic('refresh-cw', 14) + ' تحديث القائمة';
+    if (epoch === scanEpoch) renderOfflineList();
+  }
 }
 
 // "Check in by name": the same handleScan path as a QR scan, started from a
@@ -796,10 +803,13 @@ let pendingListId = null, listBusyId = null, listArmedAt = 0, listSearchTimer = 
 let listCacheSavedAt = null, listFallback = null;
 const localCheckinTimes = {};
 const SYNC_AUTO_MS = 2 * 60 * 1000;
+// The cursor is compared with scannedAt written by OTHER phones' clocks: a
+// phone whose clock is more than 5 minutes behind can have its check-ins
+// missed until the saved copy is rebuilt (3 hours) or the roster is newer.
 const SYNC_OVERLAP_MS = 5 * 60 * 1000;
 const SYNC_TIMEOUT_MS = 8000;
 const SYNC_STALE_MS = 10 * 60 * 1000;
-let syncCursor = null, lastSyncAt = null, deltaBusy = false, deltaFailed = false;
+let syncCursor = null, lastSyncAt = null, deltaBusy = false, deltaFailed = false, syncInFlight = null;
 
 function prepareListSource() {
   if (guests.length) return;
@@ -856,6 +866,19 @@ function listIsOpen() {
 // list opens (if the last sync is over 2 minutes old) and on "تحديث القائمة";
 // there is deliberately no timer, it would multiply the reads.
 async function syncEnteredGuests(force) {
+  if (deltaBusy && force) {
+    // A tap on "تحديث القائمة" during an automatic sync waits for it, then
+    // runs its own forced one.
+    const epoch = scanEpoch;
+    if (syncInFlight) { try { await syncInFlight; } catch (_) {} }
+    if (epoch !== scanEpoch) return;
+  }
+  const p = runSync(force);
+  syncInFlight = p;
+  try { await p; } finally { if (syncInFlight === p) syncInFlight = null; }
+}
+
+async function runSync(force) {
   if (deltaBusy || !guests.length || !syncCursor || !eventId) return;
   if (!force && lastSyncAt && Date.now() - lastSyncAt < SYNC_AUTO_MS) return;
   const epoch = scanEpoch;
@@ -1086,46 +1109,89 @@ async function loadGuestsOnce(force) {
     return;
   }
   const { collection, getDocs, doc, getDoc } = window._fsFns;
+  const epoch = scanEpoch;
+  const hadList = guests.length > 0;
   try {
     // The roster event.html keeps (one document, one read). Events whose
     // owner hasn't opened the dashboard since it existed — or too big for one
     // document — have none, and fall back to reading every guest.
     // A failed roster read (say, rules not yet allowing it) must not look
-    // like a revoked session — just fall back to the old way.
-    const roster = await getDoc(doc(window._db, 'events', eventId, 'roster', 'list')).catch(() => null);
+    // like a revoked session. With no list yet it falls back to the old way;
+    // with a list on screen (a refresh) the old list is kept and the failure
+    // is shown, never a download of every guest.
+    let roster = null, rosterErr = null;
+    try { roster = await getDoc(doc(window._db, 'events', eventId, 'roster', 'list')); } catch (e) { rosterErr = e; }
+    if (epoch !== scanEpoch) return 'stale';
+    if (hadList && (rosterErr || (roster && roster.metadata && roster.metadata.fromCache))) {
+      if (rosterErr && rosterErr.code === 'permission-denied') { sessionRevoked(); return 'stale'; }
+      if (rosterErr && window._isFirestoreTerminated && window._isFirestoreTerminated(rosterErr)) {
+        setTimeout(() => location.reload(), 800);
+        return 'stale';
+      }
+      deltaFailed = true;
+      return 'failed';
+    }
     const startedAt = Date.now();
     // What this device already knows is kept: a refresh never turns an
     // entered guest back into one who has not entered.
     const knownIn = {};
     guests.forEach(g => { if (g.scanned) knownIn[g.id] = true; });
+    let result = 'ok';
     if (roster && roster.exists() && Array.isArray(roster.data().guests)) {
+      const oldGuests = guests;
+      const seen = {};
       guests = roster.data().guests.map(entry => {
         const a = entry.indexOf('|');
         const b = entry.indexOf('|', a + 1);
         const id = entry.slice(0, a);
+        seen[id] = true;
         return { docId: id, id, scanned: entry.slice(a + 1, b) === '1' || !!knownIn[id], name: entry.slice(b + 1) };
       });
+      // Guests the delta sync added (admitted, newer than the roster) stay.
+      oldGuests.forEach(g => { if (g.scanned && !seen[g.id]) guests.push(g); });
       // The roster is only rewritten while the dashboard is open, so it can be
       // hours old: the delta sync starts from its own time (epoch when it has none).
+      // The cursor never moves backwards, or every refresh would re-read all
+      // admissions since the old roster.
       const upd = roster.data().updatedAt;
       const updMs = upd && typeof upd.toDate === 'function' ? upd.toDate().getTime() : 0;
-      syncCursor = new Date(Math.max(0, updMs - SYNC_OVERLAP_MS)).toISOString();
-      lastSyncAt = null;
-    } else {
+      const fromRoster = new Date(Math.max(0, updMs - SYNC_OVERLAP_MS)).toISOString();
+      if (syncCursor && syncCursor >= fromRoster) {
+        // keep the existing cursor and the time it was reached
+      } else {
+        syncCursor = fromRoster;
+        lastSyncAt = null;
+      }
+    } else if (roster && roster.exists() === false || !roster) {
       const snap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
+      if (epoch !== scanEpoch) return 'stale';
       guests = snap.docs.map(d => ({ docId: d.id, ...d.data(), scanned: !!d.data().scanned || !!knownIn[d.id] }));
       syncCursor = new Date(startedAt - SYNC_OVERLAP_MS).toISOString();
       lastSyncAt = startedAt;
+      result = 'full';
+    } else {
+      // A roster that exists but has no list: treat like a failed read.
+      if (hadList) { deltaFailed = true; return 'failed'; }
+      const snap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
+      if (epoch !== scanEpoch) return 'stale';
+      guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+      syncCursor = new Date(startedAt - SYNC_OVERLAP_MS).toISOString();
+      lastSyncAt = startedAt;
+      result = 'full';
     }
     deltaFailed = false;
     guestsLoadedAt = new Date().toISOString();
     updateScanCounter();
     refreshConnectionBanner(true);
     cacheGuestsOffline();
+    return result;
   } catch (error) {
+    if (epoch !== scanEpoch) return 'stale';
     console.error('guests load error:', error);
-    if (error && error.code === 'permission-denied') { sessionRevoked(); return; }
+    if (error && error.code === 'permission-denied') { sessionRevoked(); return 'stale'; }
+    if (hadList) { deltaFailed = true; return 'failed'; }
     refreshConnectionBanner(false);
+    return 'failed';
   }
 }
 

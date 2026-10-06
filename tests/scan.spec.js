@@ -1883,9 +1883,10 @@ for (const fn of ['lockDevice', 'lockOrClose', 'resetScanState']) {
 }
 
 // ---- Names list delta sync (who entered on other phones) ----
+const ROSTER_MS = Date.now() - 6 * 3600 * 1000;
 function rosterStore(rosterEntries, guestDocs) {
   const store = counterStore(guestDocs, 0);
-  store['events/e1/roster'] = { list: { guests: rosterEntries, updatedAt: 'x' } };
+  store['events/e1/roster'] = { list: { guests: rosterEntries, updatedAt: { __timestampMs: ROSTER_MS } } };
   return store;
 }
 async function openRosterList(page, rosterEntries, guestDocs, init) {
@@ -1910,6 +1911,7 @@ test('delta sync: opening the list issues exactly one scannedAt range query and 
   expect(q.filters[0].field).toBe('scannedAt');
   expect(q.filters[0].op).toBe('>');
   expect(q.filters[0].value).toMatch(/^\d{4}-\d\d-\d\dT.*Z$/);
+  expect(q.filters[0].value).toBe(new Date(ROSTER_MS - 5 * 60 * 1000).toISOString());
   expect(q.returned).toBe(0);
 });
 
@@ -1939,6 +1941,9 @@ test('delta sync: a guest admitted but missing from the roster is added and the 
   await page.locator('#offline-list-btn').click();
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 2');
   await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 1 من 2');
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect(page.getByRole('button', { name: /تحديث القائمة/ })).toBeEnabled();
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 2');
 });
 
 test('delta sync: a failed query keeps the list, says "تعذّر التحديث" and does not show the connection banner', async ({ page }) => {
@@ -2098,4 +2103,68 @@ test('delta sync regression: a guest checked in by name stays "✓ دخل" (with
   await page.locator('#offline-search').fill('أحمد');
   await expect(listRow(page, 'WD-A')).toContainText('✓ دخل ' + time);
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 من 2');
+});
+
+test('delta sync: a refresh after a first sync never moves the cursor back and reads almost nothing', async ({ page }) => {
+  const old = new Date(ROSTER_MS + 3600 * 1000).toISOString();
+  await openRosterList(page, ['WD-A|0|أحمد', 'WD-B|0|بدر', 'WD-C|0|جاسم'], {
+    'WD-A': { name: 'أحمد', id: 'WD-A', scanned: true, scannedAt: old },
+    'WD-B': { name: 'بدر', id: 'WD-B', scanned: true, scannedAt: old },
+    'WD-C': { name: 'جاسم', id: 'WD-C', scanned: false },
+  });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 1 من 3');
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(2);
+  const [q1, q2] = await guestQueries(page);
+  expect(q1.returned).toBe(2);
+  expect(q2.filters[0].value >= q1.filters[0].value).toBe(true);
+  expect(q2.returned).toBe(0);
+});
+
+test('delta sync: a failed roster read on refresh keeps the old list, shows the failure and downloads no guests', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  await page.evaluate(() => { window.__failNextGetDoc = true; });
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect(page.locator('#offline-list-meta')).toContainText('تعذّر التحديث — الأسماء من');
+  await expect(page.getByRole('button', { name: /تحديث القائمة/ })).toBeEnabled();
+  await expect(listRow(page, 'WD-A')).toBeVisible();
+  await expect(page.locator('#connection-banner')).toBeHidden();
+  const qs = await guestQueries(page);
+  expect(qs.filter(q => !q.filters)).toHaveLength(0);
+  expect(qs).toHaveLength(1);
+});
+
+for (const fn of ['lockDevice', 'lockOrClose', 'resetScanState']) {
+  test('delta sync: ' + fn + ' during a sync resets the busy flag and the late answer touches nothing', async ({ page }) => {
+    await openRosterList(page, ['WD-A|0|أحمد'], {
+      'WD-A': { name: 'أحمد', id: 'WD-A', scanned: true, scannedAt: NOW_ISO() },
+    }, () => { window.__getDocsDelay = 1500; });
+    await page.locator('#offline-list-btn').click();
+    await expect.poll(() => page.evaluate(() => deltaBusy)).toBe(true);
+    const cursor = await page.evaluate(() => syncCursor);
+    await page.evaluate((f) => { window[f](); }, fn);
+    expect(await page.evaluate(() => deltaBusy)).toBe(false);
+    await page.waitForTimeout(2200);
+    expect(await page.evaluate(() => [guests.find(g => g.id === 'WD-A').scanned, syncCursor, deltaBusy])).toEqual([false, cursor, false]);
+  });
+}
+
+test('delta sync: a terminated Firestore client during the sync reloads the page', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  await page.evaluate(() => { window.__marker = 1; window.__failNextGetDocs = true; window._isFirestoreTerminated = () => true; });
+  await Promise.all([page.waitForEvent('load'), page.locator('#offline-list-btn').click()]);
+  expect(await page.evaluate(() => window.__marker)).toBeUndefined();
+});
+
+test('delta sync: a refresh tap during the automatic sync still runs its own forced sync', async ({ page }) => {
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } }, () => { window.__getDocsDelay = 800; });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => page.evaluate(() => deltaBusy)).toBe(true);
+  await page.getByRole('button', { name: /تحديث القائمة/ }).click();
+  await expect.poll(() => guestQueries(page), { timeout: 8000 }).toHaveLength(2);
+  await expect(page.getByRole('button', { name: /تحديث القائمة/ })).toBeEnabled();
 });

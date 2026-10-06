@@ -107,11 +107,24 @@ function snapshotWithChanges(path, entry) {
   return snap;
 }
 
+// Seeded data crosses a JSON boundary, so a Timestamp is written as
+// { __timestampMs } and turned into a Timestamp-like object (with toDate) on read.
+function reviveTimestamps(obj) {
+  Object.keys(obj).forEach(k => {
+    const v = obj[k];
+    if (v && typeof v === 'object' && typeof v.__timestampMs === 'number') {
+      const ms = v.__timestampMs;
+      obj[k] = { seconds: Math.floor(ms / 1000), toDate: () => new Date(ms) };
+    }
+  });
+  return obj;
+}
+
 function makeDocSnap(path, id, data) {
   return {
     id,
     exists: () => data !== undefined,
-    data: () => (data === undefined ? undefined : { ...data }),
+    data: () => (data === undefined ? undefined : reviveTimestamps({ ...data })),
     ref: { __type: 'doc', path: path + '/' + id, collPath: path, id },
   };
 }
