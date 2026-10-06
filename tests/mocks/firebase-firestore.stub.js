@@ -107,11 +107,24 @@ function snapshotWithChanges(path, entry) {
   return snap;
 }
 
+// Seeded data crosses a JSON boundary, so a Timestamp is written as
+// { __timestampMs } and turned into a Timestamp-like object (with toDate) on read.
+function reviveTimestamps(obj) {
+  Object.keys(obj).forEach(k => {
+    const v = obj[k];
+    if (v && typeof v === 'object' && typeof v.__timestampMs === 'number') {
+      const ms = v.__timestampMs;
+      obj[k] = { seconds: Math.floor(ms / 1000), toDate: () => new Date(ms) };
+    }
+  });
+  return obj;
+}
+
 function makeDocSnap(path, id, data) {
   return {
     id,
     exists: () => data !== undefined,
-    data: () => (data === undefined ? undefined : { ...data }),
+    data: () => (data === undefined ? undefined : reviveTimestamps({ ...data })),
     ref: { __type: 'doc', path: path + '/' + id, collPath: path, id },
   };
 }
@@ -226,19 +239,32 @@ export function getDoc(ref) {
   }
   if (isDenied(ref.path)) return Promise.reject(permissionDenied(ref.path));
   const coll = F().store[ref.collPath] || {};
-  return Promise.resolve(makeDocSnap(ref.collPath, ref.id, coll[ref.id]));
+  const snap = makeDocSnap(ref.collPath, ref.id, coll[ref.id]);
+  if (window.__rosterFromCache && ref.path.endsWith('/roster/list')) snap.metadata = { fromCache: true };
+  return Promise.resolve(snap);
 }
 
 export function getDocs(refOrQuery) {
+  if (window.__failNextGetDocs) {
+    window.__failNextGetDocs = false;
+    return Promise.reject(new Error('simulated network failure'));
+  }
+  if (window.__getDocsDelay && !refOrQuery.__delayed) {
+    return new Promise((r) => setTimeout(r, window.__getDocsDelay)).then(() => getDocs(Object.assign({}, refOrQuery, { __delayed: true })));
+  }
   if (isDenied(refOrQuery.path) || isListDenied(refOrQuery.path)) return Promise.reject(permissionDenied(refOrQuery.path));
   // Test-only tally of which collection paths actually got a real read, so
   // a test can assert a quota-saving change really stopped a redundant one
   // (not just that the UI still ends up showing the right numbers).
   (F().getDocsPaths = F().getDocsPaths || []).push(refOrQuery.path);
+  const logQuery = (snap) => {
+    (F().getDocsQueries = F().getDocsQueries || []).push({ path: refOrQuery.path, filters: refOrQuery.filters || null, returned: snap.docs.length });
+    return snap;
+  };
   if (refOrQuery.__type === 'query') {
-    return Promise.resolve(buildQuerySnapshot(refOrQuery.path, refOrQuery.filters, refOrQuery.order));
+    return Promise.resolve(logQuery(buildQuerySnapshot(refOrQuery.path, refOrQuery.filters, refOrQuery.order)));
   }
-  return Promise.resolve(buildQuerySnapshot(refOrQuery.path, null));
+  return Promise.resolve(logQuery(buildQuerySnapshot(refOrQuery.path, null)));
 }
 
 // A count costs about one read however many documents it counts — the

@@ -68,6 +68,11 @@ await check('the device can read its own session back', () => assertSucceeds(ano
 await check('another device cannot read that session', () => assertFails(anon('dev2').doc('events/e1/scanSessions/dev1').get()));
 await check('with a session: can list guests', () => assertSucceeds(anon('dev1').collection('events/e1/guests').get()));
 await check('with a session: can check a guest in (false -> true)', () => assertSucceeds(anon('dev1').doc('events/e1/guests/g1').update({ scanned: true, scannedAt: 'now' })));
+await check('with a session: can list guests with the scannedAt range query (names list delta sync); an unrelated signed-in user cannot', async () => {
+  const cutoff = '2026-01-01T00:00:00.000Z';
+  await assertSucceeds(anon('dev1').collection('events/e1/guests').where('scannedAt', '>', cutoff).get());
+  await assertFails(user('u9', 'other@example.com').collection('events/e1/guests').where('scannedAt', '>', cutoff).get());
+});
 await check('with a session: the same through a transaction, as scan.html does', () => {
   const db = anon('dev1');
   return assertSucceeds(db.runTransaction(async (tx) => {
