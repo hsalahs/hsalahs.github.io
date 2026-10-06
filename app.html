@@ -525,8 +525,11 @@ async function loadEventStats(ev) {
 }
 
 async function deleteEvent(eventId, name, ownerUid, slug) {
+  // The loaded guest list when we have it, else the event doc's counter.
   const stats = eventStatsCache[eventId];
-  if (!(await confirmEventDelete({ name, guestCount: stats ? stats.total : undefined }))) return;
+  const ev = allEvents.find(e => e.id === eventId);
+  const guestCount = stats ? stats.total : (ev ? ev.guestCount : undefined);
+  if (!(await confirmEventDelete({ name, guestCount }))) return;
   const { collection, getDocs, deleteDoc, doc, runTransaction } = window._fsFns;
   try {
     const guestsSnap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
