@@ -808,6 +808,8 @@ const SYNC_AUTO_MS = 2 * 60 * 1000;
 // missed until the saved copy is rebuilt (3 hours) or the roster is newer.
 const SYNC_OVERLAP_MS = 5 * 60 * 1000;
 const SYNC_TIMEOUT_MS = 8000;
+const FULL_LOAD_TIMEOUT_MS = 30000;
+let fullLoadInFlight = false;
 const SYNC_STALE_MS = 10 * 60 * 1000;
 let syncCursor = null, lastSyncAt = null, deltaBusy = false, deltaFailed = false, syncInFlight = null;
 
@@ -1181,7 +1183,20 @@ async function loadGuestsOnce(force) {
       }
     } else {
       // Roster confirmed missing, or (first load only) unreadable or without a list.
-      const snap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
+      // A read that timed out is abandoned, not cancelled: no second full read
+      // starts while it is still running, and its late answer is never used.
+      if (fullLoadInFlight) throw new Error('full load busy');
+      let fullTimer = null, snap;
+      try {
+        const fullRead = getDocs(collection(window._db, 'events', eventId, 'guests'));
+        fullLoadInFlight = true;
+        const settled = () => { fullLoadInFlight = false; };
+        fullRead.then(settled, settled);
+        snap = await Promise.race([
+          fullRead,
+          new Promise((_, reject) => { fullTimer = setTimeout(() => reject(new Error('full load timeout')), FULL_LOAD_TIMEOUT_MS); }),
+        ]);
+      } finally { clearTimeout(fullTimer); }
       if (epoch !== scanEpoch) return 'stale';
       guests = snap.docs.map(d => ({ docId: d.id, ...d.data(), scanned: !!d.data().scanned || !!knownIn[d.id] }));
       syncCursor = new Date(startedAt - SYNC_OVERLAP_MS).toISOString();

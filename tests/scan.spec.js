@@ -1141,7 +1141,7 @@ test('scanner batch 2: qr-scanner is served locally, precached by sw.js, and a f
   expect(html).toContain('<script src="vendor/qr-scanner.umd.min.js"></script>');
   const sw = fs.readFileSync('sw.js', 'utf8');
   expect(sw).toMatch(/SHELL_FILES = \[[^\]]*'vendor\/qr-scanner\.umd\.min\.js'/);
-  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v17'");
+  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v18'");
   expect(fs.readFileSync('vendor/qr-scanner.umd.min.js', 'utf8')).toContain('QrScanner');
 
   const requested = [];
@@ -1916,7 +1916,7 @@ test('delta sync: opening the list issues exactly one scannedAt range query and 
 });
 
 test('delta sync: a guest admitted on another phone shows as entered (with the time); null and old scannedAt are not returned', async ({ page }) => {
-  const at = '2026-10-06T17:14:00.000Z';
+  const at = new Date(Date.now() - 60000).toISOString();
   await openRosterList(page, ['WD-A|0|أحمد', 'WD-B|0|بدر', 'WD-C|0|جاسم'], {
     'WD-A': { name: 'أحمد', id: 'WD-A', scanned: true, scannedAt: at },
     'WD-B': { name: 'بدر', id: 'WD-B', scanned: false, scannedAt: null },
@@ -2227,4 +2227,65 @@ test('delta sync: a roster read that never answers times out after 8 seconds on 
   await expect(page.getByRole('button', { name: /تحديث القائمة/ })).toBeEnabled();
   await expect(listRow(page, 'WD-A')).toBeVisible();
   expect((await guestQueries(page)).filter(q => !q.filters)).toHaveLength(0);
+});
+
+// ---- Full guests download (roster document missing) has a 30 s timeout ----
+const fullReads = (page) => guestQueries(page).then(qs => qs.filter(q => !q.filters).length);
+const REFRESH_BTN = (page) => page.getByRole('button', { name: /تحديث القائمة/ });
+async function openWithListThenDropRoster(page) {
+  await page.clock.install();
+  await openRosterList(page, ['WD-A|0|أحمد'], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  await page.locator('#offline-list-btn').click();
+  await expect.poll(() => guestQueries(page)).toHaveLength(1);
+  await page.evaluate(() => { delete window.__fakeFirebase.store['events/e1/roster']; window.__getDocsDelay = 40000; });
+}
+
+test('full download timeout: a never-answering full read with a list on screen keeps the list and shows the failure', async ({ page }) => {
+  await openWithListThenDropRoster(page);
+  await REFRESH_BTN(page).click();
+  await page.clock.runFor(31000);
+  await expect(page.locator('#offline-list-meta')).toContainText('تعذّر التحديث');
+  await expect(REFRESH_BTN(page)).toBeEnabled();
+  await expect(listRow(page, 'WD-A')).toBeVisible();
+  await expect(page.locator('#connection-banner')).toBeHidden();
+});
+
+test('full download timeout: a late answer after the timeout is ignored', async ({ page }) => {
+  await openWithListThenDropRoster(page);
+  await page.evaluate(() => { window.__fakeFirebase.store['events/e1/guests']['WD-Z'] = { name: 'متأخر', id: 'WD-Z', scanned: false }; });
+  await REFRESH_BTN(page).click();
+  await page.clock.runFor(31000);
+  await expect(page.locator('#offline-list-meta')).toContainText('تعذّر التحديث');
+  await page.clock.runFor(15000);
+  await expect.poll(() => fullReads(page)).toBe(1);
+  expect(await page.evaluate(() => guests.map(g => g.id))).toEqual(['WD-A']);
+  await expect(page.locator('#offline-list-meta')).toContainText('تعذّر التحديث');
+});
+
+test('full download timeout: a second tap while the abandoned read still runs starts no second full read', async ({ page }) => {
+  await openWithListThenDropRoster(page);
+  await REFRESH_BTN(page).click();
+  await page.clock.runFor(31000);
+  await expect(REFRESH_BTN(page)).toBeEnabled();
+  await REFRESH_BTN(page).click();
+  await expect(page.locator('#offline-list-meta')).toContainText('تعذّر التحديث');
+  await expect(REFRESH_BTN(page)).toBeEnabled();
+  await page.clock.runFor(60000);
+  expect(await fullReads(page)).toBe(1);
+});
+
+test('full download timeout: with no list yet the connection banner shows and nothing is written', async ({ page }) => {
+  await page.clock.install();
+  await stubFirebase(page);
+  const store = rosterStore([], { 'WD-A': { name: 'أحمد', id: 'WD-A', scanned: false } });
+  delete store['events/e1/roster'];
+  await seedFakeFirebase(page, { user: DEVICE, store });
+  await page.addInitScript(() => { window.__getDocsDelay = 40000; });
+  await page.goto('/scan.html?event=e1');
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await page.clock.runFor(31000);
+  await expect(page.locator('#connection-banner')).toBeVisible();
+  expect(await page.evaluate(() => guests.length)).toBe(0);
+  await page.clock.runFor(15000);
+  expect(await page.evaluate(() => guests.length)).toBe(0);
 });
