@@ -280,7 +280,7 @@ export function getCountFromServer(refOrQuery) {
 export function updateDoc(ref, patch) {
   if (isDenied(ref.path)) return Promise.reject(permissionDenied(ref.path));
   const coll = ensureColl(ref.collPath);
-  if (!coll[ref.id]) return Promise.reject(new Error('not-found: ' + ref.path));
+  if (!coll[ref.id]) return Promise.reject(Object.assign(new Error('not-found: ' + ref.path), { code: 'not-found' }));
   coll[ref.id] = resolveIncrements(coll[ref.id], patch);
   notify(ref.collPath);
   notify(ref.path);
