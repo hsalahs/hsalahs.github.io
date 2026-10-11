@@ -624,7 +624,7 @@ function buildInviteCard(eventData, guest) {
     }
 
     waitForQr(30).then((qr) => new Promise(r => setTimeout(() => r(qr), 80))).then((qr) =>
-      loadCardFonts([eventData.name, guest.name, eventData.venue, 'هذا الباركود لشخص واحد فقط احتفظ بهذا الباركود للدخول وإبرازه عند البوابة']).then(() => qr)
+      loadCardFonts([eventData.name, guest.name, eventData.venue, 'هذا الباركود لشخص واحد فقط احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', '★ VIP']).then(() => qr)
     ).then((qr) => {
       if (!qr) { document.body.removeChild(tmp); resolve(null); return; }
 
@@ -644,7 +644,9 @@ function buildInviteCard(eventData, guest) {
       c.width = 1000; c.height = 1400;
       const ctx = c.getContext('2d');
 
-      ctx.fillStyle = '#FAFAF8';
+      const vip = !!guest.vip;
+      const dy = vip ? 56 : 0;
+      ctx.fillStyle = vip ? '#0E0C08' : '#FAFAF8';
       ctx.fillRect(0, 0, 1000, 1400);
 
       const glow = ctx.createRadialGradient(500, 530, 60, 500, 530, 520);
@@ -662,6 +664,11 @@ function buildInviteCard(eventData, guest) {
       ctx.strokeStyle = hexToRgba(GOLD, 0.35);
       ctx.lineWidth = 1.5;
       ctx.strokeRect(42, 42, 916, 1316);
+      if (vip) {
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(30, 30, 940, 1340);
+      }
 
       const titleGrad = ctx.createLinearGradient(300, 0, 700, 0);
       titleGrad.addColorStop(0, GOLD);
@@ -671,13 +678,33 @@ function buildInviteCard(eventData, guest) {
       ctx.textAlign = 'center';
       fitFillText(ctx, eventData.name, 500, 118, 860, 58, 30, (px) => 'bold ' + px + 'px "IBM Plex Sans Arabic", Arial');
 
-      ctx.fillStyle = '#999';
+      ctx.fillStyle = vip ? '#B8B4AC' : '#999';
       ctx.font = '34px "IBM Plex Sans Arabic", Arial';
       ctx.fillText(formatEventDate(eventData.date), 500, 172);
 
-      drawFadedLine(ctx, 280, 720, 205, GOLD);
+      if (vip) {
+        const bw = 170, bh = 48, bx = 500 - bw / 2, by = 196;
+        const badge = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+        badge.addColorStop(0, GOLD);
+        badge.addColorStop(0.5, GOLD_LIGHT);
+        badge.addColorStop(1, GOLD);
+        ctx.fillStyle = badge;
+        ctx.beginPath();
+        ctx.moveTo(bx + bh / 2, by);
+        ctx.arcTo(bx + bw, by, bx + bw, by + bh, bh / 2);
+        ctx.arcTo(bx + bw, by + bh, bx, by + bh, bh / 2);
+        ctx.arcTo(bx, by + bh, bx, by, bh / 2);
+        ctx.arcTo(bx, by, bx + bw, by, bh / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#1a1400';
+        ctx.font = 'bold 30px "Playfair Display", Arial';
+        ctx.fillText('★ VIP', 500, by + 35);
+      }
 
-      const qx = 180, qy = 232, qw = 640, qh = 640, rr = 28;
+      drawFadedLine(ctx, 280, 720, 205 + dy, GOLD);
+
+      const qx = 180, qy = 232 + dy, qw = 640, qh = 640, rr = 28;
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(qx + rr, qy);
@@ -696,32 +723,32 @@ function buildInviteCard(eventData, guest) {
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      ctx.drawImage(qr, 220, 272, 560, 560);
+      ctx.drawImage(qr, 220, 272 + dy, 560, 560);
 
-      ctx.fillStyle = '#0A0A0A';
-      fitFillText(ctx, guest.name, 500, 940, 860, 54, 28, (px) => 'bold ' + px + 'px "IBM Plex Sans Arabic", Arial');
+      ctx.fillStyle = vip ? GOLD_LIGHT : '#0A0A0A';
+      fitFillText(ctx, guest.name, 500, 940 + dy, 860, 54, 28, (px) => 'bold ' + px + 'px "IBM Plex Sans Arabic", Arial');
 
       ctx.fillStyle = '#B0AAA0';
       ctx.font = '28px "Playfair Display", Arial';
-      ctx.fillText(guest.id, 500, 992);
+      ctx.fillText(guest.id, 500, 992 + dy);
 
-      drawFadedLine(ctx, 220, 780, 1028, 'rgba(0,0,0,0.18)');
+      drawFadedLine(ctx, 220, 780, 1028 + dy, vip ? hexToRgba(GOLD, 0.5) : 'rgba(0,0,0,0.18)');
 
       if (eventData.venue) {
         ctx.fillStyle = GOLD;
-        fitFillText(ctx, eventData.venue, 500, 1088, 860, 38, 22, (px) => 'bold ' + px + 'px "Playfair Display", "IBM Plex Sans Arabic", Arial');
+        fitFillText(ctx, eventData.venue, 500, 1088 + dy, 860, 38, 22, (px) => 'bold ' + px + 'px "Playfair Display", "IBM Plex Sans Arabic", Arial');
         ctx.strokeStyle = hexToRgba(GOLD, 0.55);
         ctx.lineWidth = 1.2;
-        ctx.beginPath(); ctx.moveTo(300, 1076); ctx.lineTo(360, 1076); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(640, 1076); ctx.lineTo(700, 1076); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(300, 1076 + dy); ctx.lineTo(360, 1076 + dy); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(640, 1076 + dy); ctx.lineTo(700, 1076 + dy); ctx.stroke();
       }
 
-      ctx.fillStyle = '#888';
+      ctx.fillStyle = vip ? '#B8B4AC' : '#888';
       ctx.font = '26px "IBM Plex Sans Arabic", Arial';
-      ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1148);
-      ctx.fillStyle = '#666';
+      ctx.fillText('هذا الباركود لشخص واحد فقط', 500, 1148 + dy);
+      ctx.fillStyle = vip ? '#8a857a' : '#666';
       ctx.font = '24px "IBM Plex Sans Arabic", Arial';
-      ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1200);
+      ctx.fillText('احتفظ بهذا الباركود للدخول وإبرازه عند البوابة', 500, 1200 + dy);
 
       drawSparkle(ctx, 92, 92, 16, GOLD);
       drawSparkle(ctx, 908, 92, 16, GOLD);
@@ -767,7 +794,10 @@ async function downloadInviteCard() {
   }, 'image/png');
 }
 
+let cardSeq = 0;
+
 async function renderApproved(eventData, guest) {
+  const mySeq = ++cardSeq;
   // The demo can't simulate the door camera itself — only the card a real
   // guest would end up with — so a visitor could otherwise assume that's
   // the whole product and miss that scanning happens for real at the door.
@@ -790,6 +820,7 @@ async function renderApproved(eventData, guest) {
     wrap.innerHTML = '<div id="qr-loading" style="text-align:center; color:#8a857a; font-size:13px;">جاري تجهيز بطاقتك...</div>';
     let built = null;
     try { await loadQrLib(); built = await buildInviteCard(eventData, guest); } catch (e) { built = null; }
+    if (mySeq !== cardSeq || !document.body.contains(wrap)) return;
     if (!built) {
       wrap.innerHTML = '<div class="status-msg" id="qr-retry" style="cursor:pointer">⚠️ تعذّر تجهيز البطاقة بسبب ضعف الإنترنت — اضغط هنا للمحاولة مرة ثانية</div>';
       document.getElementById('qr-retry').onclick = drawCard;
@@ -887,7 +918,7 @@ function watchStatus() {
     reqShown = true;
     clearCheckTimer();
     const req = snap.data();
-    const key = req.status + '|' + (req.guestId || '') + '|' + (req.name || '');
+    const key = req.status + '|' + (req.guestId || '') + '|' + (req.name || '') + '|' + (req.vip ? 1 : 0);
     if (key === shownKey) return;
     shownKey = key;
     if (req.status === 'pending') { renderedGuestId = null; renderPending(req.name); }
@@ -899,9 +930,10 @@ function watchStatus() {
       // filled in the next time the organizer opens their dashboard, and
       // this same listener picks it up.
       if (!req.guestId) { renderedGuestId = null; renderPreparing(); return; }
-      if (renderedGuestId === req.guestId) return;
-      renderedGuestId = req.guestId;
-      renderApproved(currentEvent, { name: req.name, id: req.guestId });
+      const cardKey = req.guestId + '|' + (req.vip ? 1 : 0);
+      if (renderedGuestId === cardKey) return;
+      renderedGuestId = cardKey;
+      renderApproved(currentEvent, { name: req.name, id: req.guestId, vip: !!req.vip });
     }
   }, (e) => {
     // A failed listener is not a deleted request: keep the saved key.
