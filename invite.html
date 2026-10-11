@@ -835,6 +835,7 @@ function clearCheckTimer() { if (checkTimer) { clearTimeout(checkTimer); checkTi
 
 function renderChecking() {
   shownKey = null;
+  renderedGuestId = null;
   if (document.getElementById('checking')) return;
   card.innerHTML = '<div class="status-msg" id="checking">جاري التحقق من طلبك... تأكد من اتصال الإنترنت</div>';
   clearCheckTimer();
@@ -848,6 +849,7 @@ function renderChecking() {
 
 function renderReqError() {
   shownKey = null;
+  renderedGuestId = null;
   clearCheckTimer();
   card.innerHTML = `
     <div class="status-icon">⚠️</div>
