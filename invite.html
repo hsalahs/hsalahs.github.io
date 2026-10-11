@@ -522,28 +522,54 @@ const THEME_COLORS = {
 };
 
 // qrcodejs is only needed once a request is approved, so it is fetched then
-// rather than blocking every visit. Rejects if the CDN fails, so the caller
-// can show a retry instead of a blank card.
+// rather than blocking every visit. It is served from our own origin first and
+// the CDN is only the fallback; rejects if both fail, so the caller can show a
+// retry instead of a blank card.
+// Keep this loader identical in invite.html and event.html
+const QR_LOCAL_URL = 'vendor/qrcode.min.js?v=1';
+const QR_CDN_URL = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+const QR_LOCAL_MS = 8000;
+const QR_CDN_MS = 15000;
+function qrReady() {
+  return typeof window.QRCode === 'function' && !!window.QRCode.CorrectLevel;
+}
+// One attempt: resolves only when a working QRCode exists; any failure (error,
+// timeout, a 200 that is not the library) removes the script and rejects.
+function tryQrScript(url, ms) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    let settled = false;
+    const end = (ok) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (ok) return resolve();
+      s.remove();
+      reject(new Error('qrcode'));
+    };
+    const timer = setTimeout(() => end(false), ms);
+    s.onload = () => {
+      let tries = 0;
+      (function check() {
+        if (settled) return;
+        if (qrReady()) return end(true);
+        if (++tries > 40) return end(false);
+        setTimeout(check, 50);
+      })();
+    };
+    s.onerror = () => end(false);
+    s.async = true;
+    s.src = url;
+    document.head.appendChild(s);
+  });
+}
 let qrLibPromise = null;
 function loadQrLib() {
-  if (window.QRCode) return Promise.resolve();
+  if (qrReady()) return Promise.resolve();
   if (!qrLibPromise) {
-    qrLibPromise = new Promise((resolve, reject) => {
-      const fail = () => { qrLibPromise = null; reject(new Error('qrcode')); };
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
-      s.async = true;
-      s.onload = () => {
-        let tries = 0;
-        (function check() {
-          if (window.QRCode) return resolve();
-          if (++tries > 40) return fail();
-          setTimeout(check, 50);
-        })();
-      };
-      s.onerror = () => { s.remove(); fail(); };
-      document.head.appendChild(s);
-    });
+    const p = tryQrScript(QR_LOCAL_URL, QR_LOCAL_MS).catch(() => tryQrScript(QR_CDN_URL, QR_CDN_MS));
+    qrLibPromise = p;
+    p.catch(() => { if (qrLibPromise === p) qrLibPromise = null; });
   }
   return qrLibPromise;
 }
@@ -580,7 +606,7 @@ function loadCardFonts(texts) {
 
 function buildInviteCard(eventData, guest) {
   return new Promise((resolve) => {
-    if (!window.QRCode) { resolve(null); return; }
+    if (!qrReady()) { resolve(null); return; }
     const themeColors = THEME_COLORS[eventData.theme || 'gold'] || THEME_COLORS.gold;
     const GOLD = themeColors.accent;
     const GOLD_LIGHT = themeColors.accentLight;
