@@ -31,22 +31,21 @@ test('a question opens its answer', async ({ page }) => {
 test('every button and message the guide quotes still exists in the page it belongs to', async () => {
   const guide = read('guide.html');
   const quoted = {
-    'app.html': ['إنشاء مناسبة جديدة'],
+    'app.html': ['إنشاء مناسبة جديدة', 'نسيت كلمة المرور؟'],
     'event.html': [
       'تعديل المناسبة', 'استيراد قائمة (Excel / CSV / أسماء)', 'إضافة أرقام متسلسلة (مثال: 1–200)',
       'تحميل كل الدعوات (ZIP)', 'تحميل نطاق معيّن (مثال: 1–100)', 'تصدير قائمة الضيوف (Excel)', 'تصدير قائمة الضيوف (CSV)', 'كشف الحضور (طباعة / PDF)',
       'تفعيل إشعارات الطلبات', 'الطلبات', 'اقبل الكل', 'كود جديد', 'رقم دخول المشرفين', 'اسم ضيف جديد',
       'تحديد ضيوف للحذف', 'حذف المحددين', 'حذف الضيف', 'حذف المناسبة نهائيًا', 'تمييز كـ VIP', 'إلغاء تمييز VIP',
       'الدعوات والتقارير', 'معاينة رسالة الواتساب', 'مشاركة عبر الواتساب', 'مشاركة بطريقة ثانية', 'الحد المجاني لعدد الضيوف',
-      'للتواصل عبر واتساب', 'تراجع', 'حضر', 'الحضور',
+      'للتواصل عبر واتساب', 'تراجع', 'حضر',
     ],
     'scan.html': [
       'تشغيل الكاميرا', 'تحقق', 'عرض الأسماء', 'أو أدخل الكود يدويًا', 'مسموح بالدخول',
       'تم استخدام هذه الدعوة مسبقًا', 'باركود غير مسجّل', 'تسجيل خروج من هذا الجهاز',
-      'تحديث القائمة', 'تأكيد الدخول', 'تسجيل',
+      'تحديث القائمة', 'تأكيد الدخول',
     ],
     'invite.html': ['تأكيد الحضور', 'حفظ الدعوة', 'بنفس الطريقة (من نفس الجوال ونفس المتصفح)'],
-    'app.html': ['نسيت كلمة المرور؟'],
   };
   for (const [file, labels] of Object.entries(quoted)) {
     const source = read(file);
@@ -230,4 +229,33 @@ test('the scanner search rule in the guide matches scan.html', () => {
   const g = read('guide.html');
   expect(g).toContain('3 أحرف على الأقل أو يبدأ بـ');
   expect(g).toContain('من دخل يختفي من القائمة، والبحث يظهر الجميع');
+});
+
+test('numbers and wording the guide states match the code', () => {
+  const guide = read('guide.html');
+  expect(read('utils.js')).toMatch(/const FREE_GUEST_LIMIT = 5;/);
+  expect(guide).toContain('الحد المجاني 5 ضيوف');
+  expect(read('utils.js')).toMatch(/const DELETE_WORD = 'حذف';/);
+  expect(guide).toContain('كلمة «حذف»');
+  const scan = read('scan.html');
+  expect(scan).toMatch(/allowed:\s*\{ autoMs: 5000,/);
+  expect(scan).toMatch(/duplicate: \{ autoMs: 6000,/);
+  expect(scan).toMatch(/denied:\s*\{ autoMs: 6000,/);
+  expect(guide).toContain('بعد 5 ثواني تقريبًا');
+  expect(guide).toContain('بعد 6 ثواني تقريبًا');
+  expect(scan).toMatch(/const SYNC_AUTO_MS = 2 \* 60 \* 1000;/);
+  expect(guide).toContain('أكثر من دقيقتين');
+});
+
+test('the downloads follow the current list and the old custom link stops after a rename', () => {
+  const ev = read('event.html');
+  expect(ev).toMatch(/function askRangeDownload\(\) \{\s*const total = visibleGuests\(\)/);
+  expect(ev).toMatch(/function downloadAllCards\(from, to\)[\s\S]{0,300}visibleGuests\(\)/);
+  expect(ev).toContain("if (old) tx.delete(doc(window._db, 'slugs', old));");
+  expect(ev).not.toContain('الروابط القديمة تبقى شغالة');
+  const g = read('guide.html');
+  expect(g).not.toContain('الروابط اللي أرسلتها قبل تبقى شغالة');
+  expect(g).toContain('رابط الاسم القديم يتوقف');
+  expect(g).toContain('يتبعان الفلتر والبحث الحاليين');
+  expect(g).toContain('إضافة ضيف واحد');
 });
