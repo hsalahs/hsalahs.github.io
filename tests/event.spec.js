@@ -1289,7 +1289,7 @@ test('a brand-new event with no guests still says "لا يوجد ضيف للآن
   await expect(page.locator('#guests-list .empty')).toHaveText('لا يوجد ضيف للآن');
 });
 
-test('a dashboard whose first read never answers turns "جاري التحميل..." into a tap-to-retry after 12 seconds', async ({ page }) => {
+test('a dashboard whose first read never answers says the connection is slow at 8 seconds and turns into a tap-to-retry only at 25', async ({ page }) => {
   await page.clock.install();
   await stubFirebase(page);
   await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([]) });
@@ -1297,7 +1297,10 @@ test('a dashboard whose first read never answers turns "جاري التحميل.
   await page.goto('/event.html?id=e1');
   const msg = page.locator('#loading-msg');
   await expect(msg).toHaveText('جاري التحميل...');
-  await page.clock.runFor(13000);
+  await page.clock.runFor(9000);
+  await expect(msg).toHaveText('الاتصال بطيء، لحظات…');
+  expect(await msg.evaluate((el) => el.style.cursor)).toBe('');
+  await page.clock.runFor(17000);
   await expect(msg).toContainText('التحميل تأخر — اضغط هنا للمحاولة مرة ثانية');
   await page.evaluate(() => { window.__hangGetDoc = false; });
   const reloaded = page.waitForEvent('load');
@@ -1311,7 +1314,7 @@ test('an invalid link message is left alone by the stuck-loading timer', async (
   await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: baseStore([]) });
   await page.goto('/event.html');
   await expect(page.locator('#loading-msg')).toContainText('رابط غير صحيح');
-  await page.clock.runFor(13000);
+  await page.clock.runFor(26000);
   await expect(page.locator('#loading-msg')).toContainText('رابط غير صحيح');
 });
 

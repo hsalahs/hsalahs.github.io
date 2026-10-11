@@ -26,12 +26,60 @@
   }
   if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
 }, true);</script>
+<!-- ?timing=1 only: a small line of milliseconds-since-navigation marks under
+     the loading message (kept after load) to see which stage is slow on a
+     real phone. Without the param tmark does nothing. -->
+<script>var TM = /[?&]timing=1(&|$)/.test(location.search) ? { m: [], err: '' } : null;
+var TM_HOST = 'auth-loading', TM_RES = ['firebase-init.js', 'firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'utils.js', 'icons.js', 'format.js'];
+function tmShow() {
+  var host = document.getElementById(TM_HOST);
+  if (!host) return;
+  var line = document.getElementById('timing-line');
+  if (!line) {
+    line = document.createElement('div');
+    line.id = 'timing-line';
+    line.style.cssText = 'direction:ltr;text-align:left;font:11px/1.6 monospace;color:#8d8a84;word-break:break-all;padding:0 18px 16px;-webkit-user-select:text;user-select:text;';
+    host.parentNode.insertBefore(line, host.nextSibling);
+  }
+  var res = [];
+  try {
+    var es = performance.getEntriesByType('resource');
+    for (var i = 0; i < TM_RES.length; i++) {
+      var d = '…';
+      for (var j = 0; j < es.length; j++) {
+        if (es[j].name.split('?')[0].slice(-TM_RES[i].length - 1) === '/' + TM_RES[i]) { d = Math.round(es[j].duration); break; }
+      }
+      res.push(TM_RES[i] + ':' + d);
+    }
+  } catch (e) {}
+  var sw = 'sw:' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes' : 'no');
+  line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + (TM.err ? ' || err: ' + TM.err : '');
+}
+function tmark(k) {
+  if (!TM) return;
+  TM.m.push(k + ' ' + Math.round(performance.now()));
+  console.log('timing:', k, Math.round(performance.now()));
+  tmShow();
+}
+function tmErr(msg) {
+  if (!TM || TM.err) return;
+  TM.err = String(msg).slice(0, 120);
+  tmShow();
+}
+if (TM) {
+  window.addEventListener('error', function (e) { if (e.message) tmErr(e.message); });
+  window.addEventListener('unhandledrejection', function (e) { tmErr(e.reason && e.reason.message || e.reason); });
+  document.addEventListener('DOMContentLoaded', tmShow);
+}
+tmark('script');</script>
 <title>لوحة المنظّم | دعوات</title>
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
 <script type="module" src="firebase-init.js"></script>
 <link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
 <style>
 @font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/ibm-plex-sans-arabic-400-arabic.woff2) format('woff2');unicode-range:U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1}
 @font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/ibm-plex-sans-arabic-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
@@ -455,28 +503,28 @@ async function createNewEvent() {
   }
 }
 
-// Last real {total, attended} read for each event, so a change on ONE
-// listed event doesn't force every other event's stat box back to "…" and
-// a fresh guest-subcollection read on the next render — see renderEvents
-// and loadEventStats.
-const eventStatsCache = {};
-
+// The two numbers come from the event doc itself (guestCount and
+// scannedCount, both kept by transactions in event.html and scan.html), so
+// listing events never reads a guest. An event that never had a scannedCount
+// written shows "—" for attended and no percentage.
 function statsBoxHtml(ev) {
-  const cached = eventStatsCache[ev.id];
-  return statsHtml(cached ? cached.total : '…', cached ? cached.attended : '…');
+  const total = typeof ev.guestCount === 'number' ? ev.guestCount : 0;
+  const attended = typeof ev.scannedCount === 'number' ? ev.scannedCount : (total === 0 ? 0 : '—');
+  return statsHtml(total, attended);
 }
 
-// The two numbers plus an attendance bar (empty until the numbers are in).
+// The two numbers plus an attendance bar (left out when attended is unknown).
 function statsHtml(total, attended) {
-  const pct = typeof total === 'number' && total > 0 ? Math.round(attended * 100 / total) : 0;
+  const known = typeof attended === 'number';
+  const pct = known && total > 0 ? Math.min(100, Math.round(attended * 100 / total)) : 0;
   return `
     <div class="event-stat"><div class="n">${total}</div><div class="l">كل الضيوف</div></div>
     <div class="event-stat"><div class="n">${attended}</div><div class="l">حضروا</div></div>
-    <div class="att-bar"><div class="att-row"><span>نسبة الحضور</span><span class="att-pct">${pct}%</span></div><div class="att-track"><div class="att-fill" style="width:${pct}%"></div></div></div>
+    ${known ? `<div class="att-bar"><div class="att-row"><span>نسبة الحضور</span><span class="att-pct">${pct}%</span></div><div class="att-track"><div class="att-fill" style="width:${pct}%"></div></div></div>` : ''}
   `;
 }
 
-function renderEvents(events, showOwner, changedIds) {
+function renderEvents(events, showOwner) {
   const list = document.getElementById('events-list');
   if (events.length === 0) {
     list.innerHTML = '<div class="empty">' + (ownerFilter ? 'هذا الحساب ما عنده مناسبات' : 'لسه ما أنشأت أي مناسبة') + '</div>';
@@ -500,37 +548,11 @@ function renderEvents(events, showOwner, changedIds) {
       </div>
     </div>
   `).join('');
-  // Re-read a listed event's guest subcollection only when that event's own
-  // doc was just added/changed (changedIds, from watchEvents' docChanges)
-  // or we've never loaded it before — not every listed event on every
-  // snapshot. On the admin's dashboard, which watches every customer's
-  // events at once, one customer adding a guest used to re-bill reads for
-  // every other customer's guest list too.
-  events.forEach(ev => {
-    if (!changedIds || changedIds.has(ev.id) || !eventStatsCache[ev.id]) loadEventStats(ev);
-  });
-}
-
-async function loadEventStats(ev) {
-  const { collection, getDocs } = window._fsFns;
-  const box = document.getElementById('stats-' + ev.id);
-  if (!box) return;
-  try {
-    const snap = await getDocs(collection(window._db, 'events', ev.id, 'guests'));
-    const total = snap.size;
-    const attended = snap.docs.filter(d => d.data().scanned).length;
-    eventStatsCache[ev.id] = { total, attended };
-    box.innerHTML = statsHtml(total, attended);
-  } catch (e) {
-    box.style.display = 'none';
-  }
 }
 
 async function deleteEvent(eventId, name, ownerUid, slug) {
-  // The loaded guest list when we have it, else the event doc's counter.
-  const stats = eventStatsCache[eventId];
   const ev = allEvents.find(e => e.id === eventId);
-  const guestCount = stats ? stats.total : (ev ? ev.guestCount : undefined);
+  const guestCount = ev ? ev.guestCount : undefined;
   if (!(await confirmEventDelete({ name, guestCount }))) return;
   const { collection, getDocs, deleteDoc, doc, runTransaction } = window._fsFns;
   try {
@@ -580,37 +602,58 @@ let myEventsCount = 0;
 let myEventLimit = 1;
 let myPendingRequestId = null;
 
+function showInitFailure(e) {
+  console.error(e);
+  tmErr(e && e.message || e);
+  const el = document.getElementById('auth-loading');
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = 'تعذّر تشغيل الصفحة — اضغط هنا للتحديث';
+  el.style.cursor = 'pointer';
+  el.onclick = () => location.reload();
+}
+
+let firstAuthMarked = false;
 function initAuthWatcher() {
-  const { onAuthStateChanged } = window._authFns;
-  onAuthStateChanged(window._auth, (user) => {
-    document.getElementById('auth-loading').style.display = 'none';
-    // An anonymous identity is what scan.html signs a door device in with;
-    // on the same browser it must not pass for "logged in" here — the
-    // login form stays up, and a real sign-in replaces it.
-    if (user && !user.isAnonymous) {
-      document.getElementById('auth-view').style.display = 'none';
-      document.getElementById('app-view').style.display = 'block';
-      document.getElementById('current-email').textContent = user.email || '';
-      const admin = isAdmin(user);
-      document.getElementById('events-heading').textContent = admin ? 'كل المناسبات (أدمن)' : 'مناسباتي';
-      watchEvents(user);
-      if (admin) {
-        watchAdminRequests();
-        loadAccountsCount();
-      } else {
-        watchMyLimitAndRequest(user);
-      }
+  try {
+    const { onAuthStateChanged } = window._authFns;
+    onAuthStateChanged(window._auth, (user) => {
+      try {
+        if (!firstAuthMarked) { firstAuthMarked = true; tmark('auth ' + (user ? 'user' : 'none')); }
+        handleAuthUser(user);
+      } catch (e) { showInitFailure(e); }
+    });
+  } catch (e) { showInitFailure(e); }
+}
+
+function handleAuthUser(user) {
+  document.getElementById('auth-loading').style.display = 'none';
+  // An anonymous identity is what scan.html signs a door device in with;
+  // on the same browser it must not pass for "logged in" here — the
+  // login form stays up, and a real sign-in replaces it.
+  if (user && !user.isAnonymous) {
+    document.getElementById('auth-view').style.display = 'none';
+    document.getElementById('app-view').style.display = 'block';
+    document.getElementById('current-email').textContent = user.email || '';
+    const admin = isAdmin(user);
+    document.getElementById('events-heading').textContent = admin ? 'كل المناسبات (أدمن)' : 'مناسباتي';
+    watchEvents(user);
+    if (admin) {
+      watchAdminRequests();
+      loadAccountsCount();
     } else {
-      document.getElementById('auth-view').style.display = 'block';
-      document.getElementById('app-view').style.display = 'none';
-      if (eventsUnsub) { eventsUnsub(); eventsUnsub = null; }
-      if (limitUnsub) { limitUnsub(); limitUnsub = null; }
-      if (requestUnsub) { requestUnsub(); requestUnsub = null; }
-      if (adminRequestsUnsub) { adminRequestsUnsub(); adminRequestsUnsub = null; }
-      myEventLimit = 1;
-      myPendingRequestId = null;
+      watchMyLimitAndRequest(user);
     }
-  });
+  } else {
+    document.getElementById('auth-view').style.display = 'block';
+    document.getElementById('app-view').style.display = 'none';
+    if (eventsUnsub) { eventsUnsub(); eventsUnsub = null; }
+    if (limitUnsub) { limitUnsub(); limitUnsub = null; }
+    if (requestUnsub) { requestUnsub(); requestUnsub = null; }
+    if (adminRequestsUnsub) { adminRequestsUnsub(); adminRequestsUnsub = null; }
+    myEventLimit = 1;
+    myPendingRequestId = null;
+  }
 }
 
 const AUTO_APPROVE_CEILING = 3; // customers can self-serve up to this many events; beyond it needs admin approval
@@ -675,14 +718,17 @@ function watchEvents(user) {
   if (eventsUnsub) eventsUnsub();
   const admin = isAdmin(user);
   const q = admin ? window._eventsCol : query(window._eventsCol, where('ownerUid', '==', user.uid));
+  let firstSnapMarked = false, serverSnapMarked = false;
   eventsUnsub = onSnapshot(q, (snap) => {
+    const fromCache = !!(snap.metadata && snap.metadata.fromCache);
+    if (!firstSnapMarked) { firstSnapMarked = true; serverSnapMarked = !fromCache; tmark('events ' + (fromCache ? 'cache' : 'server') + ' n=' + snap.size); }
+    else if (!fromCache && !serverSnapMarked) { serverSnapMarked = true; tmark('events server n=' + snap.size); }
     const events = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     allEvents = events;
     events.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
     myEventsCount = admin ? events.filter(ev => ev.ownerUid === user.uid).length : events.length;
     updateCreateGate(admin);
-    const changedIds = new Set(snap.docChanges().filter(c => c.type !== 'removed').map(c => c.doc.id));
-    renderEvents(ownerFilter ? events.filter(ev => ev.ownerUid === ownerFilter.uid) : events, admin, changedIds);
+    renderEvents(ownerFilter ? events.filter(ev => ev.ownerUid === ownerFilter.uid) : events, admin);
     if (admin) {
       renderAllAccounts();
       renderUnpaidEvents(events);
@@ -853,7 +899,7 @@ function setOwnerFilter(uid, email) {
   bar.style.display = ownerFilter ? 'flex' : 'none';
   if (ownerFilter) document.getElementById('owner-filter-email').textContent = email;
   const sorted = [...allEvents].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  renderEvents(ownerFilter ? sorted.filter(ev => ev.ownerUid === uid) : sorted, true, new Set());
+  renderEvents(ownerFilter ? sorted.filter(ev => ev.ownerUid === uid) : sorted, true);
   if (ownerFilter) bar.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -956,6 +1002,7 @@ async function rejectEventRequest(requestId) {
 }
 
 if (window._auth) {
+  tmark('appDbReady (already)');
   initAuthWatcher();
 } else {
   // A slow or dropped connection while firebase-init.js's own CDN imports
@@ -969,20 +1016,31 @@ if (window._auth) {
     el.style.cursor = 'pointer';
     el.onclick = () => location.reload();
   }, 8000);
-  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); initAuthWatcher(); });
+  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); tmark('appDbReady'); initAuthWatcher(); });
 }
 
 // Last safety net for "stuck on جاري التحميل..." with no way out (a real
 // report: an iPhone sat on it for about a minute and a half after creating
 // an event, though the event itself had saved fine). Whatever step is slow
-// — sign-in, the first database read — after STUCK_LOADING_MS the message
-// turns into a tap-to-retry instead of hanging silently.
-const STUCK_LOADING_MS = 12000;
+// — sign-in, the first database read — the message first admits the slow
+// connection (SLOW_LOADING_MS), and only after STUCK_LOADING_MS turns into
+// a tap-to-retry instead of hanging silently.
+const SLOW_LOADING_MS = 8000;
+const STUCK_LOADING_MS = 25000;
 setTimeout(() => {
   const el = document.getElementById('auth-loading');
-  // Only the plain loading text: an error or "invalid link" message already
-  // shown there is the real answer, not a hang.
   if (!el || el.style.display === 'none' || el.onclick || el.textContent.trim() !== 'جاري التحميل...') return;
+  el.textContent = 'الاتصال بطيء، لحظات…';
+  tmark('slow');
+}, SLOW_LOADING_MS);
+setTimeout(() => {
+  const el = document.getElementById('auth-loading');
+  // Only the plain/slow loading text: an error or "invalid link" message
+  // already shown there is the real answer, not a hang.
+  if (!el || el.style.display === 'none' || el.onclick) return;
+  const t = el.textContent.trim();
+  if (t !== 'جاري التحميل...' && t !== 'الاتصال بطيء، لحظات…') return;
+  tmark('stuck');
   el.textContent = '⚠️ التحميل تأخر — اضغط هنا للمحاولة مرة ثانية';
   el.style.cursor = 'pointer';
   el.onclick = () => location.reload();

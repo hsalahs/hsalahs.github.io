@@ -26,11 +26,59 @@
   }
   if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
 }, true);</script>
+<!-- ?timing=1 only: a small line of milliseconds-since-navigation marks under
+     the loading message (kept after load) to see which stage is slow on a
+     real phone. Without the param tmark does nothing. -->
+<script>var TM = /[?&]timing=1(&|$)/.test(location.search) ? { m: [], err: '' } : null;
+var TM_HOST = 'loading-msg', TM_RES = ['firebase-init.js', 'firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'utils.js', 'icons.js', 'format.js'];
+function tmShow() {
+  var host = document.getElementById(TM_HOST);
+  if (!host) return;
+  var line = document.getElementById('timing-line');
+  if (!line) {
+    line = document.createElement('div');
+    line.id = 'timing-line';
+    line.style.cssText = 'direction:ltr;text-align:left;font:11px/1.6 monospace;color:#8d8a84;word-break:break-all;padding:0 18px 16px;-webkit-user-select:text;user-select:text;';
+    host.parentNode.insertBefore(line, host.nextSibling);
+  }
+  var res = [];
+  try {
+    var es = performance.getEntriesByType('resource');
+    for (var i = 0; i < TM_RES.length; i++) {
+      var d = '…';
+      for (var j = 0; j < es.length; j++) {
+        if (es[j].name.split('?')[0].slice(-TM_RES[i].length - 1) === '/' + TM_RES[i]) { d = Math.round(es[j].duration); break; }
+      }
+      res.push(TM_RES[i] + ':' + d);
+    }
+  } catch (e) {}
+  var sw = 'sw:' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes' : 'no');
+  line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + (TM.err ? ' || err: ' + TM.err : '');
+}
+function tmark(k) {
+  if (!TM) return;
+  TM.m.push(k + ' ' + Math.round(performance.now()));
+  console.log('timing:', k, Math.round(performance.now()));
+  tmShow();
+}
+function tmErr(msg) {
+  if (!TM || TM.err) return;
+  TM.err = String(msg).slice(0, 120);
+  tmShow();
+}
+if (TM) {
+  window.addEventListener('error', function (e) { if (e.message) tmErr(e.message); });
+  window.addEventListener('unhandledrejection', function (e) { tmErr(e.reason && e.reason.message || e.reason); });
+  document.addEventListener('DOMContentLoaded', tmShow);
+}
+tmark('script');</script>
 <title>لوحة المناسبة | دعوات</title>
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <script type="module" src="firebase-init.js"></script>
 <link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
 <style>
 @font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/ibm-plex-sans-arabic-400-arabic.woff2) format('woff2');unicode-range:U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1}
 @font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/ibm-plex-sans-arabic-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
@@ -572,9 +620,8 @@ setTimeout(() => {
   </div>
 </div>
 
-<!-- Moved out of <head> so they don't block first paint on three separate
-     CDN fetches — nothing needs them until the script below runs. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- qrcode.js is no longer here: loadQrLib() below fetches it the first time
+     a card is built, so it can't hold up the dashboard. -->
 <!-- async: only needed on a tap (Excel import/export, ZIP download, admin
      notifications) — as plain scripts they held up the whole dashboard for as
      long as each CDN took to answer. -->
@@ -1044,79 +1091,100 @@ function doLogout() {
 
 let dashboardStarted = false;
 let sessionEnded = false;
-async function init() {
+function showInitFailure(e) {
+  console.error(e);
+  tmErr(e && e.message || e);
+  const el = document.getElementById('loading-msg');
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = 'تعذّر تشغيل الصفحة — اضغط هنا للتحديث';
+  el.style.cursor = 'pointer';
+  el.onclick = () => location.reload();
+}
+
+let firstAuthMarked = false;
+function init() {
   if (!eventId) {
     document.getElementById('loading-msg').textContent = '⚠️ رابط غير صحيح — ما فيه رقم مناسبة';
     return;
   }
-  const { onAuthStateChanged } = window._authFns;
-  onAuthStateChanged(window._auth, async (user) => {
-    // An anonymous identity is what scan.html signs a door device in with;
-    // on the same browser it would otherwise look like "someone is logged
-    // in" here.
-    if (!user || user.isAnonymous) {
-      if (dashboardStarted) {
-        // Sign-in is shared by every tab of this browser: another tab (the
-        // scanner's lock button) ended it. Listeners would only fail with
-        // permission-denied, so stop showing data instead of a fake outage.
-        sessionEnded = true;
-        document.getElementById('dashboard').style.display = 'none';
-        document.getElementById('loading-msg').style.display = 'none';
-        document.getElementById('denied-msg').style.display = 'block';
-        document.getElementById('denied-msg').innerHTML = 'انتهت جلسة الدخول على هذا المتصفح — <a href="app.html" style="color:#E0BC7A">اضغط هنا لتسجيل الدخول</a>';
-        refreshConnectionBanner();
-        return;
-      }
-      document.getElementById('loading-msg').style.display = 'none';
-      document.getElementById('denied-msg').style.display = 'block';
-      document.getElementById('denied-msg').innerHTML = 'لازم تسجّل دخول الأول — <a href="app.html" style="color:#E0BC7A">اضغط هنا</a>';
-      return;
-    }
-    if (sessionEnded) { window.location.reload(); return; }
-    if (dashboardStarted) return;
-    currentUser = user;
-    const { doc, getDoc } = window._fsFns;
-    let snap;
-    try {
-      snap = await getDoc(doc(window._db, 'events', eventId));
-    } catch (e) {
-      // Same "trapped forever" failure the splash fix closed, one layer
-      // deeper: a dropped connection here used to leave the owner's whole
-      // dashboard stuck on "جاري التحميل..." forever with no way out.
-      console.error(e);
-      const msg = document.getElementById('loading-msg');
-      msg.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
-      msg.style.cursor = 'pointer';
-      msg.onclick = () => { msg.onclick = null; msg.style.cursor = ''; init(); };
-      return;
-    }
-    if (!snap.exists() || (snap.data().ownerUid !== user.uid && !isAdmin(user))) {
-      document.getElementById('loading-msg').style.display = 'none';
-      document.getElementById('denied-msg').style.display = 'block';
-      return;
-    }
-    eventData = snap.data();
-    if (window.showEventKind) window.showEventKind(eventTypeOf(eventData));
-
-    pinReady = loadScanPin().then(() => {
-      document.getElementById('scan-pin-display').textContent = currentScanPin || '—';
+  try {
+    const { onAuthStateChanged } = window._authFns;
+    onAuthStateChanged(window._auth, (user) => {
+      if (!firstAuthMarked) { firstAuthMarked = true; tmark('auth ' + (user ? 'user' : 'none')); }
+      handleAuthUser(user).catch(showInitFailure);
     });
+  } catch (e) { showInitFailure(e); }
+}
 
+async function handleAuthUser(user) {
+  // An anonymous identity is what scan.html signs a door device in with;
+  // on the same browser it would otherwise look like "someone is logged
+  // in" here.
+  if (!user || user.isAnonymous) {
+    if (dashboardStarted) {
+      // Sign-in is shared by every tab of this browser: another tab (the
+      // scanner's lock button) ended it. Listeners would only fail with
+      // permission-denied, so stop showing data instead of a fake outage.
+      sessionEnded = true;
+      document.getElementById('dashboard').style.display = 'none';
+      document.getElementById('loading-msg').style.display = 'none';
+      document.getElementById('denied-msg').style.display = 'block';
+      document.getElementById('denied-msg').innerHTML = 'انتهت جلسة الدخول على هذا المتصفح — <a href="app.html" style="color:#E0BC7A">اضغط هنا لتسجيل الدخول</a>';
+      refreshConnectionBanner();
+      return;
+    }
     document.getElementById('loading-msg').style.display = 'none';
-    document.getElementById('dashboard').style.display = 'block';
-    document.getElementById('ev-title').textContent = eventData.name;
-    renderEventMeta();
-    updateInviteLink();
-    document.getElementById('scan-link').value = window.location.origin + window.location.pathname.replace('event.html', 'scan.html') + '?event=' + eventId;
-    document.getElementById('scan-pin-display').textContent = '…';
-    applyTheme(eventData.theme || 'gold');
-    renderPaymentGate();
-    updateNotifButtonLabel();
-    dashboardStarted = true;
-    startListeners();
-    watchPaymentStatus();
-    autoClaimSlug();
+    document.getElementById('denied-msg').style.display = 'block';
+    document.getElementById('denied-msg').innerHTML = 'لازم تسجّل دخول الأول — <a href="app.html" style="color:#E0BC7A">اضغط هنا</a>';
+    return;
+  }
+  if (sessionEnded) { window.location.reload(); return; }
+  if (dashboardStarted) return;
+  currentUser = user;
+  const { doc, getDoc } = window._fsFns;
+  let snap;
+  try {
+    snap = await getDoc(doc(window._db, 'events', eventId));
+    tmark('getDoc done');
+  } catch (e) {
+    // Same "trapped forever" failure the splash fix closed, one layer
+    // deeper: a dropped connection here used to leave the owner's whole
+    // dashboard stuck on "جاري التحميل..." forever with no way out.
+    console.error(e);
+    const msg = document.getElementById('loading-msg');
+    msg.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
+    msg.style.cursor = 'pointer';
+    msg.onclick = () => { msg.onclick = null; msg.style.cursor = ''; init(); };
+    return;
+  }
+  if (!snap.exists() || (snap.data().ownerUid !== user.uid && !isAdmin(user))) {
+    document.getElementById('loading-msg').style.display = 'none';
+    document.getElementById('denied-msg').style.display = 'block';
+    return;
+  }
+  eventData = snap.data();
+  if (window.showEventKind) window.showEventKind(eventTypeOf(eventData));
+
+  pinReady = loadScanPin().then(() => {
+    document.getElementById('scan-pin-display').textContent = currentScanPin || '—';
   });
+
+  document.getElementById('loading-msg').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  tmark('dashboard shown');
+  document.getElementById('ev-title').textContent = eventData.name;
+  renderEventMeta();
+  updateInviteLink();
+  document.getElementById('scan-link').value = window.location.origin + window.location.pathname.replace('event.html', 'scan.html') + '?event=' + eventId;
+  document.getElementById('scan-pin-display').textContent = '…';
+  applyTheme(eventData.theme || 'gold');
+  renderPaymentGate();
+  updateNotifButtonLabel();
+  dashboardStarted = true;
+  startListeners();
+  watchPaymentStatus();
+  autoClaimSlug();
 }
 
 // Live-watches the event doc itself so a customer who already has this page
@@ -1239,10 +1307,17 @@ async function writeRoster() {
 
 function startListeners() {
   const { collection, query, where, onSnapshot } = window._fsFns;
+  let guestsMarked = false;
   onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
+    const snapAt = performance.now();
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     updateStats();
     scheduleRenderGuests();
+    if (!guestsMarked && TM) {
+      guestsMarked = true;
+      tmark('guests ' + (snap.metadata && snap.metadata.fromCache ? 'cache' : 'server') + ' n=' + snap.size);
+      requestAnimationFrame(() => tmark('render ' + Math.round(performance.now() - snapAt) + 'ms'));
+    }
     // Only from the server's answer, never the local cache's first guess —
     // a stale cached list must not overwrite a newer roster.
     if (!(snap.metadata && snap.metadata.fromCache)) scheduleRosterWrite();
@@ -1564,7 +1639,37 @@ function fitText(ctx, text, x, y, maxWidth, startSize, minSize, fontSpec) {
   ctx.fillText(text, x, y);
 }
 
+let qrLibPromise = null;
+function loadQrLib() {
+  if (window.QRCode) return Promise.resolve();
+  if (!qrLibPromise) {
+    qrLibPromise = new Promise((resolve, reject) => {
+      const fail = () => { qrLibPromise = null; reject(new Error('qrcode')); };
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+      s.async = true;
+      s.onload = () => {
+        let tries = 0;
+        (function check() {
+          if (window.QRCode) return resolve();
+          if (++tries > 40) return fail();
+          setTimeout(check, 50);
+        })();
+      };
+      s.onerror = () => { s.remove(); fail(); };
+      document.head.appendChild(s);
+    });
+  }
+  return qrLibPromise;
+}
+
+// Resolves null when the QR library can't be loaded (callers already treat
+// null as "card not built"); the next tap tries the download again.
 function buildGuestCard(guest) {
+  return loadQrLib().then(() => buildGuestCardNow(guest), () => null);
+}
+
+function buildGuestCardNow(guest) {
   return new Promise((resolve) => {
     const themeColors = THEME_COLORS[eventData.theme || 'gold'] || THEME_COLORS.gold;
     const GOLD = themeColors.accent;
@@ -2479,6 +2584,7 @@ async function rejectRequest(reqDocId) {
 }
 
 if (window._auth) {
+  tmark('appDbReady (already)');
   init();
 } else {
   // Same "trapped forever" failure the getDoc retry above closes, one layer
@@ -2491,20 +2597,31 @@ if (window._auth) {
     el.style.cursor = 'pointer';
     el.onclick = () => location.reload();
   }, 8000);
-  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); init(); });
+  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); tmark('appDbReady'); init(); });
 }
 
 // Last safety net for "stuck on جاري التحميل..." with no way out (a real
 // report: an iPhone sat on it for about a minute and a half after creating
 // an event, though the event itself had saved fine). Whatever step is slow
-// — sign-in, the first database read — after STUCK_LOADING_MS the message
-// turns into a tap-to-retry instead of hanging silently.
-const STUCK_LOADING_MS = 12000;
+// — sign-in, the first database read — the message first admits the slow
+// connection (SLOW_LOADING_MS), and only after STUCK_LOADING_MS turns into
+// a tap-to-retry instead of hanging silently.
+const SLOW_LOADING_MS = 8000;
+const STUCK_LOADING_MS = 25000;
 setTimeout(() => {
   const el = document.getElementById('loading-msg');
-  // Only the plain loading text: an error or "invalid link" message already
-  // shown there is the real answer, not a hang.
   if (!el || el.style.display === 'none' || el.onclick || el.textContent.trim() !== 'جاري التحميل...') return;
+  el.textContent = 'الاتصال بطيء، لحظات…';
+  tmark('slow');
+}, SLOW_LOADING_MS);
+setTimeout(() => {
+  const el = document.getElementById('loading-msg');
+  // Only the plain/slow loading text: an error or "invalid link" message
+  // already shown there is the real answer, not a hang.
+  if (!el || el.style.display === 'none' || el.onclick) return;
+  const t = el.textContent.trim();
+  if (t !== 'جاري التحميل...' && t !== 'الاتصال بطيء، لحظات…') return;
+  tmark('stuck');
   el.textContent = '⚠️ التحميل تأخر — اضغط هنا للمحاولة مرة ثانية';
   el.style.cursor = 'pointer';
   el.onclick = () => location.reload();

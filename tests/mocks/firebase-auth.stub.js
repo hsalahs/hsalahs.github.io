@@ -19,7 +19,7 @@ export const browserSessionPersistence = 'browserSessionPersistence';
 
 export function onAuthStateChanged(auth, cb) {
   F().auth.listeners.push(cb);
-  cb(F().auth.user);
+  if (!window.__hangAuth) cb(F().auth.user);
   return () => {
     F().auth.listeners = F().auth.listeners.filter(l => l !== cb);
   };

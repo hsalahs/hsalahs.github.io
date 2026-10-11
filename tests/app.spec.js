@@ -72,16 +72,17 @@ test('the admin account sees every event, not just their own, and bypasses the l
   await expect(page.locator('#create-toggle-btn')).toBeVisible();
 });
 
-test('changing one event does not re-read every other listed event\'s guest list', async ({ page }) => {
-  // Regression test for the admin dashboard, which watches every customer's
-  // events at once: one customer's change used to re-fetch EVERY listed
-  // event's full guest subcollection, not just the one that changed.
+test('the events list never reads a guest: the numbers come from the event doc and follow its changes', async ({ page }) => {
+  // Regression test: the list used to getDocs every listed event's whole
+  // guest subcollection on open and again on each change of its event doc
+  // (every scanner check-in), which is what the admin page open during a
+  // wedding billed as hundreds of thousands of reads.
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: { uid: 'admin-uid', email: 'hsallah@outlook.sa' },
     store: {
       events: {
-        e1: { name: 'Customer A Event', ownerUid: 'u1', date: '', venue: '', createdAt: { seconds: 1 }, guestCount: 0 },
+        e1: { name: 'Customer A Event', ownerUid: 'u1', date: '', venue: '', createdAt: { seconds: 1 }, guestCount: 10, scannedCount: 4 },
         e2: { name: 'Customer B Event', ownerUid: 'u2', date: '', venue: '', createdAt: { seconds: 2 }, guestCount: 0 },
       },
       'events/e1/guests': {}, 'events/e2/guests': {},
@@ -89,23 +90,39 @@ test('changing one event does not re-read every other listed event\'s guest list
   });
   await page.goto('/app.html');
   await expect(page.locator('#events-list')).toContainText('Customer A Event');
+  const stats = (name) => page.locator('.event-card', { hasText: name }).locator('.event-stat .n');
+  await expect(stats('Customer A Event')).toHaveText(['10', '4']);
+  await expect(page.locator('.event-card', { hasText: 'Customer A Event' }).locator('.att-pct')).toHaveText('40%');
 
-  const guestReads = (p) => page.evaluate((path) =>
-    (window.__fakeFirebase.getDocsPaths || []).filter(x => x === path).length, p);
+  const guestReads = () => page.evaluate(() =>
+    (window.__fakeFirebase.getDocsPaths || []).filter(x => /\/guests$/.test(x)).length);
+  expect(await guestReads()).toBe(0);
 
-  // Initial load reads both events' guest lists once each.
-  await expect.poll(() => guestReads('events/e1/guests')).toBe(1);
-  await expect.poll(() => guestReads('events/e2/guests')).toBe(1);
-
-  // Something changes on e1 only — e2's own doc is untouched.
   await page.evaluate(() => {
     const { doc, updateDoc } = window._fsFns;
-    return updateDoc(doc(window._db, 'events', 'e1'), { guestCount: 1 });
+    return updateDoc(doc(window._db, 'events', 'e1'), { scannedCount: 5, guestCount: 10 });
   });
+  await expect(stats('Customer A Event')).toHaveText(['10', '5']);
+  await expect(page.locator('.event-card', { hasText: 'Customer A Event' }).locator('.att-pct')).toHaveText('50%');
+  expect(await guestReads()).toBe(0);
+});
 
-  // e1's stats re-read, but e2's guest list is NOT read again.
-  await expect.poll(() => guestReads('events/e1/guests')).toBe(2);
-  expect(await guestReads('events/e2/guests')).toBe(1);
+test('an event with guests but no scannedCount shows «—» for attended and no percentage; an empty one shows 0', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    user: { uid: 'u1', email: 'customer@example.com' },
+    store: {
+      events: {
+        e1: { name: 'قديمة', ownerUid: 'u1', date: '', venue: '', createdAt: { seconds: 1 }, guestCount: 7 },
+        e2: { name: 'فارغة', ownerUid: 'u1', date: '', venue: '', createdAt: { seconds: 2 }, guestCount: 0 },
+      },
+    },
+  });
+  await page.goto('/app.html');
+  const card = (name) => page.locator('.event-card', { hasText: name });
+  await expect(card('قديمة').locator('.event-stat .n')).toHaveText(['7', '—']);
+  await expect(card('قديمة').locator('.att-bar')).toHaveCount(0);
+  await expect(card('فارغة').locator('.event-stat .n')).toHaveText(['0', '0']);
 });
 
 test('the admin sees a counter banner for unpaid events, and each event has one unified card with its own activate button', async ({ page }) => {
@@ -597,7 +614,7 @@ test('the events list remembers each event\'s kind for its splash, with no extra
   await expect(page.locator('#events-list')).toContainText('تخرج');
   const kinds = await page.evaluate(() => ['e1', 'e2', 'e3'].map(i => localStorage.getItem('ev_kind_' + i)));
   expect(kinds).toEqual(['wedding', 'graduation', 'event']);
-  await expect.poll(() => page.evaluate(() => (window.__fakeFirebase.getDocsPaths || []).filter(x => x === 'events/e1/guests').length)).toBe(1);
+  expect(await page.evaluate(() => (window.__fakeFirebase.getDocsPaths || []).filter(x => /\/guests$/.test(x)).length)).toBe(0);
 });
 
 const DEL_EVENT = { name: 'زفاف "سارة" <b>x</b>', ownerUid: 'u1', date: '', venue: '', createdAt: { seconds: 1 } };
