@@ -1832,12 +1832,9 @@ function closeRequestsModal() {
   document.getElementById('requests-modal').classList.remove('active');
 }
 
-const ZIP_PART_SIZE = 100;
-
 // One ZIP for the given guests, built 5 cards at a time. onProgress gets the
-// number of cards finished so far in this ZIP. usedNames is shared by all parts
-// of one download, so a duplicate name keeps counting up across parts and
-// extracting every ZIP into one folder never overwrites a card.
+// number of cards finished so far. usedNames numbers duplicate names so no
+// card overwrites another inside the ZIP.
 async function buildZipPart(list, usedNames, onProgress) {
   const zip = new JSZip();
   const total = list.length;
@@ -1908,47 +1905,16 @@ async function downloadAllCards(from, to) {
   showToast('⏳ جاري تجهيز الملف...');
 
   const total = list.length;
-  // A big list is split into parts: one huge ZIP can run a phone out of memory.
-  // A manual range is a size the owner chose, so it stays one file.
-  const split = !(from && to) && total > ZIP_PART_SIZE;
-  const parts = [];
-  if (split) {
-    for (let i = 0; i < total; i += ZIP_PART_SIZE) parts.push(list.slice(i, i + ZIP_PART_SIZE));
-  } else {
-    parts.push(list);
+  const result = await buildZipPart(list, new Map(), (n) => {
+    showToast('⏳ ' + n + ' / ' + total + ' تم...');
+  });
+  if (!result.blob) {
+    showToast('❌ ما قدرنا ننشئ أي بطاقة — جرّب متصفح ثاني أو عطّل إضافات الخصوصية لهذا الموقع');
+    return;
   }
-
-  let failed = 0;
-  let saved = 0;
-  const usedNames = new Map();
-  for (let p = 0; p < parts.length; p++) {
-    const offset = p * ZIP_PART_SIZE;
-    let result = await buildZipPart(parts[p], usedNames, (n) => {
-      showToast(split
-        ? '⏳ جاري تجهيز الجزء ' + (p + 1) + ' من ' + parts.length + ' — ' + (offset + n) + ' / ' + total
-        : '⏳ ' + n + ' / ' + total + ' تم...');
-    });
-    failed += result.failed;
-    if (!result.blob) {
-      showToast(saved > 0
-        ? '❌ تم حفظ ' + saved + ' من ' + parts.length + ' ' + arPlural(parts.length, 'جزء', 'جزأين', 'أجزاء') + '، والجزء ' + (p + 1) + ' ما قدرنا ننشئ أي بطاقة فيه — جرّب متصفح ثاني'
-        : '❌ ما قدرنا ننشئ أي بطاقة — جرّب متصفح ثاني أو عطّل إضافات الخصوصية لهذا الموقع');
-      return;
-    }
-    saveBlobAs(result.blob, split ? 'دعوات-' + (p + 1) + '.zip' : 'Invitations' + label + '.zip');
-    saved++;
-    result = null;
-    if (p < parts.length - 1) {
-      await new Promise(r => setTimeout(r, 300));
-      if (!confirm('تم تحميل الجزء ' + (p + 1) + ' من ' + parts.length + '. تابع للجزء التالي؟ (لو سألك الجوال عن السماح بتحميل عدة ملفات، اختر السماح)')) {
-        showToast('⚠️ توقف التحميل بعد ' + saved + ' من ' + parts.length + ' ' + arPlural(parts.length, 'جزء', 'جزأين', 'أجزاء') + (failed > 0 ? ' (' + failed + ' ' + arPlural(failed, 'بطاقة', 'بطاقتين', 'بطاقات') + ' فشلت)' : ''));
-        return;
-      }
-    }
-  }
-  showToast(failed > 0
-    ? '⚠️ تم التحميل، لكن ' + failed + ' من ' + total + ' ' + arPlural(total, 'بطاقة', 'بطاقتين', 'بطاقات') + ' فشلت — جرّب متصفح ثاني لها'
-    : split ? '✅ تم تحميل ' + parts.length + ' ' + arPlural(parts.length, 'جزء', 'جزأين', 'أجزاء') + '! (' + total + ' ' + arPlural(total, 'دعوة', 'دعوتين', 'دعوات') + ')'
+  saveBlobAs(result.blob, 'Invitations' + label + '.zip');
+  showToast(result.failed > 0
+    ? '⚠️ تم التحميل، لكن ' + result.failed + ' من ' + total + ' ' + arPlural(total, 'بطاقة', 'بطاقتين', 'بطاقات') + ' فشلت — جرّب متصفح ثاني لها'
     : '✅ تم تحميل الملف! (' + total + ' ' + arPlural(total, 'دعوة', 'دعوتين', 'دعوات') + ')');
 }
 
