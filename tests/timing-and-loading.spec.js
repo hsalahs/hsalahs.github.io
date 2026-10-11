@@ -350,6 +350,19 @@ test.describe('review round 3', () => {
     expect(src).toContain('if (qrLibPromise === p) qrLibPromise = null');
   });
 
+  test('signing out during the first read never starts the dashboard for the old user', async ({ page }) => {
+    await setup(page);
+    await page.addInitScript(() => { window.__getDocDelays = { 'events/e1': 600 }; });
+    await page.goto('/event.html?id=e1');
+    await page.evaluate(() => {
+      const a = window.__fakeFirebase.auth;
+      a.user = null;
+      a.listeners.slice().forEach((cb) => cb(null));
+    });
+    await page.waitForTimeout(1500);
+    await expect(page.locator('#dashboard')).toBeHidden();
+  });
+
   test('an account switch during the first read is evaluated for the NEW user', async ({ page }) => {
     await setup(page);
     await page.addInitScript(() => { window.__getDocDelays = { 'events/e1': 600 }; });

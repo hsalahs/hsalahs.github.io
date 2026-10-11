@@ -1140,7 +1140,7 @@ async function handleAuthUser(user) {
       // A different account signed in while this one was being checked.
       const next = pendingUser;
       pendingUser = null;
-      if (next && next.uid !== user.uid && !dashboardStarted) handleAuthUser(next).catch(showInitFailure);
+      if (next && next.uid !== user.uid && !dashboardStarted && lastAuthUser && lastAuthUser.uid === next.uid) handleAuthUser(next).catch(showInitFailure);
     }
   }
 }
@@ -1187,6 +1187,9 @@ async function handleAuthUserNow(user) {
     return;
   }
   if (pendingUser && pendingUser.uid !== user.uid) return;
+  // Signed out (or switched to someone else) while this read was running:
+  // the newest auth state decides, not the user this attempt started with.
+  if (!lastAuthUser || lastAuthUser.isAnonymous || lastAuthUser.uid !== user.uid) return;
   if (!snap.exists() || (snap.data().ownerUid !== user.uid && !isAdmin(user))) {
     document.getElementById('loading-msg').style.display = 'none';
     document.getElementById('denied-msg').style.display = 'block';
