@@ -296,7 +296,14 @@ export function deleteDoc(ref) {
   return Promise.resolve();
 }
 
-export function onSnapshot(refOrQuery, cb, errCb) {
+export function emitMetadataChange(path) {
+  (F().listeners[path] || []).filter(e => e.meta).forEach(e => e.cb());
+}
+
+export function onSnapshot(refOrQuery, cb, errCb, errCb2) {
+  // Like the SDK: an optional options object may come before the callbacks.
+  let meta = false;
+  if (typeof cb !== 'function') { meta = !!(cb && cb.includeMetadataChanges); cb = errCb; errCb = errCb2; }
   const path = refOrQuery.path;
   if (isDenied(path) || (refOrQuery.__type !== 'doc' && isListDenied(path))) {
     // The real SDK reports a denied listener asynchronously through the
@@ -312,7 +319,7 @@ export function onSnapshot(refOrQuery, cb, errCb) {
       if (window.__snapshotFromCache) snap.metadata = { fromCache: true };
       cb(snap);
     };
-    const entry = { cb: emit, filters: null, kind: 'doc' };
+    const entry = { cb: emit, filters: null, kind: 'doc', meta };
     F().listeners[path] = F().listeners[path] || [];
     F().listeners[path].push(entry);
     emit();

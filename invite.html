@@ -465,6 +465,7 @@ function renderRejected() {
 }
 
 function retryRequest() {
+  shownKey = null;
   if (statusUnsub) { statusUnsub(); statusUnsub = null; }
   try { localStorage.removeItem('inv_reqid_' + eventId); } catch (e) {}
   myReqId = null;
@@ -778,7 +779,7 @@ async function renderApproved(eventData, guest) {
     <div class="status-msg">تم تأكيد حضورك!</div>
     ${eventInfoHtml(eventData)}
     <div id="card-wrap" style="margin-top:16px;"></div>
-    <div class="help-line" id="press-hint" style="display:none;">اضغط مطولًا على الصورة واختر حفظ</div>
+    <div class="help-line" id="press-hint" style="display:none;">إذا ما نزلت الصورة، اضغط مطولًا عليها واختر حفظ</div>
     <button class="btn" id="save-btn" style="margin-top:14px; display:none;" onclick="downloadInviteCard()">⬇️ حفظ الدعوة</button>
     <div class="help-line" id="save-hint" style="display:none;">احفظ الدعوة أو صوّر الشاشة</div>
     ${demoScanNote}
@@ -827,8 +828,27 @@ let statusUnsub = null;
 // their barcode id). One guest can't open another's request because
 // the id is 128 random bits they never see.
 let reqShown = false;
+let shownKey = null;
+let checkTimer = null;
+
+function clearCheckTimer() { if (checkTimer) { clearTimeout(checkTimer); checkTimer = null; } }
+
+function renderChecking() {
+  shownKey = null;
+  if (document.getElementById('checking')) return;
+  card.innerHTML = '<div class="status-msg" id="checking">جاري التحقق من طلبك... تأكد من اتصال الإنترنت</div>';
+  clearCheckTimer();
+  // Still nothing from the server after a while: let the guest re-run the check.
+  checkTimer = setTimeout(() => {
+    checkTimer = null;
+    const el = document.getElementById('checking');
+    if (el) el.insertAdjacentHTML('afterend', '<button class="btn" id="check-retry" style="margin-top:18px;" onclick="watchStatus()">إعادة المحاولة</button>');
+  }, 12000);
+}
 
 function renderReqError() {
+  shownKey = null;
+  clearCheckTimer();
   card.innerHTML = `
     <div class="status-icon">⚠️</div>
     <div class="status-msg">تعذّر تحميل طلبك، تأكد من الإنترنت</div>
@@ -839,15 +859,21 @@ function renderReqError() {
 function watchStatus() {
   const { doc, onSnapshot } = window._fsFns;
   if (statusUnsub) { statusUnsub(); statusUnsub = null; }
-  statusUnsub = onSnapshot(doc(window._db, 'events', eventId, 'requests', myReqId), (snap) => {
+  clearCheckTimer();
+  shownKey = null;
+  // includeMetadataChanges: when the connection returns, the server's "still
+  // missing" (or the real request) can arrive as a metadata-only change, which
+  // the SDK otherwise never delivers. The handler skips unchanged states.
+  statusUnsub = onSnapshot(doc(window._db, 'events', eventId, 'requests', myReqId), { includeMetadataChanges: true }, (snap) => {
     if (!snap.exists()) {
       // Offline, the SDK answers from its cache first: a request it hasn't
       // cached yet looks "missing" but isn't deleted. Only a server answer
       // counts, otherwise the guest would lose the key to their own request.
       if (snap.metadata && snap.metadata.fromCache) {
-        if (!reqShown) card.innerHTML = '<div class="status-msg">جاري التحقق من طلبك... تأكد من اتصال الإنترنت</div>';
+        if (!reqShown) renderChecking();
         return;
       }
+      clearCheckTimer();
       // Nothing under this id: a request made before requests were named
       // after their id, or one the organizer deleted. Either way there's
       // nothing to wait for — let the guest register again.
@@ -857,7 +883,11 @@ function watchStatus() {
       return;
     }
     reqShown = true;
+    clearCheckTimer();
     const req = snap.data();
+    const key = req.status + '|' + (req.guestId || '') + '|' + (req.name || '');
+    if (key === shownKey) return;
+    shownKey = key;
     if (req.status === 'pending') { renderedGuestId = null; renderPending(req.name); }
     else if (req.status === 'rejected') { renderedGuestId = null; renderRejected(); }
     else if (req.status === 'approved') {

@@ -758,7 +758,7 @@ test('the saved card loads the Arabic fonts before drawing, fits long texts, and
 
   await expect(page.locator('#press-hint')).toBeHidden();
   await page.locator('#save-btn').click();
-  await expect(page.locator('#press-hint')).toHaveText('اضغط مطولًا على الصورة واختر حفظ');
+  await expect(page.locator('#press-hint')).toHaveText('إذا ما نزلت الصورة، اضغط مطولًا عليها واختر حفظ');
 });
 
 test('fitFillText shrinks until the text fits the width and never goes below the minimum', async ({ page }) => {
@@ -776,4 +776,75 @@ test('fitFillText shrinks until the text fits the width and never goes below the
   });
   expect(r.used).toBe(30);
   expect(r.short).toBe(58);
+});
+
+const REQ_PATH = 'events/e1/requests/REQ-MINE';
+async function openOfflineWithKey(page) {
+  await stubFirebase(page);
+  await page.route(/qrcodejs.*qrcode\.min\.js/, (route) => route.fulfill({ contentType: 'text/javascript', body: QR_STAND_IN }));
+  await seedFakeFirebase(page, { store: { events: { e1: EV1 }, 'events/e1/requests': {} } });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-MINE'); window.__snapshotFromCache = true; });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#checking')).toBeVisible();
+}
+async function connectionBack(page, setup) {
+  await page.evaluate(async (code) => {
+    window.__snapshotFromCache = false;
+    if (code) window.__fakeFirebase.store['events/e1/requests']['REQ-MINE'] = code;
+    const m = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    m.emitMetadataChange('events/e1/requests/REQ-MINE');
+  }, setup || null);
+}
+
+test('offline cache-only "missing", then the server confirms it is missing (a metadata-only change): the form and the deleted message appear', async ({ page }) => {
+  await openOfflineWithKey(page);
+  await connectionBack(page);
+  await expect(page.locator('#g-name')).toBeVisible();
+  await expect(page.locator('#rsvp-msg')).toContainText('تم حذف طلبك من صاحب الدعوة');
+  expect(await page.evaluate(() => localStorage.getItem('inv_reqid_e1'))).toBeNull();
+});
+
+test('offline cache-only "missing", then the server returns the real request: the pending screen appears', async ({ page }) => {
+  await openOfflineWithKey(page);
+  await connectionBack(page, { name: 'سارة', reqId: 'REQ-MINE', status: 'pending', createdAt: 'x' });
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة');
+  expect(await page.evaluate(() => localStorage.getItem('inv_reqid_e1'))).toBe('REQ-MINE');
+});
+
+test('offline cache-only "missing", then the server returns an approved request: the card is drawn once, not on every metadata change', async ({ page }) => {
+  await openOfflineWithKey(page);
+  await connectionBack(page, { name: 'سارة', reqId: 'REQ-MINE', status: 'approved', guestId: 'WD-ABC', createdAt: 'x' });
+  await expect(page.locator('#card-wrap img')).toBeVisible({ timeout: 10000 });
+  await page.evaluate(() => { document.querySelector('#card-wrap img').dataset.mark = '1'; });
+  await connectionBack(page);
+  await page.evaluate(async () => {
+    const m = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    m.emitMetadataChange('events/e1/requests/REQ-MINE'); m.emitMetadataChange('events/e1/requests/REQ-MINE');
+  });
+  await page.waitForTimeout(300);
+  await expect(page.locator('#card-wrap img[data-mark="1"]')).toHaveCount(1);
+});
+
+test('a metadata-only re-delivery of an unchanged pending request does not re-render the screen', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EV1 }, 'events/e1/requests': { 'REQ-MINE': { name: 'سارة', reqId: 'REQ-MINE', status: 'pending', createdAt: 'x' } } } });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-MINE'); });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة');
+  await page.evaluate(() => { document.querySelector('.pend-note').dataset.mark = '1'; });
+  await connectionBack(page);
+  await page.waitForTimeout(200);
+  await expect(page.locator('.pend-note[data-mark="1"]')).toHaveCount(1);
+});
+
+test('still checking after 12 s: a retry button appears and re-runs the check', async ({ page }) => {
+  await page.clock.install();
+  await openOfflineWithKey(page);
+  await expect(page.locator('#check-retry')).toHaveCount(0);
+  await page.clock.fastForward(12500);
+  await expect(page.locator('#check-retry')).toHaveText('إعادة المحاولة');
+  await page.evaluate(() => { window.__snapshotFromCache = false; });
+  await page.locator('#check-retry').click();
+  await expect(page.locator('#g-name')).toBeVisible();
+  await expect(page.locator('#rsvp-msg')).toContainText('تم حذف طلبك');
 });
