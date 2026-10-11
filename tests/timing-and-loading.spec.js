@@ -230,3 +230,85 @@ test.describe('sortGuestsByName with a shared collator', () => {
     expect(src).not.toMatch(/a\.name\.localeCompare/);
   });
 });
+
+test.describe('card building and starting the dashboard', () => {
+  test('the QR library load gives up after 15 s, so a hanging CDN cannot hang a download', async ({ page }) => {
+    await page.clock.install();
+    await setup(page);
+    await page.route(/qrcodejs.*qrcode\.min\.js/, () => {});
+    await page.goto('/event.html?id=e1');
+    await page.clock.runFor(1000);
+    await page.evaluate(() => { window.__r = 'pending'; buildGuestCard(guests[0]).then((v) => { window.__r = v === null ? 'null' : 'card'; }); });
+    await page.clock.runFor(14000);
+    expect(await page.evaluate(() => window.__r)).toBe('pending');
+    await page.clock.runFor(2000);
+    expect(await page.evaluate(() => window.__r)).toBe('null');
+  });
+
+  test('a library failure says to check the connection (single card and ZIP); a real canvas failure keeps the old text', async ({ page }) => {
+    await setup(page);
+    await page.route(/qrcodejs.*qrcode\.min\.js/, (route) => route.abort());
+    await page.route(/jszip/, (route) => route.fulfill({ contentType: 'text/javascript', body: fs.readFileSync('node_modules/jszip/dist/jszip.min.js', 'utf8') }));
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
+    const dialogs = [];
+    page.on('dialog', (d) => { dialogs.push(d.message()); d.dismiss(); });
+    await page.evaluate(() => downloadGuestCard(guests[0].docId));
+    expect(dialogs[0]).toContain('تأكد من الاتصال وجرّب مرة ثانية');
+    const toast = await page.evaluate(async () => {
+      const seen = [];
+      const orig = window.showToast;
+      window.showToast = (m) => { seen.push(m); };
+      await downloadAllCards();
+      window.showToast = orig;
+      return seen[seen.length - 1];
+    });
+    expect(toast).toContain('تأكد من الاتصال وجرّب مرة ثانية');
+    expect(toast).not.toContain('إضافات الخصوصية');
+
+    await page.evaluate(() => { window.QRCode = function (el) { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 64, 64); el.appendChild(c); }; window.QRCode.CorrectLevel = { H: 2 }; });
+    const toast2 = await page.evaluate(async () => {
+      const seen = [];
+      window.showToast = (m) => { seen.push(m); };
+      await downloadAllCards();
+      return seen[seen.length - 1];
+    });
+    expect(toast2).toContain('إضافات الخصوصية');
+  });
+
+  test('a double tap on one guest\'s card while the library loads builds and shares once', async ({ page }) => {
+    let hits = 0;
+    await setup(page);
+    await page.route(/qrcodejs.*qrcode\.min\.js/, async (route) => { hits++; await new Promise((r) => setTimeout(r, 400)); route.fulfill({ contentType: 'text/javascript', body: QR_STAND_IN }); });
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
+    const shares = await page.evaluate(async () => {
+      let n = 0;
+      navigator.canShare = () => true;
+      navigator.share = async () => { n++; };
+      const id = guests[0].docId;
+      await Promise.all([downloadGuestCard(id), downloadGuestCard(id)]);
+      await downloadGuestCard(id);
+      return n;
+    });
+    expect(shares).toBe(2);
+    expect(hits).toBe(1);
+  });
+
+  test('retrying after a failed first read starts the listeners exactly once even if auth fires again', async ({ page }) => {
+    await setup(page);
+    await page.addInitScript(() => { window.__failGetDocOnce = true; });
+    await page.goto('/event.html?id=e1');
+    const msg = page.locator('#loading-msg');
+    await expect(msg).toContainText('تعذّر الاتصال');
+    await page.evaluate(() => {
+      window.__guestListeners = 0;
+      const orig = window._fsFns.onSnapshot;
+      window._fsFns.onSnapshot = function (ref) { if (/guests$/.test(ref.path)) window.__guestListeners++; return orig.apply(this, arguments); };
+    });
+    await msg.click();
+    await page.evaluate(() => { const a = window.__fakeFirebase.auth; a.listeners.slice().forEach((cb) => cb(a.user)); });
+    await expect(page.locator('.guest-item')).toHaveCount(2);
+    expect(await page.evaluate(() => window.__guestListeners)).toBe(1);
+  });
+});

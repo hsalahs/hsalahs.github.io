@@ -1103,21 +1103,40 @@ function showInitFailure(e) {
 }
 
 let firstAuthMarked = false;
+let authWatching = false;
+let lastAuthUser = null;
+let starting = false;
 function init() {
   if (!eventId) {
     document.getElementById('loading-msg').textContent = '⚠️ رابط غير صحيح — ما فيه رقم مناسبة';
     return;
   }
+  if (authWatching) return;
+  authWatching = true;
   try {
     const { onAuthStateChanged } = window._authFns;
     onAuthStateChanged(window._auth, (user) => {
       if (!firstAuthMarked) { firstAuthMarked = true; tmark('auth ' + (user ? 'user' : 'none')); }
+      lastAuthUser = user;
       handleAuthUser(user).catch(showInitFailure);
     });
-  } catch (e) { showInitFailure(e); }
+  } catch (e) { authWatching = false; showInitFailure(e); }
 }
 
+// One sign-in start at a time: a second auth callback (or the retry tap)
+// arriving while the first is still awaiting getDoc must not start the
+// dashboard and its listeners twice. Released when the attempt ends, so a
+// failed getDoc can be retried.
 async function handleAuthUser(user) {
+  const signedIn = !!user && !user.isAnonymous;
+  if (signedIn) {
+    if (starting) return;
+    starting = true;
+  }
+  try { await handleAuthUserNow(user); } finally { if (signedIn) starting = false; }
+}
+
+async function handleAuthUserNow(user) {
   // An anonymous identity is what scan.html signs a door device in with;
   // on the same browser it would otherwise look like "someone is logged
   // in" here.
@@ -1155,7 +1174,7 @@ async function handleAuthUser(user) {
     const msg = document.getElementById('loading-msg');
     msg.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
     msg.style.cursor = 'pointer';
-    msg.onclick = () => { msg.onclick = null; msg.style.cursor = ''; init(); };
+    msg.onclick = () => { msg.onclick = null; msg.style.cursor = ''; handleAuthUser(lastAuthUser).catch(showInitFailure); };
     return;
   }
   if (!snap.exists() || (snap.data().ownerUid !== user.uid && !isAdmin(user))) {
@@ -1640,11 +1659,14 @@ function fitText(ctx, text, x, y, maxWidth, startSize, minSize, fontSpec) {
 }
 
 let qrLibPromise = null;
+const QR_LIB_TIMEOUT_MS = 15000;
+const QR_LIB_FAIL_MSG = 'تأكد من الاتصال وجرّب مرة ثانية';
 function loadQrLib() {
   if (window.QRCode) return Promise.resolve();
   if (!qrLibPromise) {
     qrLibPromise = new Promise((resolve, reject) => {
       const fail = () => { qrLibPromise = null; reject(new Error('qrcode')); };
+      setTimeout(fail, QR_LIB_TIMEOUT_MS);
       const s = document.createElement('script');
       s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
       s.async = true;
@@ -1860,12 +1882,18 @@ function buildGuestCardNow(guest) {
   });
 }
 
+const cardBusy = new Set();
 async function downloadGuestCard(docId) {
   const guest = guests.find(g => g.docId === docId);
-  if (!guest) return;
+  if (!guest || cardBusy.has(docId)) return;
+  cardBusy.add(docId);
+  try { await downloadGuestCardNow(guest); } finally { cardBusy.delete(docId); }
+}
+
+async function downloadGuestCardNow(guest) {
   const built = await buildGuestCard(guest);
 
-  if (!built) { alert('تعذّر إنشاء البطاقة'); return; }
+  if (!built) { alert(window.QRCode ? 'تعذّر إنشاء البطاقة' : 'تعذّر إنشاء البطاقة — ' + QR_LIB_FAIL_MSG); return; }
 
   const safeName = String(guest.name).trim().replace(/[\s\/\\:*?"<>|]+/g, '_');
   const fileName = 'Invitation-' + safeName + '.png';
@@ -1874,7 +1902,7 @@ async function downloadGuestCard(docId) {
     (eventData.date ? '\nبتاريخ ' + formatEventDate(eventData.date) : '') +
     '\nهذا الباركود الخاص بك — أحضره معك للدخول.';
 
-  built.toBlob(async (blob) => {
+  const shareOrSave = async (blob) => {
     if (!blob) return;
     try {
       const file = new File([blob], fileName, { type: 'image/png' });
@@ -1899,7 +1927,8 @@ async function downloadGuestCard(docId) {
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 60000);
     showToast('💾 تم حفظ صورة الدعوة — أرسلها يدويًا عبر واتساب');
-  }, 'image/png');
+  };
+  await new Promise((done) => built.toBlob((blob) => { shareOrSave(blob).then(done, done); }, 'image/png'));
 }
 
 function toggleTopMenu() {
@@ -2032,7 +2061,9 @@ async function downloadAllCards(from, to) {
     showToast('⏳ ' + n + ' / ' + total + ' تم...');
   });
   if (!result.blob) {
-    showToast('❌ ما قدرنا ننشئ أي بطاقة — جرّب متصفح ثاني أو عطّل إضافات الخصوصية لهذا الموقع');
+    showToast(window.QRCode
+      ? '❌ ما قدرنا ننشئ أي بطاقة — جرّب متصفح ثاني أو عطّل إضافات الخصوصية لهذا الموقع'
+      : '❌ ما قدرنا نجهّز أداة البطاقات — ' + QR_LIB_FAIL_MSG);
     return;
   }
   saveBlobAs(result.blob, 'Invitations' + label + '.zip');

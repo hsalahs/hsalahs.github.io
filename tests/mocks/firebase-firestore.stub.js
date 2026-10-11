@@ -235,6 +235,7 @@ export function getDoc(ref) {
   }
   // ...and a read that never answers at all (the stuck-loading case).
   if (window.__hangGetDoc) return new Promise(() => {});
+  if (window.__failGetDocOnce) { window.__failGetDocOnce = false; return Promise.reject(Object.assign(new Error("simulated"), { code: "unavailable" })); }
   if (window.__getDocDelays && window.__getDocDelays[ref.path] && !ref.__delayed) {
     return new Promise((r) => setTimeout(r, window.__getDocDelays[ref.path])).then(() => getDoc({ ...ref, __delayed: true }));
   }
