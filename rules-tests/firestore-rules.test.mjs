@@ -188,6 +188,7 @@ console.log('\nVIP on a request (قبول كـ VIP; no rules change, only locked
 await testEnv.withSecurityRulesDisabled(async (ctx) => {
   const db = ctx.firestore();
   await db.doc('events/vip1').set({ name: 'V', ownerUid: 'owner1', paid: true, guestCount: 0 });
+  await db.doc('events/vip1/scanSessions/dev1').set({ pin: '1234', createdAt: 'x' });
   await db.doc('events/vip1/requests/' + REQ_A).set({ name: 'A', reqId: REQ_A, status: 'approved', guestId: 'WD-V1', createdAt: 'x' });
 });
 await check('the owner can set vip on a request (toggle from the guest menu)', () => assertSucceeds(owner().doc('events/vip1/requests/' + REQ_A).update({ vip: true })));
@@ -195,7 +196,7 @@ await check('the owner can set vip back to false', () => assertSucceeds(owner().
 await check('the admin can set vip on a request', () => assertSucceeds(admin().doc('events/vip1/requests/' + REQ_A).update({ vip: true })));
 await check('a stranger cannot set vip on a request', () => assertFails(user('u9', 'other@example.com').doc('events/vip1/requests/' + REQ_A).update({ vip: true })));
 await check('the guest holding the request id cannot make themselves VIP', () => assertFails(unauth().doc('events/vip1/requests/' + REQ_A).update({ vip: true })));
-await check('a door device cannot set vip on a request', () => assertFails(anon('dev1').doc('events/vip1/requests/' + REQ_A).update({ vip: true })));
+await check('a door device with a real scan session on this event cannot set vip on a request', () => assertFails(anon('dev1').doc('events/vip1/requests/' + REQ_A).update({ vip: true })));
 await check('a new request that already carries vip is rejected', () => assertFails(unauth().doc('events/vip1/requests/REQ-' + 'V'.repeat(32)).set({ name: 'A', reqId: 'REQ-' + 'V'.repeat(32), status: 'pending', createdAt: 'x', vip: true })));
 await check('the owner can approve as VIP: guest with vip:true + request vip + one counter bump in one transaction', () => assertSucceeds((async () => { const db = owner(); return db.runTransaction(async (tx) => {
   tx.set(db.doc('events/vip1/guests/WD-V2'), { id: 'WD-V2', name: 'V', reqId: REQ_A, scanned: false, registeredAt: 'x', vip: true });

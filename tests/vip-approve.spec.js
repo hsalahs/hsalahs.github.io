@@ -218,3 +218,40 @@ test('invite: flipping vip on the live request re-renders the open card, both wa
   await set(false);
   await expect.poll(async () => Math.max(...(await cardPixels(page)).bg)).toBeGreaterThan(200);
 });
+
+test('a fast double tap (قبول then قبول كـ VIP) on one request creates exactly one guest and one counter bump', async ({ page }) => {
+  await openRequests(page, store([{ name: 'سارة' }]));
+  await page.evaluate(() => { window.__fakeFirebase.txDelay = 800; });
+  await page.evaluate(() => {
+    document.querySelector('.approve-btn').click();
+    document.querySelector('.vip-approve-btn').click();
+    document.querySelector('.approve-btn').click();
+  });
+  await expect(page.locator('#toast')).toContainText('تمت الموافقة');
+  await page.waitForTimeout(1500);
+  const st = await page.evaluate(() => ({ g: Object.keys(window.__fakeFirebase.store['events/e1/guests']).length, c: window.__fakeFirebase.store.events.e1.guestCount }));
+  expect(st.g).toBe(1);
+  expect(st.c).toBe(1);
+});
+
+test('invite: an older card build that finishes last cannot overwrite the card after vip flipped', async ({ page }) => {
+  await openInvite(page, { vip: true });
+  await page.evaluate(() => {
+    const orig = window.buildInviteCard;
+    window.buildInviteCard = (ev, g) => orig(ev, g).then((c) => new Promise((r) => setTimeout(() => r(c), g.vip ? 0 : 1500)));
+  });
+  const set = (vip) => page.evaluate((vip) => {
+    const { doc, setDoc } = window._fsFns;
+    return setDoc(doc(window._db, 'events', 'e1', 'requests', 'REQ-1'), { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABC', createdAt: 'x', vip });
+  }, vip);
+  await set(false);
+  await page.waitForTimeout(300);
+  await set(true);
+  await page.waitForTimeout(2500);
+  const r = await page.evaluate(() => ({
+    saved: cardCanvas.getContext('2d').getImageData(60, 700, 1, 1).data[0],
+    shown: document.querySelector('#card-wrap img').src === cardCanvas.toDataURL('image/png'),
+  }));
+  expect(r.saved).toBeLessThan(40);
+  expect(r.shown).toBe(true);
+});

@@ -794,7 +794,10 @@ async function downloadInviteCard() {
   }, 'image/png');
 }
 
+let cardSeq = 0;
+
 async function renderApproved(eventData, guest) {
+  const mySeq = ++cardSeq;
   // The demo can't simulate the door camera itself — only the card a real
   // guest would end up with — so a visitor could otherwise assume that's
   // the whole product and miss that scanning happens for real at the door.
@@ -817,6 +820,7 @@ async function renderApproved(eventData, guest) {
     wrap.innerHTML = '<div id="qr-loading" style="text-align:center; color:#8a857a; font-size:13px;">جاري تجهيز بطاقتك...</div>';
     let built = null;
     try { await loadQrLib(); built = await buildInviteCard(eventData, guest); } catch (e) { built = null; }
+    if (mySeq !== cardSeq || !document.body.contains(wrap)) return;
     if (!built) {
       wrap.innerHTML = '<div class="status-msg" id="qr-retry" style="cursor:pointer">⚠️ تعذّر تجهيز البطاقة بسبب ضعف الإنترنت — اضغط هنا للمحاولة مرة ثانية</div>';
       document.getElementById('qr-retry').onclick = drawCard;

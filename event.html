@@ -224,6 +224,7 @@
   .pending-info { flex:1; min-width:0; }
   .pending-info .pname { font-weight:700; font-size:14px; color:var(--text-main); }
   .approve-btn { background:rgba(76,175,80,0.15); border:1px solid rgba(76,175,80,0.55); color:#4CAF50; font-size:13px; padding:6px 12px; border-radius:8px; cursor:pointer; white-space:nowrap; }
+  .reject-btn { white-space:nowrap; }
   .vip-approve-btn { background:rgba(var(--accent-rgb),0.14); border:1px solid rgba(var(--accent-rgb),0.6); color:var(--gold); font-size:13px; padding:6px 10px; border-radius:8px; cursor:pointer; white-space:nowrap; }
   .reject-btn { background:rgba(229,72,77,0.12); border:1px solid rgba(229,72,77,0.45); color:#E5484D; font-size:13px; padding:6px 10px; border-radius:8px; cursor:pointer; }
   @media (max-width:420px) {
@@ -2430,10 +2431,13 @@ async function addSequentialNumbers() {
   }
 }
 
+const approvingNow = new Set();
+
 async function approveRequest(reqDocId, vip) {
   if (paymentGateActive()) { openPaymentWhatsapp(); return; }
   const req = requests.find(r => r.docId === reqDocId);
-  if (!req) return;
+  if (!req || approvingNow.has(reqDocId)) return;
+  approvingNow.add(reqDocId);
   const { doc, runTransaction } = window._fsFns;
   const eventRef = doc(window._db, 'events', eventId);
   const guestId = newGuestId();
@@ -2455,6 +2459,8 @@ async function approveRequest(reqDocId, vip) {
   } catch (e) {
     if (e.message === 'GATE') { openPaymentWhatsapp(); return; }
     showErr(e);
+  } finally {
+    approvingNow.delete(reqDocId);
   }
 }
 
