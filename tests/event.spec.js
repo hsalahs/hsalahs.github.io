@@ -1742,3 +1742,20 @@ test('an event name with quotes and tags is shown as plain text in the delete mo
   await expect(name).toHaveText('زفاف "سارة" <b>x</b>');
   await expect(name.locator('b')).toHaveCount(0);
 });
+
+test('the edit card refuses a map link that is not http(s) and keeps the saved values', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { ...baseStore([]), events: { e1: { ...EVENT, mapsLink: 'https://maps.example.com/ok' } } } });
+  const alerts = [];
+  page.on('dialog', (d) => { alerts.push(d.message()); d.accept(); });
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await page.evaluate(() => { document.getElementById('edit-ev-maps').value = 'javascript:alert(1)'; document.getElementById('edit-ev-name').value = 'اسم جديد'; saveEventEdit(); });
+  await expect.poll(() => alerts.length).toBe(1);
+  expect(alerts[0]).toContain('http');
+  const ev = await page.evaluate(() => window.__fakeFirebase.store.events.e1);
+  expect(ev.mapsLink).toBe('https://maps.example.com/ok');
+  expect(ev.name).toBe('حفل تجريبي');
+  await page.evaluate(() => { document.getElementById('edit-ev-maps').value = 'https://maps.example.com/new'; saveEventEdit(); });
+  await expect.poll(() => page.evaluate(() => window.__fakeFirebase.store.events.e1.mapsLink)).toBe('https://maps.example.com/new');
+});

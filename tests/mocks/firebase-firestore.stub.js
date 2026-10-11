@@ -126,6 +126,7 @@ function makeDocSnap(path, id, data) {
     exists: () => data !== undefined,
     data: () => (data === undefined ? undefined : reviveTimestamps({ ...data })),
     ref: { __type: 'doc', path: path + '/' + id, collPath: path, id },
+    metadata: { fromCache: false },
   };
 }
 
@@ -295,7 +296,14 @@ export function deleteDoc(ref) {
   return Promise.resolve();
 }
 
-export function onSnapshot(refOrQuery, cb, errCb) {
+export function emitMetadataChange(path) {
+  (F().listeners[path] || []).filter(e => e.meta).forEach(e => e.cb());
+}
+
+export function onSnapshot(refOrQuery, cb, errCb, errCb2) {
+  // Like the SDK: an optional options object may come before the callbacks.
+  let meta = false;
+  if (typeof cb !== 'function') { meta = !!(cb && cb.includeMetadataChanges); cb = errCb; errCb = errCb2; }
   const path = refOrQuery.path;
   if (isDenied(path) || (refOrQuery.__type !== 'doc' && isListDenied(path))) {
     // The real SDK reports a denied listener asynchronously through the
@@ -306,9 +314,12 @@ export function onSnapshot(refOrQuery, cb, errCb) {
   if (refOrQuery.__type === 'doc') {
     const emit = () => {
       const coll = F().store[refOrQuery.collPath] || {};
-      cb(makeDocSnap(refOrQuery.collPath, refOrQuery.id, coll[refOrQuery.id]));
+      const snap = makeDocSnap(refOrQuery.collPath, refOrQuery.id, coll[refOrQuery.id]);
+      // Tests set __snapshotFromCache to mimic the SDK answering from its cache (offline).
+      if (window.__snapshotFromCache) snap.metadata = { fromCache: true };
+      cb(snap);
     };
-    const entry = { cb: emit, filters: null, kind: 'doc' };
+    const entry = { cb: emit, filters: null, kind: 'doc', meta };
     F().listeners[path] = F().listeners[path] || [];
     F().listeners[path].push(entry);
     emit();
