@@ -900,6 +900,7 @@ async function saveEventEdit() {
   const mapsLink = document.getElementById('edit-ev-maps').value.trim();
   const slug = normalizeSlug(document.getElementById('edit-ev-slug').value);
   if (!name) { alert('اكتب اسم المناسبة'); return; }
+  if (mapsLink && !/^https?:\/\//i.test(mapsLink)) { alert('رابط الموقع لازم يبدأ بـ http:// أو https://'); return; }
   if (slug && slug !== (eventData.slug || '') && slugProblem(slug)) { alert(slugProblem(slug)); return; }
 
   const { doc, updateDoc } = window._fsFns;

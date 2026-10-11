@@ -114,8 +114,8 @@
   .card-wait { min-height:600px; }
   .ornament { font-size:20px; color:var(--gold); letter-spacing:8px; margin-bottom:14px; animation:float 3s ease-in-out infinite; }
   @keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
-  h1 { font-family:'Playfair Display',serif; color:var(--gold); font-size:24px; font-weight:700; margin-bottom:6px; letter-spacing:0.3px; }
-  .sub { color:var(--text-soft); font-size:12.5px; margin-bottom:24px; }
+  h1 { font-family:'Playfair Display','IBM Plex Sans Arabic',serif; color:var(--gold); font-size:24px; font-weight:700; margin-bottom:6px; letter-spacing:0.3px; overflow-wrap:anywhere; }
+  .sub { color:var(--text-soft); font-size:12.5px; margin-bottom:24px; overflow-wrap:anywhere; }
   /* The kind of event above its name, and the owner's welcome line (the same
      one they share on WhatsApp) under the date. */
   .inv-kind { font-size:12px; letter-spacing:1px; color:var(--gold); opacity:0.85; margin-bottom:6px; }
@@ -129,8 +129,12 @@
   .gold-line { width:56px; height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent); margin:22px auto; }
   .maps-link { display:inline-block; color:var(--gold); font-size:12.5px; text-decoration:none; border:1px solid rgba(var(--accent-rgb),0.4); border-radius:20px; padding:7px 16px; margin-bottom:16px; }
   .countdown { font-size:12.5px; color:var(--gold); margin-bottom:16px; letter-spacing:0.3px; }
-  input { width:100%; padding:13px; margin-bottom:14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(var(--accent-rgb),0.25); color:var(--text-main); font-size:15px; font-family:inherit; text-align:center; }
+  input { width:100%; padding:13px; margin-bottom:14px; border-radius:10px; background:rgba(255,255,255,0.04); border:1px solid rgba(var(--accent-rgb),0.25); color:var(--text-main); font-size:16px; font-family:inherit; text-align:center; }
   input:focus { outline:none; border-color:var(--gold); }
+  .btn:disabled { opacity:0.6; cursor:default; }
+  .form-msg { margin-top:12px; font-size:13px; line-height:1.8; color:#e8a0a0; }
+  .form-msg.info { color:var(--text-soft); }
+  .help-line { margin-top:10px; font-size:12.5px; color:var(--text-soft); line-height:1.8; }
   .btn { width:100%; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; font-weight:700; font-size:15px; cursor:pointer; }
   .btn.kind-btn { display:flex; align-items:center; justify-content:center; gap:14px; text-decoration:none; margin-top:12px; padding:12px 16px; font-size:19px; background:rgba(255,255,255,0.04); border:1px solid var(--gold); color:var(--gold); }
   .kind-ico { height:46px; width:auto; }
@@ -295,8 +299,10 @@ try { myReqId = localStorage.getItem('inv_reqid_' + eventId) || null; } catch (e
 // and again once the guest is approved. Time defaults to 8pm Riyadh time —
 // there's no per-event time field, so this matches the typical reception hour.
 function eventInfoHtml(eventData) {
-  const mapsBtn = eventData.mapsLink
-    ? `<a class="maps-link" href="${escapeHtml(eventData.mapsLink)}" target="_blank" rel="noopener">${ic('map-pin', 16)} موقع القاعة على الخريطة</a>`
+  // Only a web address becomes a link: a javascript: or data: URL the organizer
+  // (or anyone editing the event) saved must never be tappable by a guest.
+  const mapsBtn = /^https?:\/\//i.test(String(eventData.mapsLink || '').trim())
+    ? `<a class="maps-link" href="${escapeHtml(String(eventData.mapsLink).trim())}" target="_blank" rel="noopener noreferrer">${ic('map-pin', 16)} موقع القاعة على الخريطة</a>`
     : '';
   const countdown = eventData.date ? `<div class="countdown" id="countdown"></div>` : '';
   return mapsBtn + countdown;
@@ -343,8 +349,9 @@ function renderForm(eventData) {
     ${eventInfoHtml(eventData)}
     <div class="inv-msg">${escapeHtml(welcomeOf(eventData))}</div>
     <div class="gold-line"></div>
-    <input type="text" id="g-name" placeholder="الاسم الكامل" onkeydown="if(event.key==='Enter') submitRequest()">
-    <button class="btn" onclick="submitRequest()">تأكيد الحضور</button>
+    <input type="text" id="g-name" placeholder="الاسم الكامل" maxlength="100" autocomplete="name" aria-label="الاسم الكامل" enterkeyhint="send" onkeydown="if(event.key==='Enter') submitRequest()">
+    <button class="btn" id="rsvp-btn" onclick="submitRequest()">تأكيد الحضور</button>
+    <div class="form-msg" id="rsvp-msg" role="alert"></div>
     <div class="rsvp-note"><span>ℹ️</span><span>بعد تأكيد حضورك، تتم مراجعة طلبك من ${escapeHtml(EVENT_TYPES[eventTypeOf(eventData)].approver)}. بعد الموافقة تظهر لك <b>بطاقة الدخول (الباركود)</b> هنا في نفس الرابط.</span></div>
   `;
   startCountdown(eventData);
@@ -382,13 +389,25 @@ function startDemo() {
   renderForm(DEMO_EVENT);
 }
 
+let submitting = false;
+
+function setFormMsg(text, info) {
+  const el = document.getElementById('rsvp-msg');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'form-msg' + (info ? ' info' : '');
+}
+
 async function submitRequest() {
-  const name = document.getElementById('g-name').value.trim();
-  if (!name) return;
+  if (submitting) return;
+  const input = document.getElementById('g-name');
+  const name = input.value.trim();
+  if (!name) { setFormMsg('اكتب اسمك'); input.focus(); return; }
+  setFormMsg('');
   if (isDemo) {
     // Show what the guest goes through, without a request being created: the
     // waiting screen, then the card the organizer's approval would produce.
-    renderPending();
+    renderPending(name);
     card.insertAdjacentHTML('beforeend',
       '<div style="margin-top:14px; font-size:12px; color:#8a857a; line-height:1.7;">في الدعوة الحقيقية يوافق المنظّم على طلبك — هنا نوافق تلقائيًا عشان تشوف الشكل النهائي</div>');
     setTimeout(() => renderApproved(DEMO_EVENT, { name, id: 'WD-DEMO2026A' }), 1800);
@@ -396,16 +415,29 @@ async function submitRequest() {
   }
   const { doc, setDoc } = window._fsFns;
   const reqId = newReqId();
+  const btn = document.getElementById('rsvp-btn');
+  submitting = true;
+  btn.disabled = true;
+  btn.textContent = 'جاري الإرسال...';
+  // A slow connection can take a while to confirm the write; say so instead of
+  // letting the guest think nothing happened and tap again.
+  const slowTimer = setTimeout(() => setFormMsg('طلبك لسا يُرسل، تأكد من الإنترنت وانتظر لحظات', true), 8000);
   try {
     // The document's name IS the request id (the security rules require it).
     await setDoc(doc(window._db, 'events', eventId, 'requests', reqId), {
       name, reqId, status: 'pending', createdAt: new Date().toISOString()
     });
   } catch (e) {
-    alert('صار خطأ، حاول مرة ثانية: ' + e.message);
+    clearTimeout(slowTimer);
     console.error(e);
+    submitting = false;
+    btn.disabled = false;
+    btn.textContent = 'تأكيد الحضور';
+    setFormMsg('تعذّر إرسال طلبك، جرّب مرة ثانية');
     return;
   }
+  clearTimeout(slowTimer);
+  submitting = false;
   // The request was already written to Firestore above — an unguarded
   // throw here would leave the guest stuck without their pending-status
   // screen even though their RSVP went through, likely making them think
@@ -415,11 +447,12 @@ async function submitRequest() {
   watchStatus();
 }
 
-function renderPending() {
+function renderPending(name) {
   card.innerHTML = `
     <div class="status-icon">⏳</div>
+    ${name ? `<div class="guest-name">${escapeHtml(name)}</div>` : ''}
     <div class="status-msg">تم إرسال طلبك ✅<br>بانتظار موافقة ${escapeHtml(EVENT_TYPES[eventTypeOf(currentEvent)].approver)}</div>
-    <div class="pend-note">بعد الموافقة تظهر بطاقة دخولك (الباركود) هنا.<br>افتح نفس الرابط من <b>نفس الجوال</b> للرجوع لها.</div>
+    <div class="pend-note">بعد الموافقة تظهر بطاقة دخولك (الباركود) هنا.<br>افتح نفس الرابط <b>بنفس الطريقة (من نفس الجوال ونفس المتصفح)</b> للرجوع لها.</div>
   `;
 }
 
@@ -514,6 +547,36 @@ function loadQrLib() {
   return qrLibPromise;
 }
 
+// Draws one centred line that always fits maxW: the font shrinks a few pixels
+// at a time down to minSize, and fillText's own maxWidth squeezes what is left.
+// Returns the size used.
+function fitFillText(ctx, text, x, y, maxW, size, minSize, fontOf) {
+  text = String(text || '');
+  let px = size;
+  ctx.font = fontOf(px);
+  while (px > minSize && ctx.measureText(text).width > maxW) { px -= 2; ctx.font = fontOf(px); }
+  ctx.fillText(text, x, y, maxW);
+  return px;
+}
+
+// The canvas can't wait for web fonts by itself: drawn too early it uses the
+// fallback font. Ask for the weights the card uses, with the real texts so the
+// right unicode-range file loads, but never hold the guest more than 1.5 s.
+function loadCardFonts(texts) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, 1500);
+    try {
+      if (!document.fonts || !document.fonts.load) { clearTimeout(timer); resolve(); return; }
+      const t = texts.filter(Boolean).join(' ');
+      Promise.all([
+        document.fonts.load('400 34px "IBM Plex Sans Arabic"', t),
+        document.fonts.load('700 54px "IBM Plex Sans Arabic"', t),
+        document.fonts.load('700 38px "Playfair Display"', t)
+      ]).then(() => { clearTimeout(timer); resolve(); }, () => { clearTimeout(timer); resolve(); });
+    } catch (e) { clearTimeout(timer); resolve(); }
+  });
+}
+
 function buildInviteCard(eventData, guest) {
   return new Promise((resolve) => {
     if (!window.QRCode) { resolve(null); return; }
@@ -559,7 +622,9 @@ function buildInviteCard(eventData, guest) {
       return new Promise(r => setTimeout(r, 100)).then(() => waitForQr(retriesLeft - 1));
     }
 
-    waitForQr(30).then((qr) => new Promise(r => setTimeout(() => r(qr), 80))).then((qr) => {
+    waitForQr(30).then((qr) => new Promise(r => setTimeout(() => r(qr), 80))).then((qr) =>
+      loadCardFonts([eventData.name, guest.name, eventData.venue, 'هذا الباركود لشخص واحد فقط احتفظ بهذا الباركود للدخول وإبرازه عند البوابة']).then(() => qr)
+    ).then((qr) => {
       if (!qr) { document.body.removeChild(tmp); resolve(null); return; }
 
       // Some browsers (notably Firefox, as an anti-fingerprinting measure)
@@ -602,9 +667,8 @@ function buildInviteCard(eventData, guest) {
       titleGrad.addColorStop(0.5, GOLD_LIGHT);
       titleGrad.addColorStop(1, GOLD);
       ctx.fillStyle = titleGrad;
-      ctx.font = 'bold 58px "IBM Plex Sans Arabic", Arial';
       ctx.textAlign = 'center';
-      ctx.fillText(eventData.name, 500, 118);
+      fitFillText(ctx, eventData.name, 500, 118, 860, 58, 30, (px) => 'bold ' + px + 'px "IBM Plex Sans Arabic", Arial');
 
       ctx.fillStyle = '#999';
       ctx.font = '34px "IBM Plex Sans Arabic", Arial';
@@ -634,8 +698,7 @@ function buildInviteCard(eventData, guest) {
       ctx.drawImage(qr, 220, 272, 560, 560);
 
       ctx.fillStyle = '#0A0A0A';
-      ctx.font = 'bold 54px "IBM Plex Sans Arabic", Arial';
-      ctx.fillText(guest.name, 500, 940);
+      fitFillText(ctx, guest.name, 500, 940, 860, 54, 28, (px) => 'bold ' + px + 'px "IBM Plex Sans Arabic", Arial');
 
       ctx.fillStyle = '#B0AAA0';
       ctx.font = '28px "Playfair Display", Arial';
@@ -645,8 +708,7 @@ function buildInviteCard(eventData, guest) {
 
       if (eventData.venue) {
         ctx.fillStyle = GOLD;
-        ctx.font = 'bold 38px "Playfair Display", Arial';
-        ctx.fillText(eventData.venue, 500, 1088);
+        fitFillText(ctx, eventData.venue, 500, 1088, 860, 38, 22, (px) => 'bold ' + px + 'px "Playfair Display", "IBM Plex Sans Arabic", Arial');
         ctx.strokeStyle = hexToRgba(GOLD, 0.55);
         ctx.lineWidth = 1.2;
         ctx.beginPath(); ctx.moveTo(300, 1076); ctx.lineTo(360, 1076); ctx.stroke();
@@ -698,6 +760,9 @@ async function downloadInviteCard() {
     link.click();
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 60000);
+    // In-app browsers ignore the download: tell the guest the manual way.
+    const hint = document.getElementById('press-hint');
+    if (hint) hint.style.display = 'block';
   }, 'image/png');
 }
 
@@ -713,7 +778,9 @@ async function renderApproved(eventData, guest) {
     <div class="status-msg">تم تأكيد حضورك!</div>
     ${eventInfoHtml(eventData)}
     <div id="card-wrap" style="margin-top:16px;"></div>
+    <div class="help-line" id="press-hint" style="display:none;">اضغط مطولًا على الصورة واختر حفظ</div>
     <button class="btn" id="save-btn" style="margin-top:14px; display:none;" onclick="downloadInviteCard()">⬇️ حفظ الدعوة</button>
+    <div class="help-line" id="save-hint" style="display:none;">احفظ الدعوة أو صوّر الشاشة</div>
     ${demoScanNote}
   `;
   startCountdown(eventData);
@@ -735,6 +802,7 @@ async function renderApproved(eventData, guest) {
     wrap.innerHTML = '';
     wrap.appendChild(img);
     document.getElementById('save-btn').style.display = 'block';
+    document.getElementById('save-hint').style.display = 'block';
   }
   await drawCard();
 }
@@ -758,20 +826,39 @@ let statusUnsub = null;
 // the invite link, which exposed every guest's name and, once approved,
 // their barcode id). One guest can't open another's request because
 // the id is 128 random bits they never see.
+let reqShown = false;
+
+function renderReqError() {
+  card.innerHTML = `
+    <div class="status-icon">⚠️</div>
+    <div class="status-msg">تعذّر تحميل طلبك، تأكد من الإنترنت</div>
+    <button class="btn" style="margin-top:18px;" onclick="watchStatus()">حاول مرة ثانية</button>
+  `;
+}
+
 function watchStatus() {
   const { doc, onSnapshot } = window._fsFns;
   if (statusUnsub) { statusUnsub(); statusUnsub = null; }
   statusUnsub = onSnapshot(doc(window._db, 'events', eventId, 'requests', myReqId), (snap) => {
     if (!snap.exists()) {
+      // Offline, the SDK answers from its cache first: a request it hasn't
+      // cached yet looks "missing" but isn't deleted. Only a server answer
+      // counts, otherwise the guest would lose the key to their own request.
+      if (snap.metadata && snap.metadata.fromCache) {
+        if (!reqShown) card.innerHTML = '<div class="status-msg">جاري التحقق من طلبك... تأكد من اتصال الإنترنت</div>';
+        return;
+      }
       // Nothing under this id: a request made before requests were named
       // after their id, or one the organizer deleted. Either way there's
       // nothing to wait for — let the guest register again.
       renderedGuestId = null;
       retryRequest();
+      setFormMsg('تم حذف طلبك من صاحب الدعوة، تقدر تسجّل من جديد');
       return;
     }
+    reqShown = true;
     const req = snap.data();
-    if (req.status === 'pending') { renderedGuestId = null; renderPending(); }
+    if (req.status === 'pending') { renderedGuestId = null; renderPending(req.name); }
     else if (req.status === 'rejected') { renderedGuestId = null; renderRejected(); }
     else if (req.status === 'approved') {
       // The barcode id is copied onto the request when the organizer
@@ -784,7 +871,19 @@ function watchStatus() {
       renderedGuestId = req.guestId;
       renderApproved(currentEvent, { name: req.name, id: req.guestId });
     }
+  }, (e) => {
+    // A failed listener is not a deleted request: keep the saved key.
+    console.error(e);
+    renderReqError();
   });
+}
+
+const CHECK_LINK = 'تأكد من الرابط أو تواصل مع صاحب الدعوة';
+// Event ids are letters and digits (app.html's newEventId), never a slash or a
+// dot, which doc() would reject. Short ids are allowed: older events had them.
+function validEventId(id) { return /^[A-Za-z0-9_-]{1,100}$/.test(String(id || '')); }
+function showBadLink() {
+  card.innerHTML = '<div class="status-msg">⚠️ رابط غير صحيح</div><div class="help-line">' + CHECK_LINK + '</div>';
 }
 
 async function init() {
@@ -792,8 +891,9 @@ async function init() {
   if (!eventId && slugParam) {
     try {
       const s = await getDoc(doc(window._db, 'slugs', slugParam));
-      if (!s.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذا الرابط غير موجود</div>'; return; }
+      if (!s.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذا الرابط غير موجود</div><div class="help-line">' + CHECK_LINK + '</div>'; return; }
       eventId = s.data().eventId;
+      if (!validEventId(eventId)) { showBadLink(); return; }
       try { myReqId = localStorage.getItem('inv_reqid_' + eventId) || null; } catch (e) {}
       // Keep the readable link in the address bar (a reload goes through 404.html again).
       try { history.replaceState(null, '', '/' + slugParam); } catch (e) {}
@@ -804,7 +904,7 @@ async function init() {
       return;
     }
   }
-  if (!eventId) { card.innerHTML = '<div class="status-msg">⚠️ رابط غير صحيح</div>'; return; }
+  if (!validEventId(eventId)) { showBadLink(); return; }
   let snap;
   try {
     snap = await getDoc(doc(window._db, 'events', eventId));
@@ -817,7 +917,7 @@ async function init() {
     document.getElementById('retry-msg').onclick = init;
     return;
   }
-  if (!snap.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذه المناسبة غير موجودة</div>'; return; }
+  if (!snap.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذه المناسبة غير موجودة</div><div class="help-line">' + CHECK_LINK + '</div>'; return; }
   currentEvent = snap.data();
   document.body.setAttribute('data-theme', currentEvent.theme || 'gold');
   if (window.showInviteKind) window.showInviteKind(eventTypeOf(currentEvent));

@@ -636,3 +636,23 @@ test('typing «حذف» in the modal and confirming removes the event from the s
   expect(await page.evaluate(() => Object.keys(window.__fakeFirebase.store['events/e1/guests'] || {}).length)).toBe(0);
   await expect(page.locator('.event-card')).toHaveCount(0);
 });
+
+test('the create form refuses a map link that is not http(s) and creates nothing', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: {} } });
+  const alerts = [];
+  page.on('dialog', (d) => { alerts.push(d.message()); d.accept(); });
+  await page.goto('/app.html');
+  await page.locator('#create-toggle-btn').click();
+  await page.getByRole('radio', { name: 'زفاف' }).click();
+  await page.locator('#ev-name').fill('عرس تجريبي');
+  await page.locator('#ev-maps').fill('data:text/html,<script>alert(1)</script>');
+  await page.getByRole('button', { name: 'إنشاء', exact: true }).click();
+  await expect.poll(() => alerts.length).toBe(1);
+  expect(alerts[0]).toContain('http');
+  const store = await page.evaluate(() => window.__fakeFirebase.store);
+  expect(Object.keys(store.events || {})).toHaveLength(0);
+  await page.locator('#ev-maps').fill('https://maps.example.com/x');
+  await page.getByRole('button', { name: 'إنشاء', exact: true }).click();
+  await expect(page).toHaveURL(/event\.html\?id=/);
+});

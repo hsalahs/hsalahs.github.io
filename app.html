@@ -397,6 +397,7 @@ async function createNewEvent() {
   const mapsLink = document.getElementById('ev-maps').value.trim();
   if (!newEventType) { alert('اختر نوع المناسبة: زفاف أو تخرج أو فعالية'); return; }
   if (!name) { alert('اكتب اسم المناسبة'); return; }
+  if (mapsLink && !/^https?:\/\//i.test(mapsLink)) { alert('رابط الموقع لازم يبدأ بـ http:// أو https://'); return; }
   const type = newEventType;
 
   const { serverTimestamp, doc, runTransaction } = window._fsFns;

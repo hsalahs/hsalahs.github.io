@@ -368,7 +368,8 @@ test('the guest is told a request waits for approval, by whoever approves for th
   await page.locator('#g-name').fill('سارة');
   await page.getByRole('button', { name: 'تأكيد الحضور' }).click();
   await expect(page.locator('#card')).toContainText('بانتظار موافقة منظّمي الحفل');
-  await expect(page.locator('#card .pend-note')).toContainText('نفس الجوال');
+  await expect(page.locator('#card .pend-note')).toContainText('نفس الجوال ونفس المتصفح');
+  await expect(page.locator('#card')).toContainText('سارة');
 });
 
 test('the sample graduation invitation shows the graduation title and welcome', async ({ page }) => {
@@ -583,4 +584,196 @@ test('the invitation card is the page main landmark', async ({ page }) => {
   await expect(page.locator('main#card')).toHaveCount(1);
   await expect(page.locator('#g-name')).toBeVisible();
   await expect(page.locator('main#card')).not.toHaveClass(/card-wait/);
+});
+
+const EV1 = { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' };
+
+for (const [link, shown] of [['https://maps.example.com/x', true], ['HTTP://maps.example.com/x', true], ['javascript:alert(1)', false], ['data:text/html,x', false], ['  javascript:alert(1)', false]]) {
+  test('a map link of ' + JSON.stringify(link) + ' ' + (shown ? 'becomes a safe link' : 'never becomes a link'), async ({ page }) => {
+    await stubFirebase(page);
+    await seedFakeFirebase(page, { store: { events: { e1: { ...EV1, mapsLink: link } } } });
+    await page.goto('/invite.html?event=e1');
+    await expect(page.locator('#g-name')).toBeVisible();
+    await expect(page.locator('a.maps-link')).toHaveCount(shown ? 1 : 0);
+    if (shown) {
+      await expect(page.locator('a.maps-link')).toHaveAttribute('rel', 'noopener noreferrer');
+      await expect(page.locator('a.maps-link')).toHaveAttribute('target', '_blank');
+    }
+  });
+}
+
+test('a double tap on «تأكيد الحضور» creates exactly one request, with a busy button', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EV1 }, 'events/e1/requests': {} } });
+  await page.addInitScript(() => { window.__setDocDelay = 600; });
+  await page.goto('/invite.html?event=e1');
+  await page.locator('#g-name').fill('سارة');
+  await page.evaluate(() => { submitRequest(); submitRequest(); });
+  await expect(page.locator('#rsvp-btn')).toBeDisabled();
+  await expect(page.locator('#rsvp-btn')).toHaveText('جاري الإرسال...');
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة', { timeout: 5000 });
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(() => Object.keys(window.__fakeFirebase.store['events/e1/requests']).length)).toBe(1);
+});
+
+test('a slow send says it is still sending; a failed send re-enables the button with an Arabic message (no alert)', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EV1 }, 'events/e1/requests': {} } });
+  let alerts = 0;
+  page.on('dialog', (d) => { alerts++; d.dismiss(); });
+  await page.goto('/invite.html?event=e1');
+  await page.evaluate(() => { window.__fakeFirebase.denyPaths = ['events/e1/requests']; });
+  await page.locator('#g-name').fill('سارة');
+  await page.locator('#rsvp-btn').click();
+  await expect(page.locator('#rsvp-msg')).toHaveText('تعذّر إرسال طلبك، جرّب مرة ثانية');
+  await expect(page.locator('#rsvp-btn')).toBeEnabled();
+  await expect(page.locator('#rsvp-btn')).toHaveText('تأكيد الحضور');
+  expect(alerts).toBe(0);
+  expect(await page.evaluate(() => localStorage.getItem('inv_reqid_e1'))).toBeNull();
+
+  await page.evaluate(() => { window.__fakeFirebase.denyPaths = []; window.__setDocDelay = 9500; });
+  await page.locator('#rsvp-btn').click();
+  await expect(page.locator('#rsvp-msg')).toContainText('لسا يُرسل', { timeout: 10000 });
+});
+
+test('an empty name shows «اكتب اسمك» and focuses the field; the field has mobile-friendly attributes', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EV1 } } });
+  await page.goto('/invite.html?event=e1');
+  const input = page.locator('#g-name');
+  await expect(input).toHaveAttribute('maxlength', '100');
+  await expect(input).toHaveAttribute('autocomplete', 'name');
+  await expect(input).toHaveAttribute('aria-label', 'الاسم الكامل');
+  await expect(input).toHaveAttribute('enterkeyhint', 'send');
+  expect(await input.evaluate((el) => getComputedStyle(el).fontSize)).toBe('16px');
+  await page.locator('#rsvp-btn').click();
+  await expect(page.locator('#rsvp-msg')).toHaveText('اكتب اسمك');
+  await expect(input).toBeFocused();
+});
+
+test('offline, a request the SDK has not cached is not treated as deleted: the key stays', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EV1 }, 'events/e1/requests': {} } });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-MINE'); window.__snapshotFromCache = true; });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card')).toContainText('جاري التحقق من طلبك');
+  await expect(page.locator('#g-name')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('inv_reqid_e1'))).toBe('REQ-MINE');
+});
+
+test('a failing request listener shows a retry message and keeps the key', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EV1 }, 'events/e1/requests': { 'REQ-MINE': { name: 'سارة', reqId: 'REQ-MINE', status: 'pending', createdAt: 'x' } } } });
+  await page.addInitScript(() => {
+    localStorage.setItem('inv_reqid_e1', 'REQ-MINE');
+    window.__fakeFirebase.denyPaths = ['events/e1/requests'];
+  });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card')).toContainText('تعذّر تحميل طلبك');
+  expect(await page.evaluate(() => localStorage.getItem('inv_reqid_e1'))).toBe('REQ-MINE');
+  await page.evaluate(() => { window.__fakeFirebase.denyPaths = []; });
+  await page.getByRole('button', { name: 'حاول مرة ثانية' }).click();
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة');
+});
+
+test('when the organizer deletes the request, the guest sees a message above a fresh form', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EV1 }, 'events/e1/requests': { 'REQ-MINE': { name: 'سارة', reqId: 'REQ-MINE', status: 'pending', createdAt: 'x' } } } });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-MINE'); });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card')).toContainText('بانتظار موافقة');
+  await page.evaluate(async () => {
+    const m = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    await m.deleteDoc(m.doc(window._db, 'events', 'e1', 'requests', 'REQ-MINE'));
+  });
+  await expect(page.locator('#g-name')).toBeVisible();
+  await expect(page.locator('#rsvp-msg')).toContainText('تم حذف طلبك من صاحب الدعوة');
+  expect(await page.evaluate(() => localStorage.getItem('inv_reqid_e1'))).toBeNull();
+});
+
+test('a malformed event id shows «رابط غير صحيح» with a hint and never asks Firestore', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: {} } });
+  await page.goto('/invite.html?event=' + encodeURIComponent('a/b'));
+  await expect(page.locator('#card')).toContainText('رابط غير صحيح');
+  await expect(page.locator('#card')).toContainText('تأكد من الرابط أو تواصل مع صاحب الدعوة');
+  await expect(page.locator('#retry-msg')).toHaveCount(0);
+  await page.goto('/invite.html');
+  await expect(page.locator('#card')).toContainText('رابط غير صحيح');
+});
+
+test('a missing event and a missing readable link both carry the check-the-link hint', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: {}, slugs: {} } });
+  await page.goto('/invite.html?event=nothere1');
+  await expect(page.locator('#card')).toContainText('تأكد من الرابط أو تواصل مع صاحب الدعوة');
+  await page.goto('/invite.html?s=nothing');
+  await expect(page.locator('#card')).toContainText('هذا الرابط غير موجود');
+  await expect(page.locator('#card')).toContainText('تأكد من الرابط أو تواصل مع صاحب الدعوة');
+});
+
+test('a long event name wraps instead of overflowing, and the heading font has an Arabic fallback', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: { ...EV1, name: 'ا'.repeat(80), venue: 'ب'.repeat(100) } } } });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('h1')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await page.locator('h1').evaluate((el) => getComputedStyle(el).fontFamily)).toContain('IBM Plex Sans Arabic');
+  expect(await page.locator('h1').evaluate((el) => getComputedStyle(el).overflowWrap)).toBe('anywhere');
+});
+
+test('the approved screen tells the guest to save or screenshot the card', async ({ page }) => {
+  await stubFirebase(page);
+  await page.route(/qrcodejs.*qrcode\.min\.js/, (route) => route.fulfill({ contentType: 'text/javascript', body: QR_STAND_IN }));
+  await seedFakeFirebase(page, { store: { events: { e1: EV1 }, 'events/e1/requests': { 'REQ-1': { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABC', createdAt: 'x' } } } });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-1'); });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#save-hint')).toHaveText('احفظ الدعوة أو صوّر الشاشة');
+});
+
+test('the saved card loads the Arabic fonts before drawing, fits long texts, and tells in-app browsers to long-press', async ({ page }) => {
+  await stubFirebase(page);
+  await page.route(/qrcodejs.*qrcode\.min\.js/, (route) => route.fulfill({ contentType: 'text/javascript', body: QR_STAND_IN }));
+  const longName = 'عبدالرحمن بن محمد بن عبدالعزيز بن فهد '.repeat(3).trim();
+  await seedFakeFirebase(page, { store: { events: { e1: { ...EV1, name: 'حفل زفاف '.repeat(8).trim() } }, 'events/e1/requests': { 'REQ-1': { name: longName, reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABC', createdAt: 'x' } } } });
+  await page.addInitScript(() => {
+    localStorage.setItem('inv_reqid_e1', 'REQ-1');
+    window.__order = []; window.__fontCalls = []; window.__fills = [];
+    const load = document.fonts.load.bind(document.fonts);
+    document.fonts.load = (f, t) => { window.__order.push('font'); window.__fontCalls.push([f, t]); return load(f, t); };
+    const ft = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, x, y, mw) { window.__order.push('draw'); window.__fills.push([text, mw]); return ft.apply(this, arguments); };
+    Object.defineProperty(navigator, 'canShare', { value: undefined, configurable: true });
+  });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#save-btn')).toBeVisible({ timeout: 10000 });
+  const r = await page.evaluate(() => ({ order: window.__order, calls: window.__fontCalls, fills: window.__fills }));
+  expect(r.order.indexOf('font')).toBeGreaterThanOrEqual(0);
+  expect(r.order.indexOf('font')).toBeLessThan(r.order.indexOf('draw'));
+  expect(r.calls.some(([f, t]) => /700/.test(f) && /IBM Plex Sans Arabic/.test(f) && t.includes('عبدالرحمن'))).toBe(true);
+  expect(r.calls.some(([f]) => /^400 /.test(f) && /IBM Plex Sans Arabic/.test(f))).toBe(true);
+  const nameFill = r.fills.find(([t]) => t === longName);
+  expect(nameFill[1]).toBe(860);
+
+  await expect(page.locator('#press-hint')).toBeHidden();
+  await page.locator('#save-btn').click();
+  await expect(page.locator('#press-hint')).toHaveText('اضغط مطولًا على الصورة واختر حفظ');
+});
+
+test('fitFillText shrinks until the text fits the width and never goes below the minimum', async ({ page }) => {
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { store: { events: { e1: EV1 } } });
+  await page.goto('/invite.html?event=e1');
+  const r = await page.evaluate(() => {
+    const ctx = document.createElement('canvas').getContext('2d');
+    const f = (px) => 'bold ' + px + 'px Arial';
+    const long = 'x'.repeat(200);
+    const used = fitFillText(ctx, long, 0, 0, 860, 58, 30, f);
+    const w = ctx.measureText(long).width;
+    const short = fitFillText(ctx, 'ab', 0, 0, 860, 58, 30, f);
+    return { used, w, short };
+  });
+  expect(r.used).toBe(30);
+  expect(r.short).toBe(58);
 });

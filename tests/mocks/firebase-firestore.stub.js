@@ -126,6 +126,7 @@ function makeDocSnap(path, id, data) {
     exists: () => data !== undefined,
     data: () => (data === undefined ? undefined : reviveTimestamps({ ...data })),
     ref: { __type: 'doc', path: path + '/' + id, collPath: path, id },
+    metadata: { fromCache: false },
   };
 }
 
@@ -306,7 +307,10 @@ export function onSnapshot(refOrQuery, cb, errCb) {
   if (refOrQuery.__type === 'doc') {
     const emit = () => {
       const coll = F().store[refOrQuery.collPath] || {};
-      cb(makeDocSnap(refOrQuery.collPath, refOrQuery.id, coll[refOrQuery.id]));
+      const snap = makeDocSnap(refOrQuery.collPath, refOrQuery.id, coll[refOrQuery.id]);
+      // Tests set __snapshotFromCache to mimic the SDK answering from its cache (offline).
+      if (window.__snapshotFromCache) snap.metadata = { fromCache: true };
+      cb(snap);
     };
     const entry = { cb: emit, filters: null, kind: 'doc' };
     F().listeners[path] = F().listeners[path] || [];
