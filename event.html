@@ -1948,7 +1948,7 @@ async function downloadAllCards(from, to) {
   }
   showToast(failed > 0
     ? '⚠️ تم التحميل، لكن ' + failed + ' من ' + total + ' ' + arPlural(total, 'بطاقة', 'بطاقتين', 'بطاقات') + ' فشلت — جرّب متصفح ثاني لها'
-    : split ? '✅ تم تحميل ' + parts.length + ' أجزاء! (' + total + ' ' + arPlural(total, 'دعوة', 'دعوتين', 'دعوات') + ')'
+    : split ? '✅ تم تحميل ' + parts.length + ' ' + arPlural(parts.length, 'جزء', 'جزأين', 'أجزاء') + '! (' + total + ' ' + arPlural(total, 'دعوة', 'دعوتين', 'دعوات') + ')'
     : '✅ تم تحميل الملف! (' + total + ' ' + arPlural(total, 'دعوة', 'دعوتين', 'دعوات') + ')');
 }
 
