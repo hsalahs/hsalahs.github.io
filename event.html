@@ -1106,6 +1106,7 @@ let firstAuthMarked = false;
 let authWatching = false;
 let lastAuthUser = null;
 let starting = false;
+let pendingUser = null;
 function init() {
   if (!eventId) {
     document.getElementById('loading-msg').textContent = '⚠️ رابط غير صحيح — ما فيه رقم مناسبة';
@@ -1130,10 +1131,18 @@ function init() {
 async function handleAuthUser(user) {
   const signedIn = !!user && !user.isAnonymous;
   if (signedIn) {
-    if (starting) return;
+    if (starting) { pendingUser = user; return; }
     starting = true;
   }
-  try { await handleAuthUserNow(user); } finally { if (signedIn) starting = false; }
+  try { await handleAuthUserNow(user); } finally {
+    if (signedIn) {
+      starting = false;
+      // A different account signed in while this one was being checked.
+      const next = pendingUser;
+      pendingUser = null;
+      if (next && next.uid !== user.uid && !dashboardStarted) handleAuthUser(next).catch(showInitFailure);
+    }
+  }
 }
 
 async function handleAuthUserNow(user) {
@@ -1177,6 +1186,7 @@ async function handleAuthUserNow(user) {
     msg.onclick = () => { msg.onclick = null; msg.style.cursor = ''; handleAuthUser(lastAuthUser).catch(showInitFailure); };
     return;
   }
+  if (pendingUser && pendingUser.uid !== user.uid) return;
   if (!snap.exists() || (snap.data().ownerUid !== user.uid && !isAdmin(user))) {
     document.getElementById('loading-msg').style.display = 'none';
     document.getElementById('denied-msg').style.display = 'block';
@@ -1664,16 +1674,18 @@ const QR_LIB_FAIL_MSG = 'تأكد من الاتصال وجرّب مرة ثاني
 function loadQrLib() {
   if (window.QRCode) return Promise.resolve();
   if (!qrLibPromise) {
-    qrLibPromise = new Promise((resolve, reject) => {
-      const fail = () => { qrLibPromise = null; reject(new Error('qrcode')); };
-      setTimeout(fail, QR_LIB_TIMEOUT_MS);
+    const p = new Promise((resolve, reject) => {
+      let timer = null;
+      const done = () => clearTimeout(timer);
+      const fail = () => { done(); if (qrLibPromise === p) qrLibPromise = null; reject(new Error('qrcode')); };
+      timer = setTimeout(fail, QR_LIB_TIMEOUT_MS);
       const s = document.createElement('script');
       s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
       s.async = true;
       s.onload = () => {
         let tries = 0;
         (function check() {
-          if (window.QRCode) return resolve();
+          if (window.QRCode) { done(); return resolve(); }
           if (++tries > 40) return fail();
           setTimeout(check, 50);
         })();
@@ -1681,6 +1693,7 @@ function loadQrLib() {
       s.onerror = () => { s.remove(); fail(); };
       document.head.appendChild(s);
     });
+    qrLibPromise = p;
   }
   return qrLibPromise;
 }
@@ -2003,6 +2016,9 @@ async function buildZipPart(list, usedNames, onProgress) {
   for (let i = 0; i < total; i += 5) {
     const batch = list.slice(i, i + 5);
     const cards = await Promise.all(batch.map(g => buildGuestCard(g)));
+    // Library missing (not a canvas problem): every further batch would wait
+    // out the same download again, so stop after the first.
+    if (!window.QRCode && cards.every(c => !c)) return { blob: null, failed: total };
     cards.forEach((card, idx) => {
       if (card) {
         const base64 = card.toDataURL('image/png').split(',')[1];

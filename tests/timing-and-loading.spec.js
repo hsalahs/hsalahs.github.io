@@ -312,3 +312,54 @@ test.describe('card building and starting the dashboard', () => {
     expect(await page.evaluate(() => window.__guestListeners)).toBe(1);
   });
 });
+
+test.describe('review round 3', () => {
+  test('a ZIP with a hanging QR library fails after one 15 s wait with the network wording', async ({ page }) => {
+    await page.clock.install();
+    const store = STORE();
+    for (let i = 0; i < 30; i++) store['events/e1/guests']['x' + i] = { id: 'X-' + i, name: 'ضيف ' + i, scanned: false };
+    await setup(page, store);
+    await page.route(/qrcodejs.*qrcode\.min\.js/, () => {});
+    await page.route(/jszip/, (route) => route.fulfill({ contentType: 'text/javascript', body: fs.readFileSync('node_modules/jszip/dist/jszip.min.js', 'utf8') }));
+    await page.goto('/event.html?id=e1');
+    await page.clock.runFor(1000);
+    await page.evaluate(() => {
+      window.__toasts = [];
+      window.showToast = (m) => { window.__toasts.push(m); };
+      window.__zipDone = false;
+      downloadAllCards().then(() => { window.__zipDone = true; });
+    });
+    await page.clock.runFor(14000);
+    expect(await page.evaluate(() => window.__zipDone)).toBe(false);
+    await page.clock.runFor(3000);
+    await expect.poll(() => page.evaluate(() => window.__zipDone)).toBe(true);
+    const last = await page.evaluate(() => window.__toasts[window.__toasts.length - 1]);
+    expect(last).toContain('تأكد من الاتصال وجرّب مرة ثانية');
+  });
+
+  test('a late library load after the timeout still works on the next try, and the timer is cleared on success', async ({ page }) => {
+    await setup(page);
+    let hold = true;
+    await page.route(/qrcodejs.*qrcode\.min\.js/, (route) => hold ? route.abort() : route.fulfill({ contentType: 'text/javascript', body: QR_STAND_IN }));
+    await page.goto('/event.html?id=e1');
+    expect(await page.evaluate(async () => await buildGuestCard(guests[0]))).toBeNull();
+    hold = false;
+    expect(await page.evaluate(async () => !!(await buildGuestCard(guests[0])))).toBe(true);
+    const src = fs.readFileSync('event.html', 'utf8');
+    expect(src).toContain('clearTimeout(timer)');
+    expect(src).toContain('if (qrLibPromise === p) qrLibPromise = null');
+  });
+
+  test('an account switch during the first read is evaluated for the NEW user', async ({ page }) => {
+    await setup(page);
+    await page.addInitScript(() => { window.__getDocDelays = { 'events/e1': 600 }; });
+    await page.goto('/event.html?id=e1');
+    await page.evaluate(() => {
+      const a = window.__fakeFirebase.auth;
+      a.user = { uid: 'u2', email: 'other@example.com' };
+      a.listeners.slice().forEach((cb) => cb(a.user));
+    });
+    await expect(page.locator('#denied-msg')).toBeVisible();
+    await expect(page.locator('#dashboard')).toBeHidden();
+  });
+});
