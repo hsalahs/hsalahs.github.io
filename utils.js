@@ -34,6 +34,11 @@ function guestWord(n) { return arPlural(n, 'ضيف', 'ضيفين', 'ضيوف'); 
 // everyone else sorts alphabetically after them. Never by arrival/scanned
 // status: door staff searching for a name shouldn't have to first work out
 // which half of a jumping list it's currently in.
+let nameCollator = null;
+try { nameCollator = new Intl.Collator('ar', { numeric: true }); } catch (e) {}
+function compareNames(a, b) {
+  return nameCollator ? nameCollator.compare(a, b) : a.localeCompare(b, 'ar', { numeric: true });
+}
 function sortGuestsByName(list) {
   return [...list].sort((a, b) => {
     const aNum = /^\d+$/.test(a.name.trim());
@@ -41,7 +46,7 @@ function sortGuestsByName(list) {
     if (aNum && bNum) return parseInt(a.name, 10) - parseInt(b.name, 10);
     if (aNum) return -1;
     if (bNum) return 1;
-    return a.name.localeCompare(b.name, 'ar', { numeric: true });
+    return compareNames(a.name, b.name);
   });
 }
 
