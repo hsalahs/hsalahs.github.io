@@ -124,10 +124,11 @@ function setButtonBusy(btn, label) {
 }
 
 // Readable event links (da3wt.com/hala-turki). Same pattern and reserved
-// words in firestore.rules (slugs/{slug}) and 404.html — keep the three in step.
+// words in firestore.rules (slugs/{slug}) — keep them in step. 'privacy' is
+// reserved here only for now: add it to the rules list the next time the rules are published.
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
 const RESERVED_SLUGS = ['index', 'app', 'event', 'invite', 'scan', 'guide', 'icons', 'tests', 'sitemap', 'robots',
-  'manifest', 'sw', 'utils', 'format', 'admin', 'login', 'www', 'api', '404'];
+  'manifest', 'sw', 'utils', 'format', 'admin', 'login', 'www', 'api', '404', 'privacy'];
 function normalizeSlug(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, '-'); }
 // '' when fine, otherwise the reason in Arabic.
 function slugProblem(s) {

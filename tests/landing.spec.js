@@ -76,7 +76,7 @@ test('the free-tier reassurance says "no fees", never the ambiguous "no card", o
   await expect(quote).toContainText('اطلب سعر مناسبتك');
   expect(decodeURIComponent((await quote.getAttribute('href')).split('text=')[1])).toBe('السلام عليكم، أبغى عرض سعر من دعوات لمناسبتي. عدد الضيوف تقريبًا: ');
   await expect(page.locator('.price-card')).toContainText('بدون دفع رسوم');
-  expect(await page.locator('meta[property="og:description"]').getAttribute('content')).toContain('بدون دفع رسوم');
+  expect(await page.locator('meta[property="og:description"]').getAttribute('content')).not.toContain('بدون دفع رسوم');
   await page.goto('/guide.html');
   await expect(page.locator('#start .note')).toContainText('بدون دفع رسوم');
 });
@@ -124,12 +124,12 @@ test('the steps are numbered 1, 2, 3 in Western digits', async ({ page }) => {
 
 // "ليش دعوات؟" — six cards; one column on phones, a 3x2 grid on large screens.
 const FEATURES = [
-  ['zap', 'خدمة ذاتية وفورية'],
+  ['file-spreadsheet', 'استيراد من Excel وتقرير حضور'],
   ['smartphone', 'بدون تطبيقات أو تحميل'],
   ['gift', 'تجربة مجانية بالكامل'],
   ['ticket', 'بطاقة مصممة لكل ضيف'],
   ['chart-column', 'تحديث وإحصائيات لحظية'],
-  ['lock', 'بياناتك خاصة وآمنة'],
+  ['lock', 'بياناتك خاصة ومحمية'],
 ];
 
 test('"why Dawaat" has the six cards, each with its own line icon and title, in order', async ({ page }) => {
@@ -152,7 +152,7 @@ test('the cards say only what the product does: no invented attendance percentag
   // The dashboard shows counts (came / not yet), not a percentage.
   expect(text).not.toContain('نسبة');
   // Door staff holding the code can open the list, so it is not "only you".
-  expect(text).toContain('إلا أنت ومن تعطيه رمز الباب');
+  expect(text).toContain('إلا أنت ومن تعطيه رمز الباب وإدارة المنصة عند طلب الدعم');
   expect(text).not.toContain('غيرك');
   expect(text).toContain('حتى 5 ضيوف مجانًا');
 });
@@ -296,4 +296,189 @@ test('the landing page has a main landmark and its headings never skip a level',
   const levels = await page.evaluate(() => [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')].map((h) => +h.tagName[1]));
   expect(levels[0]).toBe(1);
   for (let i = 1; i < levels.length; i++) expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
+});
+
+// Batch 3 of the pre-launch review: landing fixes + the privacy / terms page.
+const htmlFiles = () => fs.readdirSync(repoFile('.')).filter(n => n.endsWith('.html'));
+const metaOf = (src, re) => (src.match(re) || [])[1];
+
+test('the landing page title and description carry the real search words, and the share card matches', async ({ page }) => {
+  await page.goto('/index.html');
+  const title = await page.title();
+  for (const w of ['بطاقات دعوة', 'باركود', 'الزفاف', 'التخرج']) expect(title).toContain(w);
+  const desc = await page.locator('meta[name="description"]').getAttribute('content');
+  for (const w of ['دعوة زفاف إلكترونية', 'بطاقة دعوة بباركود', 'تخرج', 'الحضور']) expect(desc).toContain(w);
+  expect(await page.locator('meta[property="og:title"]').getAttribute('content')).toBe(title);
+  expect(await page.locator('meta[name="twitter:title"]').getAttribute('content')).toBe(title);
+});
+
+test('the landing page JSON-LD parses and describes the organisation and the site', async ({ page }) => {
+  await page.goto('/index.html');
+  const raw = await page.locator('script[type="application/ld+json"]').first().textContent();
+  const data = JSON.parse(raw);
+  const types = data['@graph'].map(n => n['@type']);
+  expect(types).toEqual(expect.arrayContaining(['Organization', 'WebSite']));
+  for (const n of data['@graph']) expect(n.url).toBe('https://da3wt.com/');
+});
+
+test('the privacy claim names platform support, links to the privacy page, and the footer links to it', async ({ page }) => {
+  await page.goto('/index.html');
+  const card = page.locator('.feature', { hasText: 'بياناتك خاصة ومحمية' });
+  await expect(card).toContainText('وإدارة المنصة عند طلب الدعم');
+  await expect(card.locator('a[href="privacy.html"]')).toHaveCount(1);
+  await expect(page.locator('footer a[href="privacy.html"]')).toHaveText('الخصوصية والشروط');
+});
+
+test('headings use a font stack that has Arabic glyphs, and every named family is declared locally', async () => {
+  const src = fs.readFileSync(repoFile('index.html'), 'utf8');
+  expect(src).not.toMatch(/font-family:'Playfair Display',serif;(?! font-size:16px; font-weight:400; color:#E0BC7A; letter-spacing:6px)/);
+  expect(src).toContain("'Playfair Display','Reem Kufi','IBM Plex Sans Arabic',serif");
+  for (const fam of ['Playfair Display', 'Reem Kufi', 'IBM Plex Sans Arabic']) expect(src).toContain("@font-face{font-family:'" + fam + "'");
+});
+
+test('the floating WhatsApp button has a plain bottom fallback before the safe-area one', async () => {
+  for (const f of ['index.html']) {
+    const src = fs.readFileSync(repoFile(f), 'utf8');
+    expect(src).toMatch(/bottom:20px;\s*bottom:calc\(20px \+ env\(safe-area-inset-bottom\)\)/);
+  }
+});
+
+test('the splash and the sample card are hidden from screen readers, and the sample code looks like a real one', async ({ page }) => {
+  await page.goto('/index.html');
+  await expect(page.locator('#splash')).toHaveAttribute('aria-hidden', 'true');
+  await expect(page.locator('.card-preview')).toHaveAttribute('aria-hidden', 'true');
+  expect(await page.locator('.cp-id').textContent()).toMatch(/^WD-[A-Z0-9]{6,}$/);
+});
+
+test('for a visitor who asked for reduced motion, the splash and the sample card stop animating', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/index.html');
+  const names = await page.locator('.splash-inner, .splash-rings, .splash-line').evaluateAll(els => els.map(e => getComputedStyle(e).animationName));
+  expect(names).toEqual(['none', 'none', 'none']);
+  expect(await page.locator('.splash-line').evaluate(e => getComputedStyle(e).width)).toBe('140px');
+});
+
+test('old-Android fallbacks: no flex gap on the logo, the button row or the steps', async () => {
+  const src = fs.readFileSync(repoFile('index.html'), 'utf8');
+  for (const sel of ['.logo', '.btn-row', '.step', '.steps']) {
+    const rule = src.match(new RegExp('\\n  ' + sel.replace('.', '\\.') + ' \\{[^}]*\\}'))[0];
+    expect(rule, sel).not.toMatch(/\bgap:/);
+  }
+});
+
+test('small tap targets on the landing page are at least 44px tall, and card text is 13px', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto('/index.html');
+  for (const sel of ['.nav-login', '.btn-secondary', 'footer a[href="guide.html"]', 'footer a[href="privacy.html"]']) {
+    const h = await page.locator(sel).evaluate(e => e.getBoundingClientRect().height);
+    expect(h, sel).toBeGreaterThanOrEqual(43.5);
+  }
+  expect(await page.locator('.feature p').first().evaluate(e => getComputedStyle(e).fontSize)).toBe('13px');
+  expect(await page.locator('.step-text p').first().evaluate(e => getComputedStyle(e).fontSize)).toBe('13px');
+  expect(await page.locator('footer').evaluate(e => getComputedStyle(e).fontSize)).toBe('12px');
+});
+
+test('the pricing WhatsApp message is neutral (no "package") and asks for a name and a guest count', async ({ page }) => {
+  await page.goto('/index.html');
+  const href = await page.locator('a[data-wa="pricing"]').getAttribute('href');
+  const msg = decodeURIComponent(href.split('text=')[1]);
+  expect(msg).not.toContain('الباقة');
+  expect(msg).toContain('اسمي:');
+  expect(msg).toContain('عدد الضيوف');
+});
+
+test('step 2 says names can also be added by hand or from Excel', async ({ page }) => {
+  await page.goto('/index.html');
+  await expect(page.locator('.step').nth(1)).toContainText('من ملف Excel');
+});
+
+test.describe('privacy.html', () => {
+  test('has the privacy and terms sections, the SEO tags, and no Arabic-Indic digits', async ({ page }) => {
+    await page.goto('/privacy.html');
+    await expect(page.locator('section#privacy h2')).toHaveText('الخصوصية');
+    await expect(page.locator('section#terms h2')).toHaveText('الشروط');
+    await expect(page.locator('h1')).toContainText('الخصوصية');
+    await expect(page.locator('.hero p')).toContainText('بدون مصطلحات قانونية');
+    expect(await page.title()).toBe('الخصوصية والشروط — دعوات');
+    expect(await page.locator('link[rel="canonical"]').getAttribute('href')).toBe('https://da3wt.com/privacy.html');
+    expect(await page.locator('meta[name="robots"]').getAttribute('content')).toContain('index');
+    expect(await page.locator('meta[name="description"]').getAttribute('content')).toBeTruthy();
+    expect(await page.locator('meta[property="og:title"]').getAttribute('content')).toBeTruthy();
+    expect(await page.locator('meta[name="twitter:card"]').getAttribute('content')).toBe('summary_large_image');
+    const text = await page.locator('body').innerText();
+    expect(text).not.toMatch(/[\u0660-\u0669]/);
+    expect(text).toContain('حتى 5 ضيوف');
+    expect(text).not.toMatch(/استرجاع|الاسترجاع|refund/i);
+    expect(text).toContain('تقدر تحذف مناسبتك بنفسك');
+    expect(text).toContain('وكل ضيف يرى بطاقته فقط');
+    expect(text).not.toMatch(/Firebase|Firestore|Google|EmailJS|مؤمّنة|آمنة|معزولة/);
+    expect(text).not.toMatch(/\d\s*(ريال|ر\.س|SAR|﷼)/);
+  });
+
+  test('every contact link is the WhatsApp number with a ready message, and there is no other contact channel', async ({ page }) => {
+    await page.goto('/privacy.html');
+    const hrefs = await page.locator('a[href^="https://wa.me/"]').evaluateAll(as => as.map(a => a.href));
+    expect(hrefs.length).toBe(2);
+    for (const h of hrefs) {
+      const u = new URL(h);
+      expect(u.pathname).toBe('/' + WHATSAPP);
+      expect(u.searchParams.get('text')).toContain('دعوات');
+    }
+    expect(new Set(hrefs).size).toBe(2);
+    await expect(page.locator('a[href^="mailto:"], a[href^="tel:"]')).toHaveCount(0);
+  });
+
+  test('is linked from the landing footer, the sign-in screen, and listed in the sitemap but not blocked in robots.txt', async ({ page }) => {
+    const sitemap = fs.readFileSync(repoFile('sitemap.xml'), 'utf8');
+    expect(sitemap).toMatch(/<loc>https:\/\/da3wt\.com\/privacy\.html<\/loc>\s*<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
+    expect(fs.readFileSync(repoFile('robots.txt'), 'utf8')).not.toMatch(/Disallow:\s*\/privacy/);
+    await stubFirebase(page);
+    await seedFakeFirebase(page, { user: null, store: {} });
+    await page.goto('/app.html');
+    await expect(page.locator('#auth-view a[href="privacy.html"]')).toBeVisible();
+  });
+
+  test('its links work: back to the landing page and the guide', async ({ page }) => {
+    await page.goto('/privacy.html');
+    await expect(page.locator('a[href="index.html"]').first()).toBeVisible();
+    await expect(page.locator('footer a[href="guide.html"]')).toBeVisible();
+  });
+});
+
+// The privacy page says there are no ads or trackers: keep that true.
+test('no page loads an analytics or advertising script (the privacy page says there are none)', async () => {
+  const bad = /google-analytics|googletagmanager|gtag\(|fbevents|facebook\.net|hotjar|clarity\.ms|plausible\.io|matomo|mixpanel|segment\.(com|io)|doubleclick|adsbygoogle|sentry|datadog/i;
+  for (const f of [...htmlFiles(), 'utils.js', 'firebase-init.js', 'firebase-init-lite.js', 'sw.js']) {
+    expect(fs.readFileSync(repoFile(f), 'utf8'), f).not.toMatch(bad);
+  }
+  for (const f of htmlFiles()) {
+    const src = fs.readFileSync(repoFile(f), 'utf8');
+    for (const m of src.matchAll(/<script[^>]+src="(https?:\/\/[^"]+)"/g)) {
+      expect(m[1], f).toMatch(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|www\.gstatic\.com)\//);
+    }
+  }
+});
+
+test('"privacy" is a reserved readable link: the client refuses it and the automatic name skips it', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.addScriptTag({ path: repoFile('utils.js') }).catch(() => {});
+  const r = await page.evaluate(() => ({ problem: slugProblem('privacy'), auto: slugFromName('privacy'), ok: slugProblem('privacy-party') }));
+  expect(r.problem).not.toBe('');
+  expect(r.auto).not.toBe('privacy');
+  expect(r.ok).toBe('');
+});
+
+test('the privacy links are comfortable tap targets, and the privacy page pills fit at 320px', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto('/index.html');
+  expect(await page.locator('.feature a[href="privacy.html"]').evaluate(e => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(43.5);
+  await page.goto('/privacy.html');
+  for (const sel of ['.toc a', '.nav-back', 'footer a']) {
+    for (const h of await page.locator(sel).evaluateAll(els => els.map(e => e.getBoundingClientRect().height))) expect(h, sel).toBeGreaterThanOrEqual(43.5);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: null, store: {} });
+  await page.goto('/app.html');
+  expect(await page.locator('#auth-view a[href="privacy.html"]').evaluate(e => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(43.5);
 });
