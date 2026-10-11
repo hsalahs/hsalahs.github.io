@@ -1835,15 +1835,15 @@ function closeRequestsModal() {
 const ZIP_PART_SIZE = 100;
 
 // One ZIP for the given guests, built 5 cards at a time. onProgress gets the
-// number of cards finished so far in this ZIP. File names only have to be
-// unique inside one ZIP, so each call numbers its own duplicates.
-async function buildZipPart(list, onProgress) {
+// number of cards finished so far in this ZIP. usedNames is shared by all parts
+// of one download, so a duplicate name keeps counting up across parts and
+// extracting every ZIP into one folder never overwrites a card.
+async function buildZipPart(list, usedNames, onProgress) {
   const zip = new JSZip();
   const total = list.length;
   let done = 0;
   let failed = 0;
 
-  const usedNames = new Map();
   function safeFileName(name) {
     const clean = String(name || 'Guest').replace(/[\/\\:*?"<>|]/g, '-').trim() || 'Guest';
     const count = (usedNames.get(clean) || 0) + 1;
@@ -1920,16 +1920,19 @@ async function downloadAllCards(from, to) {
 
   let failed = 0;
   let saved = 0;
+  const usedNames = new Map();
   for (let p = 0; p < parts.length; p++) {
     const offset = p * ZIP_PART_SIZE;
-    let result = await buildZipPart(parts[p], (n) => {
+    let result = await buildZipPart(parts[p], usedNames, (n) => {
       showToast(split
         ? '⏳ جاري تجهيز الجزء ' + (p + 1) + ' من ' + parts.length + ' — ' + (offset + n) + ' / ' + total
         : '⏳ ' + n + ' / ' + total + ' تم...');
     });
     failed += result.failed;
     if (!result.blob) {
-      showToast('❌ ما قدرنا ننشئ أي بطاقة — جرّب متصفح ثاني أو عطّل إضافات الخصوصية لهذا الموقع');
+      showToast(saved > 0
+        ? '❌ تم حفظ ' + saved + ' من ' + parts.length + ' ' + arPlural(parts.length, 'جزء', 'جزأين', 'أجزاء') + '، والجزء ' + (p + 1) + ' ما قدرنا ننشئ أي بطاقة فيه — جرّب متصفح ثاني'
+        : '❌ ما قدرنا ننشئ أي بطاقة — جرّب متصفح ثاني أو عطّل إضافات الخصوصية لهذا الموقع');
       return;
     }
     saveBlobAs(result.blob, split ? 'دعوات-' + (p + 1) + '.zip' : 'Invitations' + label + '.zip');
@@ -1937,14 +1940,15 @@ async function downloadAllCards(from, to) {
     result = null;
     if (p < parts.length - 1) {
       await new Promise(r => setTimeout(r, 300));
-      if (!confirm('تم تحميل الجزء ' + (p + 1) + ' من ' + parts.length + '. تابع للجزء التالي؟')) {
-        showToast('⚠️ توقف التحميل بعد ' + saved + ' من ' + parts.length + ' ' + arPlural(parts.length, 'جزء', 'جزأين', 'أجزاء'));
+      if (!confirm('تم تحميل الجزء ' + (p + 1) + ' من ' + parts.length + '. تابع للجزء التالي؟ (لو سألك الجوال عن السماح بتحميل عدة ملفات، اختر السماح)')) {
+        showToast('⚠️ توقف التحميل بعد ' + saved + ' من ' + parts.length + ' ' + arPlural(parts.length, 'جزء', 'جزأين', 'أجزاء') + (failed > 0 ? ' (' + failed + ' ' + arPlural(failed, 'بطاقة', 'بطاقتين', 'بطاقات') + ' فشلت)' : ''));
         return;
       }
     }
   }
   showToast(failed > 0
     ? '⚠️ تم التحميل، لكن ' + failed + ' من ' + total + ' ' + arPlural(total, 'بطاقة', 'بطاقتين', 'بطاقات') + ' فشلت — جرّب متصفح ثاني لها'
+    : split ? '✅ تم تحميل ' + parts.length + ' أجزاء! (' + total + ' ' + arPlural(total, 'دعوة', 'دعوتين', 'دعوات') + ')'
     : '✅ تم تحميل الملف! (' + total + ' ' + arPlural(total, 'دعوة', 'دعوتين', 'دعوات') + ')');
 }
 

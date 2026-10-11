@@ -73,9 +73,11 @@ test('250 guests download as three ZIP parts of 100 / 100 / 50, asking before ea
   expect(await page.evaluate(() => window.__dlNames)).toEqual(['دعوات-1.zip', 'دعوات-2.zip', 'دعوات-3.zip']);
   expect((await Promise.all(downloads.map(zipFiles))).map(f => f.length)).toEqual([100, 100, 50]);
   const confirms = dialogs.filter(d => d.type === 'confirm').map(d => d.message);
-  expect(confirms).toEqual(['تم تحميل الجزء 1 من 3. تابع للجزء التالي؟', 'تم تحميل الجزء 2 من 3. تابع للجزء التالي؟']);
+  expect(confirms.map(c => c.split(' (')[0])).toEqual(['تم تحميل الجزء 1 من 3. تابع للجزء التالي؟', 'تم تحميل الجزء 2 من 3. تابع للجزء التالي؟']);
   const toasts = await page.evaluate(() => window.__toasts);
   expect(toasts).toContain('⏳ جاري تجهيز الجزء 2 من 3 — 150 / 250');
+  expect(toasts.some(t => /✅ تم تحميل 3 أجزاء/.test(t))).toBe(true);
+  expect(confirms[0]).toContain('اختر السماح');
   expect(toasts.join(' ')).not.toMatch(/[٠-٩]/);
 });
 
@@ -111,7 +113,7 @@ test('answering no to the question stops after part 1 and says how many parts ca
   expect(dialogs.filter(d => d.type === 'confirm')).toHaveLength(1);
 });
 
-test('duplicate names inside a part are numbered, and each part numbers on its own', async ({ page }) => {
+test('duplicate names are numbered across parts, so extracting every ZIP into one folder overwrites nothing', async ({ page }) => {
   const names = Array.from({ length: 105 }, () => 'نفس الاسم');
   const { downloads } = await open(page, names);
   await clickAll(page);
@@ -121,9 +123,10 @@ test('duplicate names inside a part are numbered, and each part numbers on its o
   expect(first).toContain('Invitation-نفس الاسم.png');
   expect(first).toContain('Invitation-نفس الاسم (100).png');
   expect(new Set(first).size).toBe(100);
-  expect(second).toContain('Invitation-نفس الاسم.png');
-  expect(second).toContain('Invitation-نفس الاسم (5).png');
   expect(second).toHaveLength(5);
+  expect(second).toContain('Invitation-نفس الاسم (101).png');
+  expect(second).toContain('Invitation-نفس الاسم (105).png');
+  expect(new Set(first.concat(second)).size).toBe(105);
 });
 
 test('every card failing shows the message and downloads nothing', async ({ page }) => {
@@ -142,4 +145,15 @@ test('without the ZIP library a friendly message shows instead of a crash', asyn
     await expect.poll(() => page.evaluate(() => window.__toasts.some(t => /أداة الضغط/.test(t)))).toBe(true);
     expect(downloads).toHaveLength(0);
   });
+});
+
+test('a later part where every card fails says how many parts were already saved', async ({ page }) => {
+  const { downloads } = await open(page, numbered(150));
+  await page.evaluate(() => {
+    const ok = window.buildGuestCard;
+    window.buildGuestCard = (g) => (parseInt(g.name.split(' ')[1], 10) > 100 ? Promise.resolve(null) : ok(g));
+  });
+  await clickAll(page);
+  await expect.poll(() => page.evaluate(() => window.__toasts.some(t => /تم حفظ 1 من 2 .*الجزء 2/.test(t))), { timeout: 20000 }).toBe(true);
+  expect(downloads).toHaveLength(1);
 });
