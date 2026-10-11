@@ -18,18 +18,13 @@ const numbered = (n) => Array.from({ length: n }, (_, i) => 'ضيف ' + (i + 1))
 
 // Cards are cheap 8x8 canvases (the real card builder is covered in event.spec.js);
 // failAll makes every card fail the way a blocked canvas does.
-async function open(page, names, { failAll = false, confirmAnswers = null, noZip = false } = {}) {
+async function open(page, names, { failAll = false, noZip = false } = {}) {
   await stubFirebase(page);
   if (!noZip) await page.route('https://cdnjs.cloudflare.com/ajax/libs/jszip/**', (r) => r.fulfill({ contentType: 'text/javascript', body: JSZIP_BROWSER }));
   await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: guestsStore(names) });
   const dialogs = [];
-  let ci = 0;
   page.on('dialog', (d) => {
     dialogs.push({ type: d.type(), message: d.message() });
-    if (d.type() === 'confirm') {
-      const ans = confirmAnswers ? confirmAnswers[ci++] : true;
-      return ans ? d.accept() : d.dismiss();
-    }
     return d.accept();
   });
   // Headless Chromium reports any non-ASCII download name as "download", so the
@@ -66,29 +61,26 @@ const clickAll = async (page) => {
   await page.getByRole('button', { name: /تحميل كل الدعوات/ }).click();
 };
 
-test('250 guests download as three ZIP parts of 100 / 100 / 50, asking before each next part', async ({ page }) => {
+test('250 guests download as ONE Invitations.zip with every guest, no question, Western-digit progress', async ({ page }) => {
   const { dialogs, downloads } = await open(page, numbered(250));
   await clickAll(page);
-  await expect.poll(() => downloads.length, { timeout: 30000 }).toBe(3);
-  expect(await page.evaluate(() => window.__dlNames)).toEqual(['دعوات-1.zip', 'دعوات-2.zip', 'دعوات-3.zip']);
-  expect((await Promise.all(downloads.map(zipFiles))).map(f => f.length)).toEqual([100, 100, 50]);
-  const confirms = dialogs.filter(d => d.type === 'confirm').map(d => d.message);
-  expect(confirms.map(c => c.split(' (')[0])).toEqual(['تم تحميل الجزء 1 من 3. تابع للجزء التالي؟', 'تم تحميل الجزء 2 من 3. تابع للجزء التالي؟']);
+  await expect.poll(() => downloads.length, { timeout: 40000 }).toBe(1);
+  expect(await page.evaluate(() => window.__dlNames)).toEqual(['Invitations.zip']);
+  expect((await zipFiles(downloads[0])).length).toBe(250);
+  expect(dialogs).toHaveLength(0);
   const toasts = await page.evaluate(() => window.__toasts);
-  expect(toasts).toContain('⏳ جاري تجهيز الجزء 2 من 3 — 150 / 250');
-  expect(toasts.some(t => /✅ تم تحميل 3 أجزاء/.test(t))).toBe(true);
-  expect(confirms[0]).toContain('اختر السماح');
+  expect(toasts).toContain('⏳ 150 / 250 تم...');
+  expect(toasts.some(t => /✅ تم تحميل الملف/.test(t))).toBe(true);
+  expect(toasts.some(t => /الجزء/.test(t))).toBe(false);
   expect(toasts.join(' ')).not.toMatch(/[٠-٩]/);
 });
 
-test('80 guests still download as one Invitations.zip with no question', async ({ page }) => {
-  const { dialogs, downloads } = await open(page, numbered(80));
+test('80 guests download as one Invitations.zip', async ({ page }) => {
+  const { downloads } = await open(page, numbered(80));
   await clickAll(page);
   await expect.poll(() => downloads.length, { timeout: 20000 }).toBe(1);
   expect(downloads[0].suggestedFilename()).toBe('Invitations.zip');
   expect((await zipFiles(downloads[0])).length).toBe(80);
-  expect(dialogs.filter(d => d.type === 'confirm')).toHaveLength(0);
-  expect((await page.evaluate(() => window.__toasts)).some(t => /الجزء/.test(t))).toBe(false);
 });
 
 test('a manual range stays one file even above 100 cards', async ({ page }) => {
@@ -103,30 +95,15 @@ test('a manual range stays one file even above 100 cards', async ({ page }) => {
   expect((await zipFiles(downloads[0])).length).toBe(120);
 });
 
-test('answering no to the question stops after part 1 and says how many parts came down', async ({ page }) => {
-  const { dialogs, downloads } = await open(page, numbered(250), { confirmAnswers: [false] });
-  await clickAll(page);
-  await expect.poll(() => page.evaluate(() => window.__toasts.some(t => /توقف التحميل بعد 1 من 3/.test(t))), { timeout: 20000 }).toBe(true);
-  await page.waitForTimeout(1500);
-  expect(downloads).toHaveLength(1);
-  expect(await page.evaluate(() => window.__dlNames)).toEqual(['دعوات-1.zip']);
-  expect(dialogs.filter(d => d.type === 'confirm')).toHaveLength(1);
-});
-
-test('duplicate names are numbered across parts, so extracting every ZIP into one folder overwrites nothing', async ({ page }) => {
+test('duplicate names are numbered so no card overwrites another', async ({ page }) => {
   const names = Array.from({ length: 105 }, () => 'نفس الاسم');
   const { downloads } = await open(page, names);
   await clickAll(page);
-  await expect.poll(() => downloads.length, { timeout: 30000 }).toBe(2);
-  const first = await zipFiles(downloads[0]);
-  const second = await zipFiles(downloads[1]);
-  expect(first).toContain('Invitation-نفس الاسم.png');
-  expect(first).toContain('Invitation-نفس الاسم (100).png');
-  expect(new Set(first).size).toBe(100);
-  expect(second).toHaveLength(5);
-  expect(second).toContain('Invitation-نفس الاسم (101).png');
-  expect(second).toContain('Invitation-نفس الاسم (105).png');
-  expect(new Set(first.concat(second)).size).toBe(105);
+  await expect.poll(() => downloads.length, { timeout: 30000 }).toBe(1);
+  const files = await zipFiles(downloads[0]);
+  expect(files).toContain('Invitation-نفس الاسم.png');
+  expect(files).toContain('Invitation-نفس الاسم (105).png');
+  expect(new Set(files).size).toBe(105);
 });
 
 test('every card failing shows the message and downloads nothing', async ({ page }) => {
@@ -147,13 +124,3 @@ test('without the ZIP library a friendly message shows instead of a crash', asyn
   });
 });
 
-test('a later part where every card fails says how many parts were already saved', async ({ page }) => {
-  const { downloads } = await open(page, numbered(150));
-  await page.evaluate(() => {
-    const ok = window.buildGuestCard;
-    window.buildGuestCard = (g) => (parseInt(g.name.split(' ')[1], 10) > 100 ? Promise.resolve(null) : ok(g));
-  });
-  await clickAll(page);
-  await expect.poll(() => page.evaluate(() => window.__toasts.some(t => /تم حفظ 1 من 2 .*الجزء 2/.test(t))), { timeout: 20000 }).toBe(true);
-  expect(downloads).toHaveLength(1);
-});
