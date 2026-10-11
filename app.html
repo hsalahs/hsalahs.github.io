@@ -505,11 +505,11 @@ async function createNewEvent() {
 
 // The two numbers come from the event doc itself (guestCount and
 // scannedCount, both kept by transactions in event.html and scan.html), so
-// listing events never reads a guest. An event that never had a scannedCount
-// written shows "—" for attended and no percentage.
+// listing events never reads a guest. An event with no scannedCount yet (no
+// guest has entered) shows 0 for attended.
 function statsBoxHtml(ev) {
   const total = typeof ev.guestCount === 'number' ? ev.guestCount : 0;
-  const attended = typeof ev.scannedCount === 'number' ? ev.scannedCount : (total === 0 ? 0 : '—');
+  const attended = typeof ev.scannedCount === 'number' ? ev.scannedCount : 0;
   return statsHtml(total, attended);
 }
 

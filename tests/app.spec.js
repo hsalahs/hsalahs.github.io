@@ -107,7 +107,7 @@ test('the events list never reads a guest: the numbers come from the event doc a
   expect(await guestReads()).toBe(0);
 });
 
-test('an event with guests but no scannedCount shows «—» for attended and no percentage; an empty one shows 0', async ({ page }) => {
+test('an event with no scannedCount yet shows 0 attended (with the bar at 0%); an empty one shows 0 and 0', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, {
     user: { uid: 'u1', email: 'customer@example.com' },
@@ -120,8 +120,8 @@ test('an event with guests but no scannedCount shows «—» for attended and no
   });
   await page.goto('/app.html');
   const card = (name) => page.locator('.event-card', { hasText: name });
-  await expect(card('قديمة').locator('.event-stat .n')).toHaveText(['7', '—']);
-  await expect(card('قديمة').locator('.att-bar')).toHaveCount(0);
+  await expect(card('قديمة').locator('.event-stat .n')).toHaveText(['7', '0']);
+  await expect(card('قديمة').locator('.att-pct')).toHaveText('0%');
   await expect(card('فارغة').locator('.event-stat .n')).toHaveText(['0', '0']);
 });
 
