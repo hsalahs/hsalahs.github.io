@@ -411,7 +411,7 @@ test.describe('privacy.html', () => {
     expect(text).not.toMatch(/استرجاع|الاسترجاع|refund/i);
     expect(text).toContain('تقدر تحذف مناسبتك بنفسك');
     expect(text).toContain('وكل ضيف يرى بطاقته فقط');
-    expect(text).not.toMatch(/Firebase|Google|مؤمّنة|آمنة|معزولة/);
+    expect(text).not.toMatch(/Firebase|Firestore|Google|EmailJS|مؤمّنة|آمنة|معزولة/);
     expect(text).not.toMatch(/\d\s*(ريال|ر\.س|SAR|﷼)/);
   });
 
