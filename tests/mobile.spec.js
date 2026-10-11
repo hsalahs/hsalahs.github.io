@@ -23,6 +23,7 @@ const ADMIN = { uid: 'a1', email: 'hsallah@outlook.sa' };
 const PAGES = [
   ['landing', '/index.html', null, (p) => p.locator('.hero').waitFor()],
   ['guide', '/guide.html', null, (p) => p.locator('#faq').waitFor()],
+  ['privacy and terms', '/privacy.html', null, (p) => p.locator('#terms').waitFor()],
   ['organizer events', '/app.html', OWNER, (p) => p.locator('#events-list .event-card').waitFor()],
   ['admin accounts', '/app.html', ADMIN, async (p) => { await p.locator('#admin-accounts-toggle').click(); await p.locator('#admin-accounts-list .acc-row').waitFor(); }],
   ['event dashboard', '/event.html?id=e1', OWNER, (p) => p.locator('.guest-item').first().waitFor()],

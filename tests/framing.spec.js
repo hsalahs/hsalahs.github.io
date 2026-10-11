@@ -28,5 +28,5 @@ test('robots.txt points to the sitemap, and the sitemap lists only the public pa
   for (const p of ['/app.html', '/event.html', '/scan.html', '/invite.html']) expect(robots).toContain('Disallow: ' + p);
   const sitemap = await (await request.get('/sitemap.xml')).text();
   const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-  expect(locs).toEqual(['https://da3wt.com/', 'https://da3wt.com/guide.html']);
+  expect(locs).toEqual(['https://da3wt.com/', 'https://da3wt.com/guide.html', 'https://da3wt.com/privacy.html']);
 });
