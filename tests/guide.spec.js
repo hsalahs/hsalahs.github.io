@@ -31,16 +31,21 @@ test('a question opens its answer', async ({ page }) => {
 test('every button and message the guide quotes still exists in the page it belongs to', async () => {
   const guide = read('guide.html');
   const quoted = {
-    'app.html': ['إنشاء مناسبة جديدة'],
+    'app.html': ['إنشاء مناسبة جديدة', 'نسيت كلمة المرور؟'],
     'event.html': [
       'تعديل المناسبة', 'استيراد قائمة (Excel / CSV / أسماء)', 'إضافة أرقام متسلسلة (مثال: 1–200)',
       'تحميل كل الدعوات (ZIP)', 'تحميل نطاق معيّن (مثال: 1–100)', 'تصدير قائمة الضيوف (Excel)', 'تصدير قائمة الضيوف (CSV)', 'كشف الحضور (طباعة / PDF)',
       'تفعيل إشعارات الطلبات', 'الطلبات', 'اقبل الكل', 'كود جديد', 'رقم دخول المشرفين', 'اسم ضيف جديد',
+      'تحديد ضيوف للحذف', 'حذف المحددين', 'حذف الضيف', 'حذف المناسبة نهائيًا', 'تمييز كـ VIP', 'إلغاء تمييز VIP',
+      'الدعوات والتقارير', 'معاينة رسالة الواتساب', 'مشاركة عبر الواتساب', 'مشاركة بطريقة ثانية', 'الحد المجاني لعدد الضيوف',
+      'للتواصل عبر واتساب', 'تراجع', 'حضر',
     ],
     'scan.html': [
       'تشغيل الكاميرا', 'تحقق', 'عرض الأسماء', 'أو أدخل الكود يدويًا', 'مسموح بالدخول',
       'تم استخدام هذه الدعوة مسبقًا', 'باركود غير مسجّل', 'تسجيل خروج من هذا الجهاز',
+      'تحديث القائمة', 'تأكيد الدخول',
     ],
+    'invite.html': ['تأكيد الحضور', 'حفظ الدعوة', 'بنفس الطريقة (من نفس الجوال ونفس المتصفح)'],
   };
   for (const [file, labels] of Object.entries(quoted)) {
     const source = read(file);
@@ -139,4 +144,118 @@ test('the guide has a description, a canonical address and a share card', async 
   expect(await page.locator('link[rel="canonical"]').getAttribute('href')).toBe('https://da3wt.com/guide.html');
   expect(await page.locator('meta[property="og:title"]').getAttribute('content')).toBe('دليل الاستخدام — دعوات');
   expect(await page.locator('meta[property="og:image"]').getAttribute('content')).toBe('https://da3wt.com/icons/og-image.jpg');
+});
+
+// Batch 2 of the pre-launch review: the guide's FAQ, structure and accessibility.
+test('the FAQ no longer claims a «حضر» / «لسه» status on each row and explains the real buttons', () => {
+  const g = read('guide.html');
+  expect(g).not.toContain('حالته «حضر» أو «لسه»');
+  expect(g).toContain('زر أخضر «حضر»');
+  expect(g).toContain('يصير الزر «تراجع»');
+  expect(g).toContain('ولو سُجّل بالخطأ اضغط «تراجع» جنب اسمه');
+  expect(g).toContain('رقم «الحضور» فوق القائمة');
+  const ev = read('event.html');
+  expect(ev).toContain("} حضر</button>");
+  expect(ev).toContain('} تراجع</button>');
+});
+
+test('the new FAQ entries exist and promise no price or time', async ({ page }) => {
+  await page.goto('/guide.html');
+  const qs = await page.locator('#faq summary').allTextContents();
+  for (const q of ['وصلت حد الضيوف ولا أقدر أضيف', 'نسيت كلمة المرور', 'هل يقدر أكثر من مشرف يمسح في نفس الوقت؟',
+    'هل أقدر أضيف الموقع على شاشة الجوال الرئيسية؟', 'كيف يحفظ الضيف بطاقته في جواله؟', 'من يفعّل مناسبتي لعدد أكبر من الضيوف؟']) {
+    expect(qs, q).toContain(q);
+  }
+  const limit = await page.locator('details', { hasText: 'وصلت حد الضيوف' }).textContent();
+  expect(limit).toContain('الحد المجاني لعدد الضيوف');
+  expect(limit).toContain('للتواصل عبر واتساب');
+  expect(limit).toContain('اقبل الكل');
+  expect(limit).not.toMatch(/ريال|SAR|\d+\s*(دقيقة|ساعة|يوم)/);
+  const faqText = await page.locator('#faq').textContent();
+  expect(faqText).not.toMatch(/ريال|SAR/);
+});
+
+test('the guide has main, labelled nav, theme-color, a focus outline and no nowrap on button names', async ({ page }) => {
+  await page.goto('/guide.html');
+  await expect(page.locator('main')).toHaveCount(1);
+  await expect(page.locator('nav.toc')).toHaveAttribute('aria-label', 'محتويات الدليل');
+  expect(await page.locator('meta[name="theme-color"]').getAttribute('content')).toBe('#0A0A0A');
+  const src = read('guide.html');
+  expect(src).toContain('summary:focus-visible');
+  expect(src).not.toMatch(/b\.k\s*\{[^}]*nowrap/);
+  expect(src).toContain('padding-right:18px');
+  expect(src).not.toContain('<div class="lead">&nbsp;</div>');
+  expect(src).not.toContain('🎁');
+  expect(src).toContain('→ مناسباتي');
+  expect(src).not.toContain('← مناسباتي');
+  for (const w of ['أي شي ', 'دعهم يسجلون', 'ثلاث طرق للإضافة']) expect(src).not.toContain(w);
+  expect(src).not.toMatch(/\?\?|replaceAll|\.at\(|inset:|aspect-ratio/);
+});
+
+test('the FAQPage JSON-LD parses and matches the visible questions', async ({ page }) => {
+  await page.goto('/guide.html');
+  const json = JSON.parse(await page.locator('script[type="application/ld+json"]').textContent());
+  expect(json['@type']).toBe('FAQPage');
+  const visible = await page.locator('#faq summary').allTextContents();
+  expect(json.mainEntity.length).toBe(visible.length);
+  expect(json.mainEntity.map(q => q.name)).toEqual(visible.map(t => t.replace(/\s+/g, ' ').trim()));
+  for (const q of json.mainEntity) expect(q.acceptedAnswer.text.length).toBeGreaterThan(10);
+});
+
+test('the guide uses Western digits only', () => {
+  expect(read('guide.html')).not.toMatch(/[\u0660-\u0669\u06F0-\u06F9]/);
+});
+
+test('the long feature paragraph is split into short lists, one feature per item', async ({ page }) => {
+  await page.goto('/guide.html');
+  for (const label of ['تحميل كل الدعوات (ZIP)', 'تحميل نطاق معيّن (مثال: 1–100)', 'تصدير قائمة الضيوف (Excel)', 'تصدير قائمة الضيوف (CSV)',
+    'كشف الحضور (طباعة / PDF)', 'حذف المحددين', 'تمييز كـ VIP', 'حذف المناسبة نهائيًا']) {
+    const li = page.locator('#guests li', { hasText: label });
+    await expect(li, label).toHaveCount(1);
+    expect((await li.textContent()).length).toBeLessThan(420);
+  }
+  await expect(page.locator('#guests li', { hasText: 'اكتب رقم البداية والنهاية' })).toHaveCount(1);
+  await expect(page.locator('#guests li', { hasText: 'كلمة «حذف»' })).toHaveCount(1);
+  await expect(page.locator('#invite')).toContainText('معاينة رسالة الواتساب');
+  await expect(page.locator('#invite')).toContainText('تأكيد الحضور');
+  await expect(page.locator('#door ul li')).not.toHaveCount(0);
+  const p = await page.locator('#door .step').nth(3).locator('p').allTextContents();
+  for (const t of p) expect(t.length).toBeLessThan(400);
+});
+
+test('the scanner search rule in the guide matches scan.html', () => {
+  const scan = read('scan.html');
+  expect(scan).toContain("query.length >= 3 || ql.indexOf('wd') === 0");
+  const g = read('guide.html');
+  expect(g).toContain('3 أحرف على الأقل أو يبدأ بـ');
+  expect(g).toContain('من دخل يختفي من القائمة، والبحث يظهر الجميع');
+});
+
+test('numbers and wording the guide states match the code', () => {
+  const guide = read('guide.html');
+  expect(read('utils.js')).toMatch(/const FREE_GUEST_LIMIT = 5;/);
+  expect(guide).toContain('الحد المجاني 5 ضيوف');
+  expect(read('utils.js')).toMatch(/const DELETE_WORD = 'حذف';/);
+  expect(guide).toContain('كلمة «حذف»');
+  const scan = read('scan.html');
+  expect(scan).toMatch(/allowed:\s*\{ autoMs: 5000,/);
+  expect(scan).toMatch(/duplicate: \{ autoMs: 6000,/);
+  expect(scan).toMatch(/denied:\s*\{ autoMs: 6000,/);
+  expect(guide).toContain('بعد 5 ثواني تقريبًا');
+  expect(guide).toContain('بعد 6 ثواني تقريبًا');
+  expect(scan).toMatch(/const SYNC_AUTO_MS = 2 \* 60 \* 1000;/);
+  expect(guide).toContain('أكثر من دقيقتين');
+});
+
+test('the downloads follow the current list and the old custom link stops after a rename', () => {
+  const ev = read('event.html');
+  expect(ev).toMatch(/function askRangeDownload\(\) \{\s*const total = visibleGuests\(\)/);
+  expect(ev).toMatch(/function downloadAllCards\(from, to\)[\s\S]{0,300}visibleGuests\(\)/);
+  expect(ev).toContain("if (old) tx.delete(doc(window._db, 'slugs', old));");
+  expect(ev).not.toContain('الروابط القديمة تبقى شغالة');
+  const g = read('guide.html');
+  expect(g).not.toContain('الروابط اللي أرسلتها قبل تبقى شغالة');
+  expect(g).toContain('رابط الاسم القديم يتوقف');
+  expect(g).toContain('يتبعان الفلتر والبحث الحاليين');
+  expect(g).toContain('إضافة ضيف واحد');
 });
