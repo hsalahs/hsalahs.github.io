@@ -63,3 +63,26 @@ test('320px: a long event name on the scanner code screen stays clear of the ref
   const overlaps = range.some(b => b.left < btn.x + btn.width && b.right > btn.x && b.top < btn.y + btn.height && b.bottom > btn.y);
   expect(overlaps).toBe(false);
 });
+
+// body{overflow-x:hidden} hides a clipped label from scrollWidth, so check that
+// every long button name in the guide stays inside the screen at 320 and 375.
+for (const width of [320, 375]) {
+  test(`${width}px: the guide's long button names wrap inside the screen`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 760 });
+    await page.goto('/guide.html');
+    const bad = await page.evaluate((w) => {
+      const out = [];
+      document.querySelectorAll('b.k').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        const box = el.closest('.step, .note, details');
+        const b = box ? box.getBoundingClientRect() : { left: 0, right: w };
+        if (r.width && (r.left < Math.max(0, b.left) - 0.5 || r.right > Math.min(w, b.right) + 0.5)) out.push(el.textContent.trim());
+      });
+      document.querySelectorAll('.step > div:last-child').forEach((el) => {
+        if (el.scrollWidth > el.clientWidth + 1) out.push('step overflows: ' + el.textContent.trim().slice(0, 30));
+      });
+      return out;
+    }, width);
+    expect(bad).toEqual([]);
+  });
+}
