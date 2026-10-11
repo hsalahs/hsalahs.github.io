@@ -129,7 +129,7 @@ const FEATURES = [
   ['gift', 'تجربة مجانية بالكامل'],
   ['ticket', 'بطاقة مصممة لكل ضيف'],
   ['chart-column', 'تحديث وإحصائيات لحظية'],
-  ['lock', 'بياناتك خاصة وآمنة'],
+  ['lock', 'بياناتك خاصة ومحمية'],
 ];
 
 test('"why Dawaat" has the six cards, each with its own line icon and title, in order', async ({ page }) => {
@@ -323,7 +323,7 @@ test('the landing page JSON-LD parses and describes the organisation and the sit
 
 test('the privacy claim names platform support, links to the privacy page, and the footer links to it', async ({ page }) => {
   await page.goto('/index.html');
-  const card = page.locator('.feature', { hasText: 'بياناتك خاصة وآمنة' });
+  const card = page.locator('.feature', { hasText: 'بياناتك خاصة ومحمية' });
   await expect(card).toContainText('وإدارة المنصة عند طلب الدعم');
   await expect(card.locator('a[href="privacy.html"]')).toHaveCount(1);
   await expect(page.locator('footer a[href="privacy.html"]')).toHaveText('الخصوصية والشروط');
@@ -347,7 +347,7 @@ test('the splash and the sample card are hidden from screen readers, and the sam
   await page.goto('/index.html');
   await expect(page.locator('#splash')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.locator('.card-preview')).toHaveAttribute('aria-hidden', 'true');
-  expect(await page.locator('.cp-id').textContent()).toMatch(/^WD-[A-Z0-9]{13}$/);
+  expect(await page.locator('.cp-id').textContent()).toMatch(/^WD-[A-Z0-9]{6,}$/);
 });
 
 test('for a visitor who asked for reduced motion, the splash and the sample card stop animating', async ({ page }) => {
@@ -408,7 +408,10 @@ test.describe('privacy.html', () => {
     const text = await page.locator('body').innerText();
     expect(text).not.toMatch(/[\u0660-\u0669]/);
     expect(text).toContain('حتى 5 ضيوف');
-    expect(text).toContain('الاسترجاع');
+    expect(text).not.toMatch(/استرجاع|الاسترجاع|refund/i);
+    expect(text).toContain('تقدر تحذف مناسبتك بنفسك');
+    expect(text).toContain('وكل ضيف يرى بطاقته فقط');
+    expect(text).not.toMatch(/Firebase|Google|مؤمّنة|آمنة|معزولة/);
     expect(text).not.toMatch(/\d\s*(ريال|ر\.س|SAR|﷼)/);
   });
 
@@ -454,4 +457,28 @@ test('no page loads an analytics or advertising script (the privacy page says th
       expect(m[1], f).toMatch(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|www\.gstatic\.com)\//);
     }
   }
+});
+
+test('"privacy" is a reserved readable link: the client refuses it and the automatic name skips it', async ({ page }) => {
+  await page.goto('/index.html');
+  await page.addScriptTag({ path: repoFile('utils.js') }).catch(() => {});
+  const r = await page.evaluate(() => ({ problem: slugProblem('privacy'), auto: slugFromName('privacy'), ok: slugProblem('privacy-party') }));
+  expect(r.problem).not.toBe('');
+  expect(r.auto).not.toBe('privacy');
+  expect(r.ok).toBe('');
+});
+
+test('the privacy links are comfortable tap targets, and the privacy page pills fit at 320px', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 760 });
+  await page.goto('/index.html');
+  expect(await page.locator('.feature a[href="privacy.html"]').evaluate(e => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(43.5);
+  await page.goto('/privacy.html');
+  for (const sel of ['.toc a', '.nav-back', 'footer a']) {
+    for (const h of await page.locator(sel).evaluateAll(els => els.map(e => e.getBoundingClientRect().height))) expect(h, sel).toBeGreaterThanOrEqual(43.5);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  await stubFirebase(page);
+  await seedFakeFirebase(page, { user: null, store: {} });
+  await page.goto('/app.html');
+  expect(await page.locator('#auth-view a[href="privacy.html"]').evaluate(e => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(43.5);
 });

@@ -9,7 +9,7 @@ An Arabic, multi-tenant digital-invitation service (weddings and other occasions
 - Static site on **GitHub Pages** (no build step, no backend, no server). Live at `https://da3wt.com/` (custom domain, done — DNS/SSL/GitHub Pages/Firebase Auth authorized domains all set up; the old `https://hsalahs.github.io/` still works too, GitHub doesn't disable it, and that's intentional — any already-sent invite links keep working).
 - **Firebase** (Firestore + Auth, v10.12.0 from the CDN), project `wedding-qr-16d01`, **Spark (free) plan**. No Cloud Functions.
 - Installable as a PWA (`manifest.webmanifest`, `sw.js`); there is no app-store app.
-- Pages: `index.html` (landing), `app.html` (organizer's events list, admin activation), `event.html` (one event's dashboard), `invite.html` (what a guest opens), `scan.html` (door scanner), `guide.html` (user guide).
+- Pages: `index.html` (landing), `app.html` (organizer's events list, admin activation), `event.html` (one event's dashboard), `invite.html` (what a guest opens), `scan.html` (door scanner), `guide.html` (user guide), `privacy.html` (privacy and terms, plain language, WhatsApp contact only).
 - Shared scripts: `firebase-init.js`, `utils.js` (guest limit helpers), `format.js`, `guest-names.js` + `xlsx-names.js` (import), `xlsx-export.js` (Excel export), `attendance-report.js` (print / PDF report).
 - Security lives in `firestore.rules` (guest cap, scan sessions, door code). The client is never trusted.
 
@@ -67,7 +67,7 @@ These are standing instructions the user gave in chat for how to respond, not pr
 
 ## Tests
 
-- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 17 minutes, 577 tests). Run a single file while developing, the full suite once before pushing.
+- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 17 minutes, 579 tests). Run a single file while developing, the full suite once before pushing.
 - Rules tests (real emulator): `npm run test:rules` (166 checks; `RULES_PATH` overrides the rules file).
 - Playwright uses in-memory Firebase stubs (`tests/mocks/*.stub.js`, `tests/helpers.js`: `stubFirebase`, `seedFakeFirebase`). The store resets on navigation. JSZip is served from `node_modules` via `page.route`. See `tests/README.md`.
 - Tool quirks: heredocs expand `\uXXXX` (use the Write tool for escapes); avoid `pkill -f`; foreground `sleep` is blocked (use until-loops).

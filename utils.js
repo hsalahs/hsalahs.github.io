@@ -127,7 +127,7 @@ function setButtonBusy(btn, label) {
 // words in firestore.rules (slugs/{slug}) and 404.html — keep the three in step.
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
 const RESERVED_SLUGS = ['index', 'app', 'event', 'invite', 'scan', 'guide', 'icons', 'tests', 'sitemap', 'robots',
-  'manifest', 'sw', 'utils', 'format', 'admin', 'login', 'www', 'api', '404'];
+  'manifest', 'sw', 'utils', 'format', 'admin', 'login', 'www', 'api', '404', 'privacy'];
 function normalizeSlug(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, '-'); }
 // '' when fine, otherwise the reason in Arabic.
 function slugProblem(s) {
