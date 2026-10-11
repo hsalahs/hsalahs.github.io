@@ -234,6 +234,16 @@ test('a fast double tap (قبول then قبول كـ VIP) on one request creates
   expect(st.c).toBe(1);
 });
 
+test('a request already approved elsewhere (another tab) is not approved twice: no second guest, no counter bump', async ({ page }) => {
+  await openRequests(page, store([{ name: 'سارة' }]));
+  await page.evaluate(() => { window.__fakeFirebase.store['events/e1/requests'].r0.status = 'approved'; });
+  await page.locator('.approve-btn').first().click();
+  await expect(page.locator('#toast')).toContainText('تمت الموافقة عليه مسبقًا');
+  const st = await page.evaluate(() => ({ g: Object.keys(window.__fakeFirebase.store['events/e1/guests']).length, c: window.__fakeFirebase.store.events.e1.guestCount || 0 }));
+  expect(st.g).toBe(0);
+  expect(st.c).toBe(0);
+});
+
 test('invite: an older card build that finishes last cannot overwrite the card after vip flipped', async ({ page }) => {
   await openInvite(page, { vip: true });
   await page.evaluate(() => {

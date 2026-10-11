@@ -2437,14 +2437,18 @@ async function approveRequest(reqDocId, vip) {
   if (paymentGateActive()) { openPaymentWhatsapp(); return; }
   const req = requests.find(r => r.docId === reqDocId);
   if (!req || approvingNow.has(reqDocId)) return;
-  approvingNow.add(reqDocId);
   const { doc, runTransaction } = window._fsFns;
   const eventRef = doc(window._db, 'events', eventId);
   const guestId = newGuestId();
   const guestRef = doc(window._db, 'events', eventId, 'guests', guestId);
   const reqRef = doc(window._db, 'events', eventId, 'requests', reqDocId);
+  approvingNow.add(reqDocId);
   try {
     await runTransaction(window._db, async (tx) => {
+      // A second tab (or «اقبل الكل») may have approved this request already:
+      // re-check inside the transaction so one request never makes two guests.
+      const reqSnap = await tx.get(reqRef);
+      if (!reqSnap.exists() || (reqSnap.data() || {}).status !== 'pending') throw new Error('ALREADY');
       const snap = await tx.get(eventRef);
       const data = snap.data() || {};
       const count = data.guestCount || 0;
@@ -2458,6 +2462,7 @@ async function approveRequest(reqDocId, vip) {
     showToast('✅ تمت الموافقة — ' + req.name + (vip ? ' (VIP)' : ''));
   } catch (e) {
     if (e.message === 'GATE') { openPaymentWhatsapp(); return; }
+    if (e.message === 'ALREADY') { showToast('ℹ️ هذا الطلب تمت الموافقة عليه مسبقًا'); return; }
     showErr(e);
   } finally {
     approvingNow.delete(reqDocId);
