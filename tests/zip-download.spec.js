@@ -40,7 +40,7 @@ async function open(page, names, { failAll = false, noZip = false } = {}) {
   await expect(page.locator('.guest-item')).toHaveCount(names.length);
   await page.evaluate((failAll) => {
     window.buildGuestCard = async () => {
-      if (failAll) { window.QRCode = function () {}; return null; }
+      if (failAll) { window.QRCode = function () {}; window.QRCode.CorrectLevel = { H: 2 }; return null; }
       const c = document.createElement('canvas'); c.width = c.height = 8;
       c.getContext('2d').fillRect(0, 0, 8, 8);
       return c;

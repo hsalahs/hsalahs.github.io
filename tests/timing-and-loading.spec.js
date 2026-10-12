@@ -235,10 +235,12 @@ test.describe('card building and starting the dashboard', () => {
   test('the QR library load gives up after 15 s, so a hanging CDN cannot hang a download', async ({ page }) => {
     await page.clock.install();
     await setup(page);
-    await page.route(/qrcodejs.*qrcode\.min\.js/, () => {});
+    let cdnHits = 0;
+    await page.route(/qrcodejs.*qrcode\.min\.js/, () => { cdnHits++; });
     await page.goto('/event.html?id=e1');
     await page.clock.runFor(1000);
     await page.evaluate(() => { window.__r = 'pending'; buildGuestCard(guests[0]).then((v) => { window.__r = v === null ? 'null' : 'card'; }); });
+    await expect.poll(() => cdnHits).toBe(1);
     await page.clock.runFor(14000);
     expect(await page.evaluate(() => window.__r)).toBe('pending');
     await page.clock.runFor(2000);
@@ -319,7 +321,8 @@ test.describe('review round 3', () => {
     const store = STORE();
     for (let i = 0; i < 30; i++) store['events/e1/guests']['x' + i] = { id: 'X-' + i, name: 'ضيف ' + i, scanned: false };
     await setup(page, store);
-    await page.route(/qrcodejs.*qrcode\.min\.js/, () => {});
+    let cdnHits = 0;
+    await page.route(/qrcodejs.*qrcode\.min\.js/, () => { cdnHits++; });
     await page.route(/jszip/, (route) => route.fulfill({ contentType: 'text/javascript', body: fs.readFileSync('node_modules/jszip/dist/jszip.min.js', 'utf8') }));
     await page.goto('/event.html?id=e1');
     await page.clock.runFor(1000);
@@ -329,6 +332,7 @@ test.describe('review round 3', () => {
       window.__zipDone = false;
       downloadAllCards().then(() => { window.__zipDone = true; });
     });
+    await expect.poll(() => cdnHits).toBe(1);
     await page.clock.runFor(14000);
     expect(await page.evaluate(() => window.__zipDone)).toBe(false);
     await page.clock.runFor(3000);
