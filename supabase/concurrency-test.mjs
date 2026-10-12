@@ -53,6 +53,13 @@ try {
   const locked = tries.filter((r) => r[0].r === 'locked').length;
   console.log(`30 parallel wrong codes, one device: wrong=${wrong} (expect 10) locked=${locked} (expect 20)`);
   if (wrong !== 10 || locked !== 20) bad++;
+  // 5) add_guests RPC under parallel load: free event (cap 5), 3 used, 8 parallel calls of 1 guest -> exactly 2 succeed
+  await sql(`delete from public.guests where event_id = 'zzconc1'; insert into public.guests (event_id, id, name) select 'zzconc1', 'D-' || g, 'd' from generate_series(1, 3) g`);
+  const rpc = await Promise.all(Array.from({ length: 8 }, (_, i) => sql(asOwner(`select added from public.add_guests('zzconc1', '[{"name":"n${i}"}]')`))));
+  const addedTotal = rpc.reduce((n, r) => n + r[0].added, 0);
+  const [c2] = await sql(`select guest_count from public.events where id = 'zzconc1'`);
+  console.log(`8 parallel add_guests at 3 of 5: added=${addedTotal} (expect 2), guest_count=${c2.guest_count} (expect 5)`);
+  if (addedTotal !== 2 || c2.guest_count !== 5) bad++;
 } finally {
   await cleanup();
 }

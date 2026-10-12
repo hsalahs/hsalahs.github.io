@@ -13,3 +13,8 @@ grant execute on function app_private.is_anon(), app_private.is_admin(), app_pri
 grant execute on function public.start_scan_session(text, text), public.end_scan_session(text),
   public.scan_session_valid(text), public.check_in(text, text), public.door_guests(text, timestamptz),
   public.door_event(text), public.reset_door_attempts(text), public.door_alert(text) to authenticated;
+
+-- guests and requests (chunk 4). add_guests / approve_requests check ownership inside.
+grant execute on function public.add_guests(text, jsonb, boolean), public.approve_requests(text, jsonb) to authenticated;
+-- public: the invite page (guest may be signed in or not)
+grant execute on function public.submit_request(text, text, text), public.get_request(text, text) to anon, authenticated;
