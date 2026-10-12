@@ -60,6 +60,20 @@ try {
   const [c2] = await sql(`select guest_count from public.events where id = 'zzconc1'`);
   console.log(`8 parallel add_guests at 3 of 5: added=${addedTotal} (expect 2), guest_count=${c2.guest_count} (expect 5)`);
   if (addedTotal !== 2 || c2.guest_count !== 5) bad++;
+  // 6) double click: 6 parallel approve_requests of the SAME 3 requests on a free event with room for 3 -> 3 guests, no duplicates
+  await sql(`delete from public.guests where event_id = 'zzconc1'; delete from public.requests where event_id = 'zzconc1';
+    insert into public.requests (event_id, id, name) select 'zzconc1', 'zzconc-req-' || lpad(g::text, 10, '0'), 'r' || g from generate_series(1, 3) g`);
+  const items = JSON.stringify([1, 2, 3].map((g) => ({ req_id: 'zzconc-req-' + String(g).padStart(10, '0') })));
+  await Promise.all(Array.from({ length: 6 }, () => sql(asOwner(`select cardinality(approved) from public.approve_requests('zzconc1', '${items}')`))));
+  const [c3] = await sql(`select (select count(*) from public.guests where event_id='zzconc1')::int g, (select count(distinct req_id) from public.guests where event_id='zzconc1')::int d, (select count(*) from public.requests where event_id='zzconc1' and status='approved')::int a`);
+  console.log(`6 parallel approvals of the same 3 requests: guests=${c3.g} distinct=${c3.d} approved=${c3.a} (expect 3/3/3)`);
+  if (c3.g !== 3 || c3.d !== 3 || c3.a !== 3) bad++;
+  // 7) submit_request at the pending cap: free event (cap 5): 10 parallel submits -> exactly 5 pending
+  await sql(`delete from public.requests where event_id = 'zzconc1'; delete from public.guests where event_id = 'zzconc1'`);
+  const subs = await Promise.allSettled(Array.from({ length: 10 }, (_, i) => sql(`select public.submit_request('zzconc1', 'zzconc-sub-${String(i).padStart(10, '0')}', 'n${i}')`)));
+  const [c4] = await sql(`select count(*)::int n from public.requests where event_id='zzconc1' and status='pending'`);
+  console.log(`10 parallel submit_request at cap 5: pending=${c4.n} (expect 5), accepted=${subs.filter((x) => x.status === 'fulfilled').length}`);
+  if (c4.n !== 5) bad++;
 } finally {
   await cleanup();
 }

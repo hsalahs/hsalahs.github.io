@@ -100,4 +100,14 @@ select pg_temp.t_eq('short id: nothing', $$select count(*) from public.get_reque
 select pg_temp.t_eq('approved shows the guest id', $$select guest_id is not null from public.get_request('t3', repeat('1', 20))$$, 'true', 'anon');
 select pg_temp.t_eq('approved shows vip', $$select vip::text from public.get_request('t3', repeat('3', 20))$$, 'true', 'anon');
 select pg_temp.t_eq('the answer has only 4 columns (no event or owner data)', $$select count(*) from (select * from public.get_request('t1', repeat('q', 20))) s, jsonb_object_keys(to_jsonb(s))$$, '4', 'anon');
+-- reviewer follow-ups
+insert into public.events (id, owner_uid, name, paid) values ('t4', pg_temp.uid('A'), 'event four', true);
+insert into public.requests (event_id, id, name) values ('t4', repeat('x', 20), 'dup');
+select pg_temp.t_eq('the same req_id twice in one call approves it once', $$select cardinality(approved) from public.approve_requests('t4', '[{"req_id":"xxxxxxxxxxxxxxxxxxxx"},{"req_id":"xxxxxxxxxxxxxxxxxxxx","vip":true}]')$$, '1', 'authenticated', pg_temp.uid('A'));
+select pg_temp.t_eq('and creates exactly one guest', $$select count(*) from public.guests where event_id='t4' and req_id=repeat('x', 20)$$, '1');
+select pg_temp.t_fail('a second guest for the same request is refused by the database', $$insert into public.guests (event_id, id, name, req_id) values ('t4', 'WD-DUP', 'x', repeat('x', 20))$$);
+select pg_temp.t_fail('vip must be a boolean (add_guests)', $$select * from public.add_guests('t4', '[{"name":"x","vip":"abc"}]')$$, 'authenticated', pg_temp.uid('A'));
+select pg_temp.t_fail('vip must be a boolean (approve)', $$select * from public.approve_requests('t4', '[{"req_id":"xxxxxxxxxxxxxxxxxxxx","vip":"abc"}]')$$, 'authenticated', pg_temp.uid('A'));
+insert into public.requests (event_id, id, name) select 't1', 'adm-' || lpad(g::text, 16, '0'), 'a' from generate_series(1, 3) g;
+select pg_temp.t_eq('admin approves past the cap', $$select cardinality(approved) || '/' || blocked from public.approve_requests('t1', '[{"req_id":"adm-0000000000000001"},{"req_id":"adm-0000000000000002"}]')$$, '2/false', 'authenticated', pg_temp.uid('ADM'));
 select * from pg_temp.report();

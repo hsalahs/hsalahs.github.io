@@ -2,9 +2,12 @@
 -- Replaces the Firestore transactions in event.html / invite.html. The cap itself is also enforced by the
 -- guests trigger (0002), so these functions can never exceed it even if buggy.
 
+-- one guest per approved request (reviewer: duplicate req_ids in one call must not create two guests)
+create unique index if not exists guests_req_unique on public.guests (event_id, req_id) where req_id is not null;
+
 -- barcode text of a guest: 'WD-' + 12 hex chars (the Firestore ids were 'WD-' + 13 base36 chars)
 create or replace function app_private.new_guest_id() returns text
-language sql volatile set search_path = 'extensions', 'public' as $$
+language sql volatile set search_path = 'extensions' as $$
   select 'WD-' || upper(encode(gen_random_bytes(6), 'hex'));
 $$;
 
@@ -28,10 +31,11 @@ begin
   select * into ev from public.events where id = p_event_id for update;
   if not found then raise exception 'EVENT_NOT_FOUND' using errcode = 'P0002'; end if;
 
-  for r in select btrim(e.value ->> 'name') as nm from jsonb_array_elements(p_guests) e loop
+  for r in select btrim(e.value ->> 'name') as nm, jsonb_typeof(e.value -> 'vip') as vt from jsonb_array_elements(p_guests) e loop
     if r.nm is null or char_length(r.nm) not between 1 and 100 then
       raise exception 'BAD_NAME' using errcode = '22023';
     end if;
+    if r.vt is not null and r.vt not in ('boolean', 'null') then raise exception 'BAD_INPUT' using errcode = '22023'; end if;
   end loop;
 
   room := case when app_private.is_admin() then n
@@ -64,13 +68,18 @@ begin
   end if;
   if p_items is null or jsonb_typeof(p_items) <> 'array' then raise exception 'BAD_INPUT' using errcode = '22023'; end if;
   if jsonb_array_length(p_items) > 200 then raise exception 'BATCH_TOO_LARGE' using errcode = '22023'; end if;
+  if exists (select 1 from jsonb_array_elements(p_items) i where jsonb_typeof(i.value -> 'vip') not in ('boolean', 'null')) then
+    raise exception 'BAD_INPUT' using errcode = '22023';
+  end if;
   select * into ev from public.events where id = p_event_id for update;
   if not found then raise exception 'EVENT_NOT_FOUND' using errcode = 'P0002'; end if;
 
+  -- distinct on: the same req_id twice in p_items must approve it once (one guest, one cap slot)
   for r in
-    select q.id, q.name, q.vip as req_vip, (i.value ->> 'vip')::boolean as item_vip
+    select q.id, q.name, q.vip as req_vip, i.item_vip, q.created_at
       from public.requests q
-      join jsonb_array_elements(p_items) i(value) on i.value ->> 'req_id' = q.id
+      join (select distinct on (i.value ->> 'req_id') i.value ->> 'req_id' as rid, (i.value ->> 'vip')::boolean as item_vip
+              from jsonb_array_elements(p_items) i order by i.value ->> 'req_id') i on i.rid = q.id
      where q.event_id = p_event_id and q.status = 'pending'
      order by q.created_at, q.id
   loop
@@ -98,9 +107,9 @@ declare ev public.events%rowtype; nm text := btrim(p_name); pending integer;
 begin
   if p_req_id is null or p_req_id !~ '^[A-Za-z0-9_-]{20,128}$' then raise exception 'BAD_REQUEST_ID' using errcode = '22023'; end if;
   if nm is null or char_length(nm) not between 1 and 100 then raise exception 'BAD_NAME' using errcode = '22023'; end if;
-  perform pg_advisory_xact_lock(hashtext('req:' || p_event_id));
   select * into ev from public.events where id = p_event_id;
   if not found then raise exception 'EVENT_NOT_FOUND' using errcode = 'P0002'; end if;
+  perform pg_advisory_xact_lock(hashtext('req:' || p_event_id));
   if exists (select 1 from public.requests where event_id = p_event_id and id = p_req_id) then return; end if;  -- retry-safe
   select count(*) into pending from public.requests where event_id = p_event_id and status = 'pending';
   if pending >= least(app_private.guest_cap(ev.paid, ev.guest_limit), 5000) then
