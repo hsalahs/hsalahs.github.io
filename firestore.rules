@@ -73,6 +73,15 @@ service cloud.firestore {
         request.resource.data.guestCount >= resource.data.guestCount;
     }
 
+    // The guests' welcome message: text of at most 400 characters (WELCOME_MAX
+    // in utils.js). An unchanged value always passes, so an older event with a
+    // longer message can still have its other details edited.
+    function welcomeMessageOk() {
+      let m = request.resource.data.get('welcomeMessage', null);
+      return m == null || (m is string && m.size() <= 400) ||
+        (resource != null && m == resource.data.get('welcomeMessage', null));
+    }
+
     match /eventRequests/{requestId} {
       allow create: if request.auth != null && request.resource.data.uid == request.auth.uid &&
         request.resource.data.keys().hasOnly(['uid', 'email', 'status', 'requestedAt']) &&
@@ -149,7 +158,7 @@ service cloud.firestore {
       allow create: if request.auth != null &&
         slug.matches('^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$') &&
         !(slug in ['index', 'app', 'event', 'invite', 'scan', 'guide', 'icons', 'tests', 'sitemap', 'robots',
-                   'manifest', 'sw', 'utils', 'format', 'admin', 'login', 'www', 'api', '404']) &&
+                   'manifest', 'sw', 'utils', 'format', 'admin', 'login', 'www', 'api', '404', 'privacy']) &&
         request.resource.data.keys().hasOnly(['eventId', 'ownerUid', 'createdAt']) &&
         request.resource.data.ownerUid == request.auth.uid &&
         request.resource.data.eventId is string &&
@@ -178,6 +187,7 @@ service cloud.firestore {
             request.resource.data.get('paid', false) == false &&
             !('guestLimit' in request.resource.data) &&
             request.resource.data.get('guestCount', 0) == 0 &&
+            welcomeMessageOk() &&
             existsAfter(/databases/$(database)/documents/accountLimits/$(request.auth.uid)) &&
             getAfter(/databases/$(database)/documents/accountLimits/$(request.auth.uid)).data.eventCount <=
             getAfter(/databases/$(database)/documents/accountLimits/$(request.auth.uid)).data.eventLimit
@@ -194,7 +204,8 @@ service cloud.firestore {
           request.resource.data.ownerUid == resource.data.ownerUid &&
           request.resource.data.paid == resource.data.paid &&
           request.resource.data.get('guestLimit', null) == resource.data.get('guestLimit', null) &&
-          guestCountNotDecreased()
+          guestCountNotDecreased() &&
+          welcomeMessageOk()
         )
       );
 
