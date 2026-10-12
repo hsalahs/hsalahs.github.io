@@ -17,6 +17,9 @@ create function pg_temp.fx(q text) returns text language sql immutable as $$
   select replace(replace(replace(replace(replace(replace(q, '{A}', pg_temp.uid('A')::text), '{B}', pg_temp.uid('B')::text), '{D}', pg_temp.uid('D')::text), '{ADM}', pg_temp.uid('ADM')::text), '{E}', pg_temp.uid('E')::text), '{F}', pg_temp.uid('F')::text);
 $$;
 
+-- 0012 revokes EXECUTE from PUBLIC on new functions: the helpers called from inside role-switched SQL need it back
+grant execute on function pg_temp.uid(text), pg_temp.fx(text) to public;
+
 create function pg_temp.as_role(p_role text, p_uid uuid, p_anon boolean) returns void
 language plpgsql as $$
 begin

@@ -85,7 +85,7 @@ select pg_temp.t_ok('customer asks for another event', $$insert into public.even
 select pg_temp.t_fail('cannot ask in someone else name', $$insert into public.event_requests (uid,email) values ('{B}','b@test.local')$$, 'authenticated', pg_temp.uid('A'), false);
 select pg_temp.t_fail('anonymous cannot ask', $$insert into public.event_requests (uid,email) values ('{D}','')$$, 'authenticated', pg_temp.uid('D'), true);
 select pg_temp.t_fail('cannot insert an approved request', $$insert into public.event_requests (uid,email,status) values ('{A}','x','approved')$$, 'authenticated', pg_temp.uid('A'), false);
-insert into public.event_requests (id, uid, email) values ('00000000-0000-0000-0000-00000000e001', pg_temp.uid('A'), 'a@test.local');
+insert into public.event_requests (id, uid, email, status) values ('00000000-0000-0000-0000-00000000e001', pg_temp.uid('A'), 'a@test.local', 'rejected');
 select pg_temp.t_eq('customer cannot approve own request', $$with u as (update public.event_requests set status='approved' where id='00000000-0000-0000-0000-00000000e001' returning 1) select count(*) from u$$, '0', 'authenticated', pg_temp.uid('A'), false);
 select pg_temp.t_ok('admin approves a request', $$update public.event_requests set status='approved' where id='00000000-0000-0000-0000-00000000e001'$$, 'authenticated', pg_temp.uid('ADM'), false);
 select pg_temp.t_eq('customer reads own requests', $$select count(*) from public.event_requests$$, '2', 'authenticated', pg_temp.uid('A'), false);
