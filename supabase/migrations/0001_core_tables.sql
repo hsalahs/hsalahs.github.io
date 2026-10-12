@@ -1,6 +1,6 @@
 -- 0001: core tables, constraints, indexes. RLS is turned on in 0003; until then
--- nothing is granted to anon/authenticated (0007 is the final grants audit).
--- Replaces firestore.rules data model. Safe to re-run on staging (drops first).
+-- nothing is granted to anon/authenticated (9999 is the final grants step).
+-- Replaces firestore.rules data model. Safe to re-run on staging (create if not exists).
 
 create schema if not exists app_private;
 revoke all on schema app_private from public, anon, authenticated;

@@ -37,7 +37,9 @@ create index if not exists scan_attempts_failed_at_idx on public.scan_attempts (
 
 -- (should-fix) changed_at must also move when the name or VIP changes, so the door's delta sync
 -- carries edits. clock_timestamp(), not now(): a long transaction must not stamp an old time
--- that a device which synced meanwhile would then skip.
+-- that a device which synced meanwhile would then skip. This does NOT cover commit order (a row
+-- stamped at t1 but committed after a device synced at t2>t1 is missed by since=t2): the client must
+-- subtract a safety margin (e.g. 1 minute) from its cursor.
 alter table public.guests alter column changed_at set default clock_timestamp();
 
 create or replace function app_private.guests_before_update() returns trigger

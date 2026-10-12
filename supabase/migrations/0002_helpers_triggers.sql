@@ -3,7 +3,7 @@
 -- guest cap, guest_count, scanned_count, and the owner's protected event fields.
 
 -- Functions created from now on are NOT callable by anon/authenticated/public by default
--- (Supabase's default grants EXECUTE to them; every grant here is explicit, see 0007).
+-- (Supabase's default grants EXECUTE to them; every grant here is explicit, see 9999).
 alter default privileges in schema public revoke execute on functions from public, anon, authenticated;
 alter default privileges in schema app_private revoke execute on functions from public, anon, authenticated;
 

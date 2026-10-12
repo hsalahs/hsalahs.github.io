@@ -1,4 +1,4 @@
--- 0099: the single place that decides who may EXECUTE what. Runs LAST on every migration run.
+-- 9999: the single place that decides who may EXECUTE what. Runs LAST on every migration run (files sort by name: keep every other migration below 9999).
 -- Functions get EXECUTE for PUBLIC/anon by default in Postgres/Supabase, so everything is
 -- revoked here and only the whitelist below is granted back. Every later chunk that adds a
 -- callable function must add it to this list AND to tests/50_review.sql (the audit test).
