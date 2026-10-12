@@ -9,7 +9,7 @@ import {
 import {
   initializeFirestore, persistentLocalCache, memoryLocalCache, persistentMultipleTabManager, persistentSingleTabManager,
   collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp,
-  doc, setDoc, getDoc, getDocFromCache, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc, getCountFromServer
+  doc, setDoc, getDoc, getDocFromCache, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc, getCountFromServer, terminate
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -54,11 +54,15 @@ try {
 // sessionStorage fsmode = 'memory' (no IndexedDB cache) or 'long' (the same
 // cache plus forced long-polling). Session-only, so it resets when the app
 // is reopened. Only app.html and event.html honour it, never the door
-// scanner. Anything else is the normal behaviour.
+// scanner. Anything else is the normal behaviour. The key is removed as soon
+// as it is read, so a mode applies to ONE page load only: the next
+// navigation tries the normal persistent cache again.
+const fsMarkPage = /\/(app|event)(\.html)?$/.test(location.pathname);
 let fsMode = 'default';
 try {
-  const m = /\/(app|event)(\.html)?$/.test(location.pathname) ? sessionStorage.getItem('fsmode') : null;
+  const m = fsMarkPage ? sessionStorage.getItem('fsmode') : null;
   if (m === 'memory' || m === 'long') fsMode = m;
+  if (m !== null) sessionStorage.removeItem('fsmode');
 } catch (e) {}
 window._fsMode = fsMode;
 window._fsTab = fsMode === 'memory' ? 'none' : (iosStandalone ? 'single' : 'multi');
@@ -80,11 +84,119 @@ window._fsFns = { collection, addDoc, query, where, orderBy, onSnapshot, serverT
 // "The client has already been terminated". Reloading gives it a fresh,
 // working client — a second's wait instead of a dead page.
 let firestorePageHidden = false;
-window.addEventListener('pagehide', () => { firestorePageHidden = true; });
-window.addEventListener('pageshow', (e) => { if (e.persisted || firestorePageHidden) location.reload(); });
+window.addEventListener('pagehide', () => {
+  firestorePageHidden = true;
+  // Backup for the iOS home-screen app: Firestore's own shutdown is async and
+  // iOS freezes the page before it finishes, leaving the IndexedDB cache busy
+  // for the next page. Terminating here, fire-and-forget, helps when _leave
+  // below was not the way out.
+  if (iosStandalone) { try { terminate(db).catch(() => {}); } catch (e) {} }
+});
+let deadClient = false;
+window.addEventListener('pageshow', (e) => { if (e.persisted || firestorePageHidden || deadClient) location.reload(); });
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && deadClient) { location.reload(); return; }
   if (document.visibilityState === 'visible' && firestorePageHidden) location.reload();
 });
 window._isFirestoreTerminated = (e) => !!(e && /already been terminated/i.test(e.message || ''));
+
+function fsMark(k) { try { if (typeof tmark === 'function') tmark(k); } catch (e) {} }
+if (fsMarkPage && fsMode !== 'default') fsMark('mode:' + fsMode);
+
+// Leaving a Firestore page for another one. In the iOS home-screen app the
+// old page stays frozen behind the new one and keeps the IndexedDB cache
+// busy, so the new page's reads hang (measured: raw IndexedDB and the network
+// are fine, the cache probe hangs, memory cache works). Terminating the
+// client from a live page, BEFORE navigating, frees it. Capped at 400 ms so
+// a terminate that never answers cannot hold the user. Elsewhere this is a
+// plain navigation. The duration is kept for the next page's timing line.
+let leaveStarted = false;
+window._leave = async (url) => {
+  if (!iosStandalone) { location.assign(url); return; }
+  if (leaveStarted) return;
+  leaveStarted = true;
+  window._leaving = true;
+  deadClient = true;
+  const t0 = performance.now();
+  let timer;
+  try {
+    await Promise.race([terminate(db), new Promise((r) => { timer = setTimeout(r, 400); })]);
+  } catch (e) {}
+  clearTimeout(timer);
+  try { sessionStorage.setItem('fsleave', String(Math.round(performance.now() - t0))); } catch (e) {}
+  location.assign(url);
+  // No reload while the navigation is slow (it would cancel it). If it never
+  // happens, a later tap may try again; and a user who backgrounds the app
+  // and comes back to this terminated page gets a reload (visibilitychange).
+  // After 10 s the page is evidently staying: errors stop being silenced (a
+  // terminated one takes the normal reload path), but deadClient keeps the
+  // reload on return from the background. No reload here, on purpose: a
+  // very slow navigation could still be on its way.
+  setTimeout(() => { leaveStarted = false; window._leaving = false; }, 10000);
+};
+try {
+  const lv = sessionStorage.getItem('fsleave');
+  if (lv !== null) { sessionStorage.removeItem('fsleave'); fsMark('leave ' + lv + 'ms'); }
+} catch (e) {}
+if (iosStandalone) {
+  document.addEventListener('click', (e) => {
+    try {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+      if (!a || a.hasAttribute('download')) return;
+      const tg = (a.getAttribute('target') || '').toLowerCase();
+      if (tg && tg !== '_self') return;
+      const raw = a.getAttribute('href');
+      if (!raw || raw.charAt(0) === '#') return;
+      const u = new URL(a.href, location.href);
+      if (!/^https?:$/.test(u.protocol) || u.origin !== location.origin) return;
+      if (u.pathname === location.pathname && u.search === location.search) return;
+      e.preventDefault();
+      window._leave(u.href);
+    } catch (err) {}
+  }, true);
+}
+
+// Safety net for the same stall when it still happens (app.html / event.html
+// in the home-screen app only; never the door scanner or an invitation): a
+// cache-only read of a document that does not exist answers at once on a
+// healthy cache (a miss is fine). If it gets no answer in 6 s the cache is
+// stuck, so reload this page once in memory mode (no IndexedDB). fsauto
+// allows that only once until a probe answers again, so it can never loop.
+if (fsMarkPage && iosStandalone) {
+  const probeT0 = performance.now();
+  let probeAnswered = false, probeTimer;
+  const probeDone = () => {
+    if (probeAnswered) return;
+    probeAnswered = true;
+    clearTimeout(probeTimer);
+    fsMark('probe ok ' + Math.round(performance.now() - probeT0) + 'ms');
+    try { sessionStorage.removeItem('fsauto'); } catch (e) {}
+  };
+  try { getDocFromCache(doc(db, '__probe', 'x')).then(probeDone, probeDone); } catch (e) { probeDone(); }
+  let probeDeferred = false;
+  const probeCheck = () => {
+    if (probeAnswered || firestorePageHidden) return;
+    if (document.visibilityState !== 'visible') {
+      if (!probeDeferred) {
+        probeDeferred = true;
+        document.addEventListener('visibilitychange', function again() {
+          if (document.visibilityState !== 'visible') return;
+          document.removeEventListener('visibilitychange', again);
+          probeCheck();
+        });
+      }
+      return;
+    }
+    try {
+      if (sessionStorage.getItem('fsauto')) return;
+      sessionStorage.setItem('fsmode', 'memory');
+      sessionStorage.setItem('fsauto', '1');
+    } catch (e) { return; }
+    fsMark('auto-memory');
+    location.reload();
+  };
+  probeTimer = setTimeout(probeCheck, 6000);
+}
 
 window.dispatchEvent(new Event('appDbReady'));

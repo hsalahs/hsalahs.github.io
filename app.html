@@ -75,7 +75,6 @@ function tmButtons(line) {
   box.id = 'timing-btns';
   box.style.cssText = 'direction:rtl;text-align:center;padding:0 18px 16px;';
   var defs = [['جرّب بدون ذاكرة', 'memory'], ['جرّب اتصال بديل', 'long']];
-  if (window._fsMode && window._fsMode !== 'default') defs.push(['رجوع للوضع العادي', '']);
   defs.forEach(function (d) {
     var b = document.createElement('button');
     b.type = 'button';
@@ -545,7 +544,7 @@ async function createNewEvent() {
     if (!admin) {
       notifyAdmin('مناسبة جديدة 🎉', 'عميل جديد سوى مناسبة: "' + name + '" — الإيميل: ' + (user.email || user.uid));
     }
-    window.location.href = 'event.html?id=' + eventId;
+    goTo('event.html?id=' + eventId);
     // Left busy on purpose: the page is on its way to the dashboard.
   } catch (e) {
     restore();

@@ -263,6 +263,16 @@ export function getDocFromCache(ref) {
   return Promise.resolve(makeDocSnap(ref.collPath, ref.id, coll[ref.id]));
 }
 
+// terminate(db): the iOS home-screen fix calls it before leaving a page.
+// Each call is tallied in sessionStorage (the page is about to navigate and
+// window state is lost); window.__terminateHang = true never answers.
+export function terminate() {
+  try { sessionStorage.setItem('__terminateCalls', String(Number(sessionStorage.getItem('__terminateCalls') || 0) + 1)); } catch (e) {}
+  window.__terminateCalls = (window.__terminateCalls || 0) + 1;
+  if (window.__terminateHang) return new Promise(() => {});
+  return Promise.resolve();
+}
+
 export function getDocs(refOrQuery) {
   if (window.__failNextGetDocs) {
     window.__failNextGetDocs = false;
