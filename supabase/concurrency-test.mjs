@@ -7,10 +7,14 @@ const url = `https://api.supabase.com/v1/projects/${ref}/database/query`;
 const N = Number(process.argv[2] || 8);
 const OWNER = '00000000-0000-0000-0000-00000000c0c0';
 const sql = async (query) => {
-  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query }) });
-  const t = await r.text();
-  if (!r.ok) throw new Error(`${r.status} ${t.slice(0, 400)}`);
-  return JSON.parse(t);
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query }) });
+    const t = await r.text();
+    if (r.status === 429) { await new Promise((ok) => setTimeout(ok, 4000)); continue; }   // management API throttle
+    if (!r.ok) throw new Error(`${r.status} ${t.slice(0, 400)}`);
+    return JSON.parse(t);
+  }
+  throw new Error('429 too many requests, gave up');
 };
 // an open transaction is rolled back when the request ends, so commit explicitly
 const asOwner = (q) => `begin; select set_config('request.jwt.claims', '{"sub":"${OWNER}","role":"authenticated","is_anonymous":false}', true); set local role authenticated; ${q}; commit;`;
@@ -88,6 +92,27 @@ try {
   const [c6] = await sql(`select event_count, (select count(*) from public.events where owner_uid = '${OWNER}')::int n from public.account_limits where uid = '${OWNER}'`);
   console.log(`6 parallel delete_event of one event: event_count=${c6.event_count} (expect 1), events left=${c6.n} (expect 1)`);
   if (c6.event_count !== 1 || c6.n !== 1) bad++;
+  // 10) lock order (deadlock check). B holds the EVENT lock for 1.5 s and then deletes the event; A starts 0.5 s later
+  // with a write on one guest. The OLD client path (direct guest UPDATE, guest row locked first, then the event row
+  // through the counter trigger) must deadlock: that proves the check is sensitive. The NEW path (set_guest_scanned,
+  // event row locked first) must not.
+  const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  const mkEvent = (id) => sql(`delete from public.events where id = '${id}'; insert into public.events (id, owner_uid, name, paid) values ('${id}', '${OWNER}', 'x', true);
+    insert into public.guests (event_id, id, name) select '${id}', 'G-' || g, 'g' from generate_series(1, 5) g`);
+  const race = async (id, writerSql) => {
+    await mkEvent(id);
+    const b = sql(asOwner(`select 1 from public.events where id = '${id}' for update; select pg_sleep(1.5); select public.delete_event('${id}')`).replace('set local role authenticated;', ''));
+    await wait(500);
+    const a = sql(writerSql);
+    const res = await Promise.allSettled([a, b]);
+    return res.filter((x) => x.status === 'rejected' && /deadlock/i.test(String(x.reason))).length;
+  };
+  const oldPath = await race('zzconc-lo1', `begin; update public.guests set scanned = true where event_id = 'zzconc-lo1' and id = 'G-1'; commit; select 1`);
+  const newPath = await race('zzconc-lo2', asOwner(`select public.set_guest_scanned('zzconc-lo2', 'G-1', true)`));
+  const newPath2 = await race('zzconc-lo3', asOwner(`select public.remove_guest('zzconc-lo3', 'G-1')`));
+  const newPath3 = await race('zzconc-lo4', asOwner(`select outcome from public.check_in('zzconc-lo4', 'G-1')`));
+  console.log(`lock order: old path deadlocks=${oldPath} (expect >=1 = the check can see it), set_guest_scanned=${newPath}, remove_guest=${newPath2}, check_in=${newPath3} (expect 0 each)`);
+  if (oldPath < 1 || newPath || newPath2 || newPath3) bad++;
 } finally {
   await cleanup();
 }

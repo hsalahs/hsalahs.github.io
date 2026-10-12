@@ -23,3 +23,11 @@ grant execute on function public.submit_request(text, text, text), public.get_re
 grant execute on function public.create_event(text, text, text, text, text, text, text), public.delete_event(text),
   public.bump_event_limit(), public.admin_set_event_limit(uuid, integer), public.admin_approve_event_request(uuid),
   public.admin_delete_user(uuid) to authenticated;
+
+-- slugs and the public event read (chunk 6)
+grant execute on function public.claim_slug(text, text), public.auto_claim_slug(text, text) to authenticated;
+grant execute on function public.resolve_slug(text), public.event_public(text) to anon, authenticated;
+
+-- guest writes with a fixed lock order (0010)
+grant execute on function public.set_guest(text, text, text, boolean), public.set_guest_scanned(text, text, boolean),
+  public.remove_guest(text, text) to authenticated;
