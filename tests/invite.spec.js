@@ -564,9 +564,11 @@ test('a QR library that fails to download shows a clear message with retry, and 
 });
 
 
-test('the scanner, dashboard pages still preconnect to Firestore, the invitation to Supabase; the service worker gives the network 1500 ms before the cache', async () => {
+test('the dashboard pages still preconnect to Firestore, the invitation and the scanner to Supabase; the service worker gives the network 1500 ms before the cache', async () => {
   const fs = require('fs');
-  for (const f of ['scan.html', 'app.html', 'event.html']) {
+  expect(fs.readFileSync('scan.html', 'utf8')).toContain('<link rel="preconnect" href="https://gunizkapwatixvbfliva.supabase.co" crossorigin>');
+  expect(fs.readFileSync('scan.html', 'utf8')).not.toMatch(/firestore|firebase/i);
+  for (const f of ['app.html', 'event.html']) {
     expect(fs.readFileSync(f, 'utf8')).toContain('<link rel="preconnect" href="https://firestore.googleapis.com">');
   }
   const inv = fs.readFileSync('invite.html', 'utf8');

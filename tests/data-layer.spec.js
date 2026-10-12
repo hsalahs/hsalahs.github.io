@@ -592,3 +592,105 @@ test('the timed fetch still works and times out when AbortController is missing,
   });
   expect(code).toBe('unsupported');
 });
+
+// ---- Data.scan / Data.auth (the door scanner) ----
+const DOOR_SEED = {
+  events: { e1: { name: 'x' } },
+  doors: { e1: { pin: '123456', guests: [{ id: 'WD-A', name: 'أ', scanned: false, scanned_at: null, vip: false, changed_at: '2026-01-01T00:00:00.000000+00:00' }], lastChange: '2026-01-01T00:00:00.000000+00:00' } },
+  sessions: { e1: { 'anon-1': '123456' } },
+  user: { id: 'anon-1', is_anonymous: true, email: null },
+};
+
+test('Data.scan.start returns ok / wrong / locked and nothing else', async ({ page }) => {
+  await openSb(page, { seed: { ...DOOR_SEED, sessions: {}, user: { id: 'anon-2', is_anonymous: true, email: null } } });
+  const out = await page.evaluate(async () => {
+    const wrong = await Data.scan.start('e1', '000000');
+    const ok = await Data.scan.start('e1', '123456');
+    window.__fakeSupabase.doors.e1.attempts = { 'anon-2': 10 };
+    const locked = await Data.scan.start('e1', '123456');
+    return { wrong, ok, locked };
+  });
+  expect(out).toEqual({ wrong: 'wrong', ok: 'ok', locked: 'locked' });
+});
+
+test('Data.scan.checkIn returns the outcome in the page\'s shape and is never repeated by the layer', async ({ page }) => {
+  await openSb(page, { seed: DOOR_SEED });
+  const out = await page.evaluate(async () => {
+    const a = await Data.scan.checkIn('e1', 'WD-A');
+    const b = await Data.scan.checkIn('e1', 'WD-A');
+    const c = await Data.scan.checkIn('e1', 'WD-NOPE');
+    window.__fakeSupabase.fail = { check_in: { error: 'network' } };
+    let err = null;
+    try { await Data.scan.checkIn('e1', 'WD-A'); } catch (e) { err = e.code; }
+    return { a: [a.outcome, a.guestName, a.vip, a.scannedCount, typeof a.scannedAt], b: b.outcome, c: [c.outcome, c.guestName], err, calls: window.__fakeSupabase.calls.filter((x) => x.name === 'check_in').length };
+  });
+  expect(out).toEqual({ a: ['allowed', 'أ', false, 1, 'string'], b: 'duplicate', c: ['not_found', ''], err: 'offline', calls: 4 });
+});
+
+test('Data.scan.event returns name, counts and lastChange; a refused caller gets no-session', async ({ page }) => {
+  await openSb(page, { seed: DOOR_SEED });
+  const out = await page.evaluate(async () => {
+    const ev = await Data.scan.event('e1');
+    window.__fakeSupabase.sessions.e1 = {};
+    let code = null;
+    try { await Data.scan.event('e1'); } catch (e) { code = e.code; }
+    return { ev, code };
+  });
+  expect(out.ev).toEqual({ name: 'x', guestCount: 1, scannedCount: 0, lastChange: '2026-01-01T00:00:00.000000+00:00' });
+  expect(out.code).toBe('no-session');
+});
+
+test('Data.scan.guests merges by id and the same answer applied twice is the same list', async ({ page }) => {
+  await openSb(page, { seed: DOOR_SEED });
+  const out = await page.evaluate(async () => {
+    const r1 = await Data.scan.guests('e1', null);
+    const r2 = await Data.scan.guests('e1', null);
+    return { n1: r1.rows.length, same: JSON.stringify(r1.rows) === JSON.stringify(r2.rows), cursor: r1.cursor, full: r1.full };
+  });
+  expect(out).toEqual({ n1: 1, same: true, cursor: '2025-12-31T23:59:00.000Z', full: true });
+});
+
+test('two door calls that hit a dead sign-in at the same moment heal it once (one anonymous sign-in)', async ({ page }) => {
+  await openSb(page, { seed: { ...DOOR_SEED, user: { id: 'gone', is_anonymous: true, email: null } } });
+  const out = await page.evaluate(async () => {
+    const jwt = { message: 'JWT expired', code: 'PGRST301', status: 401 };
+    window.__fakeSupabase.auth.refreshFails = true;
+    window.__fakeSupabase.fail = { door_event: { error: jwt, times: 1 }, scan_session_valid: { error: jwt, times: 1 } };
+    const codes = await Promise.all([Data.scan.event('e1').catch((e) => e.code), Data.scan.valid('e1').catch((e) => e.code)]);
+    return { codes, anon: window.__fakeSupabase.auth.anonCalls };
+  });
+  expect(out).toEqual({ codes: ['auth-lost', 'auth-lost'], anon: 1 });
+});
+
+test('Data.auth: current, onChange, signInAnon, signInWithPassword, isAdmin, signOut', async ({ page }) => {
+  await openSb(page, { seed: { admins: ['a@x.com'], accounts: { 'a@x.com': { id: 'adm', password: 'pw' } } } });
+  const out = await page.evaluate(async () => {
+    const seen = [];
+    const off = Data.auth.onChange((u, ev) => seen.push([ev, u && u.uid]));
+    const before = await Data.auth.current();
+    const anon = await Data.auth.signInAnon();
+    const adminBefore = await Data.auth.isAdmin();
+    const adm = await Data.auth.signInWithPassword('a@x.com', 'pw');
+    const adminAfter = await Data.auth.isAdmin();
+    await Data.auth.signOut();
+    const after = await Data.auth.current();
+    let bad = null;
+    try { await Data.auth.signInWithPassword('a@x.com', 'nope'); } catch (e) { bad = e.code; }
+    off();
+    return { before, anon: anon.isAnonymous, adminBefore, adm: [adm.uid, adm.isAnonymous], adminAfter, after, bad, events: seen.map((s) => s[0]) };
+  });
+  expect(out.before).toBeNull();
+  expect(out.anon).toBe(true);
+  expect(out.adminBefore).toBe(false);
+  expect(out.adm).toEqual(['adm', false]);
+  expect(out.adminAfter).toBe(true);
+  expect(out.after).toBeNull();
+  expect(out.bad).toBe('invalid-credential');
+  expect(out.events).toEqual(expect.arrayContaining(['SIGNED_IN', 'SIGNED_OUT']));
+});
+
+test('normalizeError: PGRST303 (JWT claims) is a lost sign-in like PGRST301', async ({ page }) => {
+  await openSb(page);
+  const code = await page.evaluate(() => Data.normalizeError({ message: 'JWT cryptographic operation failed', code: 'PGRST303' }).code);
+  expect(code).toBe('no-session');
+});

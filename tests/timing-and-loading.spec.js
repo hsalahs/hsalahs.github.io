@@ -610,16 +610,6 @@ test.describe('Firestore mode override and stuck-page probes', () => {
     expect((await settings(page)).mode).toBe('default');
   });
 
-  test('scan.html ignores fsmode', async ({ page }) => {
-    await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'memory'); });
-    await setup(page);
-    await page.goto('/scan.html');
-    await page.waitForFunction(() => window._fsMode);
-    const t = await settings(page);
-    expect(t.mode).toBe('default');
-    expect(t.s.localCache.kind).toBe('persistent');
-  });
-
   for (const [pageUrl, host] of [['/app.html', '#auth-loading'], ['/event.html?id=e1', '#loading-msg']]) {
     test(`${pageUrl}: stuck then recovered removes the line and the buttons`, async ({ page }) => {
       await page.clock.install();
@@ -841,15 +831,6 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
     expect(await calls(page)).toBe(0);
   });
 
-  test('scan.html: the back-to-dashboard navigation goes through _leave', async ({ page }) => {
-    await standalone(page);
-    await setup(page);
-    await page.goto('/scan.html');
-    await page.waitForFunction(() => window._leave);
-    await page.evaluate(() => goTo('event.html?id=e1'));
-    await page.waitForURL('**/event.html?id=e1');
-    expect(await calls(page)).toBeGreaterThanOrEqual(1);
-  });
 });
 
 test.describe('Stalled cache watchdog (iOS home-screen app)', () => {

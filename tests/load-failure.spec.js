@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubFirebase, seedFakeFirebase, stubSupabase, seedScan } = require('./helpers');
 
 // A weak phone signal can drop one of the page's own script files. The page
 // used to open half-working with no message (a dashboard with no invite link,
@@ -18,6 +18,7 @@ for (const [url, dropped] of PAGES) {
       user: { uid: 'u1', email: 'customer@example.com' },
       store: { events: { e1: { name: 'حفل', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } } },
     });
+    if (url.startsWith('scan.html')) { await stubSupabase(page); await seedScan(page); }
     let drop = true;
     await page.route('**/' + dropped, (route) => (drop ? route.abort() : route.continue()));
     await page.goto('/' + url);

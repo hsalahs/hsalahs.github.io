@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase, stubSupabase, seedInviteStore } = require('./helpers');
+const { stubFirebase, seedFakeFirebase, stubSupabase, seedInviteStore, seedScan } = require('./helpers');
 
 // Narrow phones (320 = the smallest still in use, 375 = the most common): no
 // page may scroll sideways, even with long names, emails and links — the
@@ -52,8 +52,8 @@ for (const width of [320, 375]) {
 
 test('320px: a long event name on the scanner code screen stays clear of the refresh button', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
-  await stubFirebase(page);
-  await seedFakeFirebase(page, { store });
+  await stubSupabase(page);
+  await seedScan(page, { event: { name: store.events.e1.name } });
   await page.goto('/scan.html?event=e1');
   await page.locator('#pin-input').waitFor();
   await expect(page.locator('#pin-event-name')).not.toBeEmpty();

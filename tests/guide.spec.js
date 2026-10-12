@@ -243,8 +243,12 @@ test('numbers and wording the guide states match the code', () => {
   expect(scan).toMatch(/denied:\s*\{ autoMs: 6000,/);
   expect(guide).toContain('بعد 5 ثواني تقريبًا');
   expect(guide).toContain('بعد 6 ثواني تقريبًا');
-  expect(scan).toMatch(/const SYNC_AUTO_MS = 2 \* 60 \* 1000;/);
-  expect(guide).toContain('أكثر من دقيقتين');
+  const data = read('data.js');
+  expect(data).toMatch(/const SCAN_COUNTER_MS = 4000;/);
+  expect(data).toMatch(/const SCAN_NAMES_MS = 10000;/);
+  expect(data).toMatch(/const SCAN_FULL_MS = 60000;/);
+  expect(guide).toContain('يتحدثون تلقائيًا كل ثواني قليلة');
+  expect(guide).toContain('يختفي خلال دقيقة تقريبًا');
 });
 
 test('the downloads follow the current list and the old custom link stops after a rename', () => {
