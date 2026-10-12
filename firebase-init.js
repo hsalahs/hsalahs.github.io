@@ -92,9 +92,10 @@ window.addEventListener('pagehide', () => {
   // below was not the way out.
   if (iosStandalone) { try { terminate(db).catch(() => {}); } catch (e) {} }
 });
-window.addEventListener('pageshow', (e) => { if (e.persisted || firestorePageHidden) location.reload(); });
+let deadClient = false;
+window.addEventListener('pageshow', (e) => { if (e.persisted || firestorePageHidden || deadClient) location.reload(); });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && window._leaving) { location.reload(); return; }
+  if (document.visibilityState === 'visible' && deadClient) { location.reload(); return; }
   if (document.visibilityState === 'visible' && firestorePageHidden) location.reload();
 });
 window._isFirestoreTerminated = (e) => !!(e && /already been terminated/i.test(e.message || ''));
@@ -115,6 +116,7 @@ window._leave = async (url) => {
   if (leaveStarted) return;
   leaveStarted = true;
   window._leaving = true;
+  deadClient = true;
   const t0 = performance.now();
   let timer;
   try {
@@ -126,7 +128,11 @@ window._leave = async (url) => {
   // No reload while the navigation is slow (it would cancel it). If it never
   // happens, a later tap may try again; and a user who backgrounds the app
   // and comes back to this terminated page gets a reload (visibilitychange).
-  setTimeout(() => { leaveStarted = false; }, 10000);
+  // After 10 s the page is evidently staying: errors stop being silenced (a
+  // terminated one takes the normal reload path), but deadClient keeps the
+  // reload on return from the background. No reload here, on purpose: a
+  // very slow navigation could still be on its way.
+  setTimeout(() => { leaveStarted = false; window._leaving = false; }, 10000);
 };
 try {
   const lv = sessionStorage.getItem('fsleave');

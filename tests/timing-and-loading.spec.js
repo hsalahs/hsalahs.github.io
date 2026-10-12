@@ -720,17 +720,17 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
     await setup(page);
     await page.goto('/app.html');
     await expect(page.locator('.event-card')).toHaveCount(1);
-    const fire = () => page.evaluate(() => {
+    const fire = () => {
       window.__mark = 1;
       Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
       document.dispatchEvent(new Event('visibilitychange'));
-    });
-    await fire();
+    };
+    await page.evaluate(fire);
     await page.waitForTimeout(500);
     expect(await page.evaluate(() => window.__mark)).toBe(1);
-    await page.evaluate(() => { window._leaving = true; });
+    await page.route('**/guide.html', async (r) => { await new Promise((x) => setTimeout(x, 30000)); await r.abort().catch(() => {}); });
     const reloaded = page.waitForEvent('load');
-    await fire();
+    await page.evaluate((src) => { window._leave('guide.html'); setTimeout(new Function('return ' + src)(), 1000); }, fire.toString());
     await reloaded;
     await expect.poll(() => page.evaluate(() => window.__mark === undefined)).toBe(true);
   });
@@ -751,6 +751,21 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
     await page.waitForTimeout(3000);
     expect(requests).toBe(1);
     await expect.poll(() => requests, { timeout: 12000 }).toBe(2);
+  });
+
+  test('event.html: after 10 s on a page that stayed, errors are no longer silenced: a terminated one reloads', async ({ page }) => {
+    await standalone(page);
+    await setup(page);
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
+    await page.route('**/app.html', async (r) => { await new Promise((x) => setTimeout(x, 30000)); await r.abort().catch(() => {}); });
+    const reloaded = page.waitForEvent('load', { timeout: 20000 });
+    await page.evaluate(() => {
+      window._leave('app.html');
+      setTimeout(() => { showErr(Object.assign(new Error('The client has already been terminated.'), { code: 'failed-precondition' })); }, 10500);
+    });
+    await reloaded;
+    expect(page.url()).toContain('event.html');
   });
 
   test('event.html: a terminated error raised while leaving shows no toast, does not reload, and the navigation arrives', async ({ page }) => {
