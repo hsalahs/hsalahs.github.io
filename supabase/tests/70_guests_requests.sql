@@ -87,7 +87,7 @@ select pg_temp.t_fail('the 51st is refused (REQUESTS_FULL)', $$select public.sub
 select pg_temp.t_eq('approved requests do not count as pending', $$update public.requests set status='approved' where event_id='t1' and id=repeat('e', 20); select 1$$, '1', 'postgres');
 select pg_temp.t_ok('so a new one fits again', $$select public.submit_request('t1', repeat('f', 20), 'x')$$, 'anon');
 select pg_temp.t_eq('paid event with a huge limit is still capped at 5000 pending', $$update public.events set paid = true, guest_limit = null where id = 't3'; insert into public.requests (event_id, id, name) select 't3', 'bulk-' || lpad(g::text, 15, '0'), 'b' from generate_series(1, 4999) g; select 1$$, '1', 'postgres');
-select pg_temp.t_eq('5000th pending still fits (4999 bulk + 1 pending r)', $$select count(*) from public.requests where event_id='t3' and status='pending'$$, '4999');
+select pg_temp.t_eq('4999 bulk requests are pending', $$select count(*) from public.requests where event_id='t3' and status='pending'$$, '4999');
 select pg_temp.t_ok('5000th', $$select public.submit_request('t3', repeat('j', 20), 'x')$$, 'anon');
 select pg_temp.t_fail('5001st is refused', $$select public.submit_request('t3', repeat('k', 20), 'x')$$, 'anon');
 -- get_request
@@ -109,4 +109,9 @@ select pg_temp.t_fail('vip must be a boolean (add_guests)', $$select * from publ
 select pg_temp.t_fail('vip must be a boolean (approve)', $$select * from public.approve_requests('t4', '[{"req_id":"xxxxxxxxxxxxxxxxxxxx","vip":"abc"}]')$$, 'authenticated', pg_temp.uid('A'));
 insert into public.requests (event_id, id, name) select 't1', 'adm-' || lpad(g::text, 16, '0'), 'a' from generate_series(1, 3) g;
 select pg_temp.t_eq('admin approves past the cap', $$select cardinality(approved) || '/' || blocked from public.approve_requests('t1', '[{"req_id":"adm-0000000000000001"},{"req_id":"adm-0000000000000002"}]')$$, '2/false', 'authenticated', pg_temp.uid('ADM'));
+-- cap above the floor: paid event with limit 200 -> 200 pending allowed
+insert into public.events (id, owner_uid, name, paid, guest_limit) values ('t5', pg_temp.uid('A'), 'event five', true, 200);
+insert into public.requests (event_id, id, name) select 't5', 'p5-' || lpad(g::text, 17, '0'), 'x' from generate_series(1, 199) g;
+select pg_temp.t_ok('the 200th pending fits a limit of 200', $$select public.submit_request('t5', repeat('m', 20), 'x')$$, 'anon');
+select pg_temp.t_fail('the 201st does not', $$select public.submit_request('t5', repeat('n', 20), 'x')$$, 'anon');
 select * from pg_temp.report();

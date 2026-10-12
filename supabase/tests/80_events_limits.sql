@@ -74,4 +74,15 @@ select pg_temp.t_fail('an admin cannot be deleted', $$select public.admin_delete
 select pg_temp.t_ok('admin deletes a customer', $$select public.admin_delete_user('{E}')$$, 'authenticated', pg_temp.uid('ADM'));
 select pg_temp.t_eq('their events, limits, requests, mirror row and sign-in are gone', $$select (select count(*) from public.events where owner_uid='{E}') + (select count(*) from public.account_limits where uid='{E}') + (select count(*) from public.event_requests where uid='{E}') + (select count(*) from public.users where uid='{E}') + (select count(*) from auth.users where id='{E}')$$, '0');
 select pg_temp.t_eq('other accounts are untouched (admin events, limits of B and F)', $$select (select count(*) from public.events where owner_uid = '{ADM}')::text || '/' || (select count(*) from public.account_limits where uid in ('{B}','{F}'))$$, '2/2');
+-- reviewer follow-ups
+insert into auth.users (id, email, is_anonymous) values ('00000000-0000-0000-0000-00000000aa01', 'g@test.local', false);
+select pg_temp.t_ok('create with an email claim', $o$do $x$ begin
+  perform set_config('request.jwt.claims', json_build_object('sub', '00000000-0000-0000-0000-00000000aa01', 'role', 'authenticated', 'is_anonymous', false, 'email', 'g@test.local')::text, true);
+  perform public.create_event('mail','wedding','','','',''); end $x$$o$);
+select pg_temp.t_eq('email claim stored as owner_email', $$select owner_email from public.events where owner_uid = '00000000-0000-0000-0000-00000000aa01'$$, 'g@test.local');
+select pg_temp.t_fail('create_event for a deleted user (token still valid)', $$select public.create_event('ghost','wedding','','','','')$$, 'authenticated', '00000000-0000-0000-0000-00000000dead'::uuid);
+select pg_temp.t_fail('bump_event_limit for a deleted user', $$select public.bump_event_limit()$$, 'authenticated', '00000000-0000-0000-0000-00000000dead'::uuid);
+select pg_temp.t_fail('admin_delete_user: unknown user', $$select public.admin_delete_user('00000000-0000-0000-0000-00000000dead')$$, 'authenticated', pg_temp.uid('ADM'));
+select pg_temp.t_fail('51-char event type', format($$select public.create_event('ok',%L,'','','','')$$, repeat('x', 51)), 'authenticated', pg_temp.uid('F'));
+select pg_temp.t_fail('51-char theme', format($$select public.create_event('ok','wedding','','','',%L)$$, repeat('x', 51)), 'authenticated', pg_temp.uid('F'));
 select * from pg_temp.report();

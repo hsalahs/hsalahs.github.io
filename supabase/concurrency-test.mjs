@@ -81,6 +81,13 @@ try {
   const [c5] = await sql(`select (select count(*) from public.events where owner_uid = '${OWNER}')::int n, (select event_count from public.account_limits where uid = '${OWNER}') cnt`);
   console.log(`6 parallel create_event with limit 1: events=${c5.n} (expect 1), event_count=${c5.cnt} (expect 1), succeeded=${cr.filter((x) => x.status === 'fulfilled').length}`);
   if (c5.n !== 1 || c5.cnt !== 1) bad++;
+  // 9) double delete: limit 3 with 2 events (count 2): 6 parallel delete_event of ONE event -> count must be 1, not 0
+  await sql(`delete from public.events where owner_uid = '${OWNER}'; update public.account_limits set event_limit = 3, event_count = 2 where uid = '${OWNER}';
+    insert into public.events (id, owner_uid, name) values ('zzconc-x', '${OWNER}', 'x'), ('zzconc-y', '${OWNER}', 'y')`);
+  await Promise.allSettled(Array.from({ length: 6 }, () => sql(asOwner(`select public.delete_event('zzconc-x')`))));
+  const [c6] = await sql(`select event_count, (select count(*) from public.events where owner_uid = '${OWNER}')::int n from public.account_limits where uid = '${OWNER}'`);
+  console.log(`6 parallel delete_event of one event: event_count=${c6.event_count} (expect 1), events left=${c6.n} (expect 1)`);
+  if (c6.event_count !== 1 || c6.n !== 1) bad++;
 } finally {
   await cleanup();
 }
