@@ -99,8 +99,9 @@ begin
     order by g.name;
 end $$;
 
--- Live numbers for the scanner header.
-create or replace function public.door_event(p_event_id text)
+-- Live numbers for the scanner header. (0013 adds a column: dropped first so a re-run of the whole set works.)
+drop function if exists public.door_event(text);
+create function public.door_event(p_event_id text)
 returns table (name text, guest_count integer, scanned_count integer)
 language plpgsql stable security definer set search_path = '' as $$
 begin

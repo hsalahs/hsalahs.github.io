@@ -17,7 +17,8 @@ Nothing here touches the live Firebase site.
 | `start_scan_session(event, pin)` | any signed-in (door device) | `ok` / `wrong` / `locked` (per-device 10 wrong in 10 min; per-event 60/hour or 300/day) |
 | `end_scan_session(event)`, `scan_session_valid(event)` | door device | void / boolean |
 | `check_in(event, guest)` | session, owner, admin | `allowed` / `duplicate` / `not_found` / `no_session` |
-| `door_guests(event, since)`, `door_event(event)` | session, owner, admin | rows / error `NO_SESSION` (42501) |
+| `door_guests(event, since, after_name, after_id, limit)`, `door_event(event)` | session, owner, admin | rows (max 1000 per call; keyset paging, see 0013) / error `NO_SESSION` (42501); `door_event` = name, guest_count, scanned_count, `last_change` |
+| `is_admin_me()` | signed-in | boolean |
 | `door_alert(event)`, `reset_door_attempts(event)` | owner, admin | error `NOT_ALLOWED` |
 | `add_guests(event, json, partial)` | owner, admin | `(added, blocked, ids)`; errors `NOT_ALLOWED`, `BAD_NAME`, `BAD_INPUT`, `BATCH_TOO_LARGE`, `EVENT_NOT_FOUND`; the cap trigger raises `GUEST_LIMIT_REACHED` |
 | `approve_requests(event, json)` | owner, admin | `(approved[], blocked)` |
