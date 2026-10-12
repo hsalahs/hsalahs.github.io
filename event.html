@@ -26,14 +26,15 @@
   }
   if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
 }, true);</script>
-<!-- ?timing=1 only: a small line of milliseconds-since-navigation marks under
-     the loading message (kept after load) to see which stage is slow on a
-     real phone. Without the param tmark does nothing. -->
-<script>var TM = /[?&]timing=1(&|$)/.test(location.search) ? { m: [], err: '' } : null;
+<!-- Loading marks (milliseconds since navigation) are always recorded, but
+     the small line under the loading message only shows with ?timing=1 or
+     when loading gets stuck (25 s), so a stall on the home-screen app, where
+     no ?timing=1 can be typed, can still be photographed. -->
+<script>var TM = { m: [], err: '', show: /[?&]timing=1(&|$)/.test(location.search) };
 var TM_HOST = 'loading-msg', TM_RES = ['firebase-init.js', 'firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'utils.js', 'icons.js', 'format.js'];
 function tmShow() {
   var host = document.getElementById(TM_HOST);
-  if (!host) return;
+  if (!TM.show || !host) return;
   var line = document.getElementById('timing-line');
   if (!line) {
     line = document.createElement('div');
@@ -56,17 +57,16 @@ function tmShow() {
   line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + (TM.err ? ' || err: ' + TM.err : '');
 }
 function tmark(k) {
-  if (!TM) return;
   TM.m.push(k + ' ' + Math.round(performance.now()));
-  console.log('timing:', k, Math.round(performance.now()));
+  if (TM.show) console.log('timing:', k, Math.round(performance.now()));
   tmShow();
 }
 function tmErr(msg) {
-  if (!TM || TM.err) return;
+  if (TM.err) return;
   TM.err = String(msg).slice(0, 120);
   tmShow();
 }
-if (TM) {
+{
   window.addEventListener('error', function (e) { if (e.message) tmErr(e.message); });
   window.addEventListener('unhandledrejection', function (e) { tmErr(e.reason && e.reason.message || e.reason); });
   document.addEventListener('DOMContentLoaded', tmShow);
@@ -1345,7 +1345,7 @@ function startListeners() {
     guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
     updateStats();
     scheduleRenderGuests();
-    if (!guestsMarked && TM) {
+    if (!guestsMarked) {
       guestsMarked = true;
       tmark('guests ' + (snap.metadata && snap.metadata.fromCache ? 'cache' : 'server') + ' n=' + snap.size);
       requestAnimationFrame(() => tmark('render ' + Math.round(performance.now() - snapAt) + 'ms'));
@@ -2691,6 +2691,7 @@ setTimeout(() => {
   if (!el || el.style.display === 'none' || el.onclick) return;
   const t = el.textContent.trim();
   if (t !== 'جاري التحميل...' && t !== 'الاتصال بطيء، لحظات…') return;
+  TM.show = true;
   tmark('stuck');
   el.textContent = '⚠️ التحميل تأخر — اضغط هنا للمحاولة مرة ثانية';
   el.style.cursor = 'pointer';
