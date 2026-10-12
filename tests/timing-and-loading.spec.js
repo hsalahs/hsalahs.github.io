@@ -147,6 +147,36 @@ test.describe('staged slow-connection message', () => {
     expect(text).toContain('slow ');
     expect(text).toContain('stuck ');
   });
+
+  for (const [pageUrl, host] of [['/app.html', '#auth-loading'], ['/event.html?id=e1', '#loading-msg']]) {
+    test(`${pageUrl} without ?timing=1: no line while loading, the line appears once stuck (home-screen app)`, async ({ page }) => {
+      await page.clock.install();
+      await setup(page);
+      await page.addInitScript(() => { window.__hangAuth = true; });
+      await page.goto(pageUrl);
+      await expect(page.locator(host)).toHaveText('جاري التحميل...');
+      await page.clock.runFor(9000);
+      await expect(page.locator('#timing-line')).toHaveCount(0);
+      await page.clock.runFor(17000);
+      await expect(page.locator(host)).toContainText('التحميل تأخر');
+      const text = await page.locator('#timing-line').textContent();
+      expect(text).toContain('script ');
+      expect(text).toContain('slow ');
+      expect(text).toContain('stuck ');
+      expect(text).toContain('sw:');
+    });
+  }
+
+  test('event.html: a page that recovers after getting stuck drops the line again', async ({ page }) => {
+    await page.clock.install();
+    await setup(page);
+    await page.addInitScript(() => { window.__hangAuth = true; });
+    await page.goto('/event.html?id=e1');
+    await page.clock.runFor(26000);
+    await expect(page.locator('#timing-line')).toHaveCount(1);
+    await page.evaluate(() => { document.getElementById('loading-msg').style.display = 'none'; tmark('dashboard shown'); });
+    await expect(page.locator('#timing-line')).toHaveCount(0);
+  });
 });
 
 test('both pages preconnect to the sign-in hosts, and to no font host', async () => {
