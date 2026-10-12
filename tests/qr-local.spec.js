@@ -130,7 +130,7 @@ test('event.html: a junk local file plus a failing CDN counts as failure, with t
 test('invite.html: both sources hanging give up after 8 s + 15 s with the retry message', async ({ page }) => {
   await page.clock.install();
   await stubFirebase(page);
-  await routeQr(page, { local: 'hang', cdn: 'hang' });
+  const q = await routeQr(page, { local: 'hang', cdn: 'hang' });
   await seedFakeFirebase(page, {
     store: {
       events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } },
@@ -139,9 +139,11 @@ test('invite.html: both sources hanging give up after 8 s + 15 s with the retry 
   });
   await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-1'); });
   await page.goto('/invite.html?event=e1', { waitUntil: 'domcontentloaded' });
-  await page.clock.runFor(1000);
+  await expect.poll(() => q.hits.local).toBe(1);
+  await page.clock.runFor(8500);
+  await expect.poll(() => q.hits.cdn).toBe(1);
   await expect(page.locator('#qr-retry')).toHaveCount(0);
-  await page.clock.runFor(25000);
+  await page.clock.runFor(15000);
   await expect(page.locator('#qr-retry')).toContainText('تعذّر تجهيز البطاقة', { timeout: 10000 });
   await expect(page.locator('#card-wrap img')).toHaveCount(0);
 });
