@@ -4,7 +4,7 @@
 // Usage: NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node --no-warnings supabase/concurrency-test.mjs [N=12]
 const ref = process.env.SUPABASE_REF || 'gunizkapwatixvbfliva';
 const url = `https://api.supabase.com/v1/projects/${ref}/database/query`;
-const N = Number(process.argv[2] || 12);
+const N = Number(process.argv[2] || 8);
 const OWNER = '00000000-0000-0000-0000-00000000c0c0';
 const sql = async (query) => {
   const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query }) });
@@ -14,7 +14,7 @@ const sql = async (query) => {
 };
 // an open transaction is rolled back when the request ends, so commit explicitly
 const asOwner = (q) => `begin; select set_config('request.jwt.claims', '{"sub":"${OWNER}","role":"authenticated","is_anonymous":false}', true); set local role authenticated; ${q}; commit;`;
-const cleanup = () => sql(`delete from public.events where id like 'zzconc%'; delete from auth.users where id = '${OWNER}'`);
+const cleanup = () => sql(`delete from public.events where id like 'zzconc%' or owner_uid = '${OWNER}'; delete from public.account_limits where uid = '${OWNER}'; delete from public.users where uid = '${OWNER}'; delete from auth.users where id = '${OWNER}'`);
 let bad = 0;
 try {
   await cleanup();
@@ -60,7 +60,7 @@ try {
   const [c2] = await sql(`select guest_count from public.events where id = 'zzconc1'`);
   console.log(`8 parallel add_guests at 3 of 5: added=${addedTotal} (expect 2), guest_count=${c2.guest_count} (expect 5)`);
   if (addedTotal !== 2 || c2.guest_count !== 5) bad++;
-  // 6) double click: 6 parallel approve_requests of the SAME 3 requests on a free event with room for 3 -> 3 guests, no duplicates
+  // 6) double click: 6 parallel approve_requests of the SAME 3 requests on a free event (room for 5) with 3 requests -> exactly 3 guests, no duplicates
   await sql(`delete from public.guests where event_id = 'zzconc1'; delete from public.requests where event_id = 'zzconc1';
     insert into public.requests (event_id, id, name) select 'zzconc1', 'zzconc-req-' || lpad(g::text, 10, '0'), 'r' || g from generate_series(1, 3) g`);
   const items = JSON.stringify([1, 2, 3].map((g) => ({ req_id: 'zzconc-req-' + String(g).padStart(10, '0') })));
@@ -68,12 +68,19 @@ try {
   const [c3] = await sql(`select (select count(*) from public.guests where event_id='zzconc1')::int g, (select count(distinct req_id) from public.guests where event_id='zzconc1')::int d, (select count(*) from public.requests where event_id='zzconc1' and status='approved')::int a`);
   console.log(`6 parallel approvals of the same 3 requests: guests=${c3.g} distinct=${c3.d} approved=${c3.a} (expect 3/3/3)`);
   if (c3.g !== 3 || c3.d !== 3 || c3.a !== 3) bad++;
-  // 7) submit_request at the pending cap: free event (cap 5): 10 parallel submits -> exactly 5 pending
-  await sql(`delete from public.requests where event_id = 'zzconc1'; delete from public.guests where event_id = 'zzconc1'`);
+  // 7) submit_request at the pending cap (free event: floor of 50): 45 pending already, 10 parallel submits -> exactly 5 accepted
+  await sql(`delete from public.requests where event_id = 'zzconc1'; delete from public.guests where event_id = 'zzconc1';
+    insert into public.requests (event_id, id, name) select 'zzconc1', 'zzconc-pre-' || lpad(g::text, 10, '0'), 'p' from generate_series(1, 45) g`);
   const subs = await Promise.allSettled(Array.from({ length: 10 }, (_, i) => sql(`select public.submit_request('zzconc1', 'zzconc-sub-${String(i).padStart(10, '0')}', 'n${i}')`)));
   const [c4] = await sql(`select count(*)::int n from public.requests where event_id='zzconc1' and status='pending'`);
-  console.log(`10 parallel submit_request at cap 5: pending=${c4.n} (expect 5), accepted=${subs.filter((x) => x.status === 'fulfilled').length}`);
-  if (c4.n !== 5) bad++;
+  console.log(`10 parallel submit_request with 45 of 50 used: pending=${c4.n} (expect 50), accepted=${subs.filter((x) => x.status === 'fulfilled').length} (expect 5)`);
+  if (c4.n !== 50) bad++;
+  // 8) create_event under the limit: a customer with limit 1 fires 6 parallel creations -> exactly 1 event, count 1
+  await sql(`delete from public.events where owner_uid = '${OWNER}'; delete from public.account_limits where uid = '${OWNER}'`);
+  const cr = await Promise.allSettled(Array.from({ length: 6 }, (_, i) => sql(asOwner(`select public.create_event('conc ${i}', 'wedding', '', '', '', '')`))));
+  const [c5] = await sql(`select (select count(*) from public.events where owner_uid = '${OWNER}')::int n, (select event_count from public.account_limits where uid = '${OWNER}') cnt`);
+  console.log(`6 parallel create_event with limit 1: events=${c5.n} (expect 1), event_count=${c5.cnt} (expect 1), succeeded=${cr.filter((x) => x.status === 'fulfilled').length}`);
+  if (c5.n !== 1 || c5.cnt !== 1) bad++;
 } finally {
   await cleanup();
 }

@@ -79,7 +79,7 @@ begin
     select q.id, q.name, q.vip as req_vip, i.item_vip, q.created_at
       from public.requests q
       join (select distinct on (i.value ->> 'req_id') i.value ->> 'req_id' as rid, (i.value ->> 'vip')::boolean as item_vip
-              from jsonb_array_elements(p_items) i order by i.value ->> 'req_id') i on i.rid = q.id
+              from jsonb_array_elements(p_items) i order by i.value ->> 'req_id', (i.value ->> 'vip')::boolean desc nulls last) i on i.rid = q.id
      where q.event_id = p_event_id and q.status = 'pending'
      order by q.created_at, q.id
   loop
@@ -99,8 +99,8 @@ begin
 end $$;
 
 -- A guest asks to register (public: the invite page calls this, signed in or not).
--- Pending requests per event are capped at the event's guest limit (founder's decision), with an absolute
--- ceiling of 5000 so a paid event with a huge limit cannot be flooded.
+-- Pending requests per event are capped at the event's guest limit but never below 50 (founder's decision, so a
+-- few junk requests from the public link cannot block a free event), with an absolute ceiling of 5000.
 create or replace function public.submit_request(p_event_id text, p_req_id text, p_name text) returns void
 language plpgsql security definer set search_path = '' as $$
 declare ev public.events%rowtype; nm text := btrim(p_name); pending integer;
@@ -112,7 +112,7 @@ begin
   perform pg_advisory_xact_lock(hashtext('req:' || p_event_id));
   if exists (select 1 from public.requests where event_id = p_event_id and id = p_req_id) then return; end if;  -- retry-safe
   select count(*) into pending from public.requests where event_id = p_event_id and status = 'pending';
-  if pending >= least(app_private.guest_cap(ev.paid, ev.guest_limit), 5000) then
+  if pending >= least(greatest(app_private.guest_cap(ev.paid, ev.guest_limit), 50), 5000) then
     raise exception 'REQUESTS_FULL' using errcode = 'P0001';
   end if;
   insert into public.requests (event_id, id, name) values (p_event_id, p_req_id, nm);

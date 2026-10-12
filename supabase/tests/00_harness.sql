@@ -9,12 +9,12 @@
 begin;
 create temp table results (name text, pass boolean, detail text);
 
--- fixture ids: {A} owner, {B} other owner, {D} door device (anonymous), {ADM} admin
+-- fixture ids: {E}/{F} extra customers created inside tests, {A} owner, {B} other owner, {D} door device (anonymous), {ADM} admin
 create function pg_temp.uid(k text) returns uuid language sql immutable as $$
-  select ('00000000-0000-0000-0000-0000000000' || case k when 'A' then 'a1' when 'B' then 'b2' when 'D' then 'd3' when 'ADM' then 'ad' end)::uuid;
+  select ('00000000-0000-0000-0000-0000000000' || case k when 'A' then 'a1' when 'B' then 'b2' when 'D' then 'd3' when 'ADM' then 'ad' when 'E' then 'e5' when 'F' then 'f6' end)::uuid;
 $$;
 create function pg_temp.fx(q text) returns text language sql immutable as $$
-  select replace(replace(replace(replace(q, '{A}', pg_temp.uid('A')::text), '{B}', pg_temp.uid('B')::text), '{D}', pg_temp.uid('D')::text), '{ADM}', pg_temp.uid('ADM')::text);
+  select replace(replace(replace(replace(replace(replace(q, '{A}', pg_temp.uid('A')::text), '{B}', pg_temp.uid('B')::text), '{D}', pg_temp.uid('D')::text), '{ADM}', pg_temp.uid('ADM')::text), '{E}', pg_temp.uid('E')::text), '{F}', pg_temp.uid('F')::text);
 $$;
 
 create function pg_temp.as_role(p_role text, p_uid uuid, p_anon boolean) returns void

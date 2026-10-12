@@ -18,7 +18,7 @@ select pg_temp.t_eq('PUBLIC (everyone) can execute no function either',
 select pg_temp.t_eq('authenticated can execute exactly the intended functions',
   $$select string_agg(n.nspname || '.' || p.proname, ', ' order by n.nspname, p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('public','app_private') and has_function_privilege('authenticated', p.oid, 'execute')$$,
-  'app_private.can_door, app_private.has_scan_session, app_private.is_admin, app_private.is_anon, app_private.is_owner, public.add_guests, public.approve_requests, public.check_in, public.door_alert, public.door_event, public.door_guests, public.end_scan_session, public.get_request, public.reset_door_attempts, public.scan_session_valid, public.start_scan_session, public.submit_request');
+  'app_private.can_door, app_private.has_scan_session, app_private.is_admin, app_private.is_anon, app_private.is_owner, public.add_guests, public.admin_approve_event_request, public.admin_delete_user, public.admin_set_event_limit, public.approve_requests, public.bump_event_limit, public.check_in, public.create_event, public.delete_event, public.door_alert, public.door_event, public.door_guests, public.end_scan_session, public.get_request, public.reset_door_attempts, public.scan_session_valid, public.start_scan_session, public.submit_request');
 select pg_temp.t_eq('trigger functions are not callable by the API roles',
   $$select coalesce(string_agg(p.proname, ', '), '') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'app_private' and p.proname like '%guests_%' and has_function_privilege('authenticated', p.oid, 'execute')$$, '');

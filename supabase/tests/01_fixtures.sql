@@ -11,4 +11,4 @@ insert into public.guests (event_id, id, name) values ('t1', 'WD-1', 'g1'), ('t1
 insert into public.requests (event_id, id, name) values ('t1', repeat('q', 20), 'req1');
 insert into public.account_limits values (pg_temp.uid('A'), 1, 1), (pg_temp.uid('B'), 1, 1);
 insert into public.slugs (slug, event_id, owner_uid) values ('slug-one', 't1', pg_temp.uid('A'));
-insert into public.users (uid, email) values (pg_temp.uid('A'), 'a@test.local');
+-- public.users rows for non-anonymous accounts are created by a trigger on auth.users (0008)

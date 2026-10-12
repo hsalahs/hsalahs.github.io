@@ -26,7 +26,7 @@ select pg_temp.t_eq('door device sees only its own session', $$select count(*) f
 select pg_temp.t_eq('owner reads own limits', $$select count(*) from public.account_limits$$, '1', 'authenticated', pg_temp.uid('A'), false);
 select pg_temp.t_eq('admin reads all limits', $$select count(*) from public.account_limits where uid in ('00000000-0000-0000-0000-0000000000a1','00000000-0000-0000-0000-0000000000b2')$$, '2', 'authenticated', pg_temp.uid('ADM'), false);
 select pg_temp.t_eq('customer cannot read users', $$select count(*) from public.users$$, '0', 'authenticated', pg_temp.uid('A'), false);
-select pg_temp.t_eq('admin reads users', $$select count(*) from public.users$$, '1', 'authenticated', pg_temp.uid('ADM'), false);
+select pg_temp.t_eq('admin reads users (A, B, ADM: filled by the signup trigger)', $$select count(*) from public.users$$, '3', 'authenticated', pg_temp.uid('ADM'), false);
 select pg_temp.t_eq('owner reads own slug', $$select count(*) from public.slugs$$, '1', 'authenticated', pg_temp.uid('A'), false);
 select pg_temp.t_eq('other owner reads no slug', $$select count(*) from public.slugs$$, '0', 'authenticated', pg_temp.uid('B'), false);
 select pg_temp.t_eq('owner reads requests', $$select count(*) from public.requests$$, '1', 'authenticated', pg_temp.uid('A'), false);
@@ -91,7 +91,7 @@ select pg_temp.t_ok('admin approves a request', $$update public.event_requests s
 select pg_temp.t_eq('customer reads own requests', $$select count(*) from public.event_requests$$, '2', 'authenticated', pg_temp.uid('A'), false);
 select pg_temp.t_eq('other customer reads none', $$select count(*) from public.event_requests$$, '0', 'authenticated', pg_temp.uid('B'), false);
 select pg_temp.t_eq('customer cannot delete users', $$with d as (delete from public.users returning 1) select count(*) from d$$, '0', 'authenticated', pg_temp.uid('A'), false);
-select pg_temp.t_eq('admin deletes a user row', $$with d as (delete from public.users returning 1) select count(*) from d$$, '1', 'authenticated', pg_temp.uid('ADM'), false);
+select pg_temp.t_eq('admin deletes a user row', $$with d as (delete from public.users returning 1) select count(*) from d$$, '3', 'authenticated', pg_temp.uid('ADM'), false);
 select pg_temp.t_eq('owner releases own slug', $$with d as (delete from public.slugs returning 1) select count(*) from d$$, '1', 'authenticated', pg_temp.uid('A'), false);
 select pg_temp.t_eq('other owner cannot release it', $$with d as (delete from public.slugs returning 1) select count(*) from d$$, '0', 'authenticated', pg_temp.uid('B'), false);
 select pg_temp.t_fail('nobody inserts slugs directly', $$insert into public.slugs (slug,event_id,owner_uid) values ('abc-def','t2','{B}')$$, 'authenticated', pg_temp.uid('B'), false);

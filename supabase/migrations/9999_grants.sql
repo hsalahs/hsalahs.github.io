@@ -18,3 +18,8 @@ grant execute on function public.start_scan_session(text, text), public.end_scan
 grant execute on function public.add_guests(text, jsonb, boolean), public.approve_requests(text, jsonb) to authenticated;
 -- public: the invite page (guest may be signed in or not)
 grant execute on function public.submit_request(text, text, text), public.get_request(text, text) to anon, authenticated;
+
+-- events, limits, admin (chunk 5): every function checks its caller inside
+grant execute on function public.create_event(text, text, text, text, text, text, text), public.delete_event(text),
+  public.bump_event_limit(), public.admin_set_event_limit(uuid, integer), public.admin_approve_event_request(uuid),
+  public.admin_delete_user(uuid) to authenticated;

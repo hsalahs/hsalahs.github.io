@@ -79,14 +79,13 @@ select pg_temp.t_fail('null name', $$select public.submit_request('t2', repeat('
 select pg_temp.t_fail('101-char name', format($$select public.submit_request('t2', repeat('c', 20), '%s')$$, repeat('x', 101)), 'anon');
 select pg_temp.t_fail('unknown event', $$select public.submit_request('nope', repeat('c', 20), 'x')$$, 'anon');
 select pg_temp.t_eq('the name is trimmed', $$select public.submit_request('t2', repeat('d', 20), '  علي  '); select name from public.requests where event_id='t2' and id=repeat('d', 20)$$, 'علي', 'postgres');
--- pending cap = event guest limit (t1: free, cap 5, already has 1 pending request from the fixtures)
-select pg_temp.t_ok('t1 pending #2', $$select public.submit_request('t1', repeat('e', 20), 'x')$$, 'anon');
-select pg_temp.t_ok('t1 pending #3', $$select public.submit_request('t1', repeat('f', 20), 'x')$$, 'anon');
-select pg_temp.t_ok('t1 pending #4', $$select public.submit_request('t1', repeat('g', 20), 'x')$$, 'anon');
-select pg_temp.t_ok('t1 pending #5', $$select public.submit_request('t1', repeat('h', 20), 'x')$$, 'anon');
-select pg_temp.t_fail('t1 pending #6 is over the guest limit', $$select public.submit_request('t1', repeat('i', 20), 'x')$$, 'anon');
-select pg_temp.t_eq('approved requests do not count as pending', $$update public.requests set status='approved' where event_id='t1' and id=repeat('h', 20); select 1$$, '1', 'postgres');
-select pg_temp.t_ok('so a new one fits again', $$select public.submit_request('t1', repeat('i', 20), 'x')$$, 'anon');
+-- pending cap = event guest limit, but never below 50 (t1: free, cap 5 -> 50), ceiling 5000
+insert into public.requests (event_id, id, name) select 't1', 'fill-' || lpad(g::text, 15, '0'), 'f' from generate_series(1, 48) g;
+select pg_temp.t_eq('t1 has 49 pending (1 fixture + 48 fill)', $$select count(*) from public.requests where event_id='t1' and status='pending'$$, '49');
+select pg_temp.t_ok('the 50th pending request fits (free event, limit 5, floor 50)', $$select public.submit_request('t1', repeat('e', 20), 'x')$$, 'anon');
+select pg_temp.t_fail('the 51st is refused (REQUESTS_FULL)', $$select public.submit_request('t1', repeat('f', 20), 'x')$$, 'anon');
+select pg_temp.t_eq('approved requests do not count as pending', $$update public.requests set status='approved' where event_id='t1' and id=repeat('e', 20); select 1$$, '1', 'postgres');
+select pg_temp.t_ok('so a new one fits again', $$select public.submit_request('t1', repeat('f', 20), 'x')$$, 'anon');
 select pg_temp.t_eq('paid event with a huge limit is still capped at 5000 pending', $$update public.events set paid = true, guest_limit = null where id = 't3'; insert into public.requests (event_id, id, name) select 't3', 'bulk-' || lpad(g::text, 15, '0'), 'b' from generate_series(1, 4999) g; select 1$$, '1', 'postgres');
 select pg_temp.t_eq('5000th pending still fits (4999 bulk + 1 pending r)', $$select count(*) from public.requests where event_id='t3' and status='pending'$$, '4999');
 select pg_temp.t_ok('5000th', $$select public.submit_request('t3', repeat('j', 20), 'x')$$, 'anon');
