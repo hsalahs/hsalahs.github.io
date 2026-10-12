@@ -107,14 +107,32 @@ async function stubSupabase(page) {
 //   requests: { eventId: { reqId: { status, guest_id, vip, name } } }
 //   tables:   { tableName: [rows] }   (plain table reads, capped by maxRows)
 // fail: { rpcName: { error: { message, code } | 'network', times } }
-async function seedFakeSupabase(page, { events = {}, slugs = {}, requests = {}, tables = {}, user = null, fail = {}, latency = 0, maxRows = 1000 } = {}) {
+async function seedFakeSupabase(page, { events = {}, slugs = {}, requests = {}, tables = {}, user = null, fail = {}, latency = 0, maxRows = 1000,
+  doors = {}, sessions = {}, owners = {}, admins = [], accounts = {} } = {}) {
   await page.addInitScript((seed) => {
     window.__fakeSupabase = Object.assign({
       calls: [],
       denyRpc: [],
-      auth: { user: seed.user, listeners: [], accounts: {}, nextSignInError: null, nextResetError: null, nextAnonUid: null },
+      auth: { user: seed.user, listeners: [], accounts: seed.accounts, nextSignInError: null, nextResetError: null, nextAnonUid: null },
     }, seed.state);
-  }, { user, state: { events, slugs, requests, tables, fail, latency, maxRows } });
+  }, { user, accounts, state: { events, slugs, requests, tables, fail, latency, maxRows, doors, sessions, owners, admins } });
+}
+
+// The door scanner's server in one call. Defaults: event e1 'حفل تجريبي', door code
+// 123456, no guests. guests: [{ id, name, scanned?, vip?, scanned_at?, changed_at? }].
+// session: true gives `user` a session on the current code (a device that unlocked
+// before). owner / admin: the signed-in user is that event's owner / the admin.
+// Plain-object options after these are passed to seedFakeSupabase.
+async function seedScan(page, { event = {}, pin = '123456', guests = [], user = null, session = false, owner = false, admin = false,
+  lastChange = '2026-01-01T00:00:00.000000+00:00', ...rest } = {}) {
+  const ev = Object.assign({ name: 'حفل تجريبي', type: 'wedding', date: '2026-01-01', venue: 'الرياض', theme: 'gold' }, event);
+  const rows = guests.map((g) => Object.assign({ scanned: false, scanned_at: null, vip: false, changed_at: '2026-01-01T00:00:00.000000+00:00' },
+    g, g.scanned && !g.scanned_at ? { scanned_at: '2026-01-01T00:00:00.000000+00:00' } : {}));
+  const opts = { events: { e1: ev }, doors: { e1: { pin, guests: rows, lastChange } }, user, ...rest };
+  if (user && session) opts.sessions = { e1: { [user.id]: pin } };
+  if (user && owner) opts.owners = { e1: user.id };
+  if (user && admin) opts.admins = [user.email];
+  return seedFakeSupabase(page, opts);
 }
 
 // Turns the Firebase-shaped store the invite specs were written with
@@ -145,4 +163,4 @@ async function seedInviteStore(page, { store = {}, ...rest } = {}) {
   return seedFakeSupabase(page, { events, slugs, requests, ...rest });
 }
 
-module.exports = { stubFirebase, seedFakeFirebase, routeQr, stubSupabase, seedFakeSupabase, seedInviteStore };
+module.exports = { stubFirebase, seedFakeFirebase, routeQr, stubSupabase, seedFakeSupabase, seedInviteStore, seedScan };

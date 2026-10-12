@@ -65,15 +65,166 @@
     },
   };
 
+
+  // ---- door scanner (supabase/migrations 0004, 0013) ------------------------
+  // State: S().doors[eventId] = { pin, guests: [row], attempts: {uid: n}, locked, lastChange }
+  //        S().sessions[eventId][uid] = pin the device proved
+  //        S().owners[eventId] = owner uid; S().admins = [emails]
+  // Guest rows: { id, name, scanned, scanned_at, vip, changed_at } like door_guests returns.
+  // Counters are computed from the rows (the real triggers keep them equal).
+  let lastMs = 0, micro = 0;
+  function stamp() {
+    const ms = Date.now();
+    if (ms === lastMs) micro++; else { lastMs = ms; micro = 0; }
+    return new Date(ms).toISOString().replace('Z', String(micro).padStart(3, '0') + '+00:00');
+  }
+  // microseconds since the epoch, for comparing the stub's and the client's timestamps
+  function tsKey(x) {
+    const m = String(x).match(/\.(\d+)/);
+    const frac = m ? Number(m[1].padEnd(6, '0').slice(0, 6)) : 0;
+    return Math.floor(Date.parse(String(x).replace(/\.\d+/, '')) / 1000) * 1e6 + frac;
+  }
+  const doorOf = (eid) => ((S().doors = S().doors || {})[eid]);
+  const me = () => S().auth.user;
+  function isAdminUser(u) { return !!u && !u.is_anonymous && (S().admins || []).includes(u.email); }
+  function canDoor(eid) {
+    const u = me();
+    if (!u) return false;
+    const d = doorOf(eid);
+    if (!d) return false;
+    const sess = ((S().sessions || {})[eid] || {})[u.id];
+    if (d.pin && sess === d.pin) return true;
+    if (!u.is_anonymous && (S().owners || {})[eid] === u.id) return true;
+    return isAdminUser(u);
+  }
+  function needDoor(eid) { if (!canDoor(eid)) throw pgError('NO_SESSION', '42501'); }
+  function touch(d) { d.lastChange = stamp(); }
+  function counts(d) { return { guest_count: d.guests.length, scanned_count: d.guests.filter((g) => g.scanned).length }; }
+
+  Object.assign(FUNCS, {
+    start_scan_session(a) {
+      const u = me();
+      if (!u) throw pgError('NOT_SIGNED_IN', '28000');
+      const d = doorOf(a.p_event_id);
+      if (!d || !d.pin) return 'wrong';
+      d.attempts = d.attempts || {};
+      const sessions = (S().sessions = S().sessions || {});
+      const mine = (sessions[a.p_event_id] = sessions[a.p_event_id] || {});
+      if ((d.attempts[u.id] || 0) >= 10) return 'locked';
+      if (d.budgetSpent && !mine[u.id]) return 'locked';
+      if (a.p_pin && a.p_pin === d.pin) { d.attempts[u.id] = 0; mine[u.id] = d.pin; return 'ok'; }
+      d.attempts[u.id] = (d.attempts[u.id] || 0) + 1;
+      return 'wrong';
+    },
+    end_scan_session(a) {
+      const u = me();
+      const mine = ((S().sessions || {})[a.p_event_id]);
+      if (u && mine) delete mine[u.id];
+      return null;
+    },
+    scan_session_valid(a) {
+      const u = me();
+      const d = doorOf(a.p_event_id);
+      return !!(u && d && d.pin && ((S().sessions || {})[a.p_event_id] || {})[u.id] === d.pin);
+    },
+    is_admin_me() { return isAdminUser(me()); },
+    door_event(a) {
+      needDoor(a.p_event_id);
+      const d = doorOf(a.p_event_id);
+      const ev = (S().events || {})[a.p_event_id] || {};
+      const row = Object.assign({ name: ev.name || '', last_change: d.lastChange || null }, counts(d));
+      const o = S().counterOverride;
+      if (o && (o.times === undefined || o.times > 0)) { if (o.times !== undefined) o.times--; Object.assign(row, o.row); }
+      return [row];
+    },
+    check_in(a) {
+      const eid = a.p_event_id;
+      if (!canDoor(eid)) return [{ outcome: 'no_session', guest_name: null, vip: null, scanned_at: null, scanned_count: null }];
+      const d = doorOf(eid);
+      const g = d.guests.find((x) => x.id === a.p_guest_id);
+      if (!g) return [{ outcome: 'not_found', guest_name: null, vip: null, scanned_at: null, scanned_count: counts(d).scanned_count }];
+      if (g.scanned) return [{ outcome: 'duplicate', guest_name: g.name, vip: g.vip, scanned_at: g.scanned_at, scanned_count: counts(d).scanned_count }];
+      g.scanned = true; g.scanned_at = stamp(); g.changed_at = stamp(); touch(d);
+      return [{ outcome: 'allowed', guest_name: g.name, vip: g.vip, scanned_at: g.scanned_at, scanned_count: counts(d).scanned_count }];
+    },
+    door_guests(a) {
+      needDoor(a.p_event_id);
+      const d = doorOf(a.p_event_id);
+      const lim = Math.min(Math.max(a.p_limit == null ? 1000 : a.p_limit, 1), 1000);
+      const cmp = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+      let rows;
+      if (a.p_since == null) {
+        rows = d.guests.slice().sort((x, y) => cmp(x.name, y.name) || cmp(x.id, y.id));
+        if (a.p_after_id != null) rows = rows.filter((g) => cmp(g.name, a.p_after_name || '') > 0 || (g.name === (a.p_after_name || '') && cmp(g.id, a.p_after_id) > 0));
+      } else {
+        const since = tsKey(a.p_since);
+        rows = d.guests.slice().sort((x, y) => (tsKey(x.changed_at) - tsKey(y.changed_at)) || cmp(x.id, y.id));
+        rows = a.p_after_id == null
+          ? rows.filter((g) => tsKey(g.changed_at) > since)
+          : rows.filter((g) => tsKey(g.changed_at) > since || (tsKey(g.changed_at) === since && cmp(g.id, a.p_after_id) > 0));
+      }
+      return rows.slice(0, lim).map((g) => Object.assign({}, g));
+    },
+  });
+
+  // Server-side actions a test performs "from another device or the dashboard".
+  window.__srv = {
+    stamp,
+    door(eid) { return doorOf(eid); },
+    addGuest(eid, g) {
+      const d = doorOf(eid);
+      d.guests.push(Object.assign({ scanned: false, scanned_at: null, vip: false, changed_at: stamp() }, g));
+      touch(d);
+    },
+    checkIn(eid, id) {
+      const d = doorOf(eid); const g = d.guests.find((x) => x.id === id);
+      if (g && !g.scanned) { g.scanned = true; g.scanned_at = stamp(); g.changed_at = stamp(); touch(d); }
+    },
+    undo(eid, id) {
+      const d = doorOf(eid); const g = d.guests.find((x) => x.id === id);
+      if (g && g.scanned) { g.scanned = false; g.scanned_at = null; g.changed_at = stamp(); touch(d); }
+    },
+    rename(eid, id, name) {
+      const d = doorOf(eid); const g = d.guests.find((x) => x.id === id);
+      if (g) { g.name = name; g.changed_at = stamp(); touch(d); }
+    },
+    setVip(eid, id, vip) {
+      const d = doorOf(eid); const g = d.guests.find((x) => x.id === id);
+      if (g) { g.vip = vip; g.changed_at = stamp(); touch(d); }
+    },
+    removeGuest(eid, id) {
+      const d = doorOf(eid); const i = d.guests.findIndex((x) => x.id === id);
+      if (i >= 0) { d.guests.splice(i, 1); touch(d); }
+    },
+    // the organizer generates a new door code: every device's session stops matching
+    setPin(eid, pin) { doorOf(eid).pin = pin; },
+    // the sign-in disappears in another tab of this browser
+    signOutElsewhere() { const A = S().auth; A.user = null; A.listeners.slice().forEach((fn) => fn('SIGNED_OUT', null)); },
+    signInElsewhere(user) { const A = S().auth; A.user = user; A.listeners.slice().forEach((fn) => fn('SIGNED_IN', { user })); },
+  };
+
   async function callRpc(name, args) {
     S().calls.push({ name, args: JSON.parse(JSON.stringify(args || {})) });
     await wait();
+    const extra = S().rpcDelay && S().rpcDelay[name];
+    if (extra) await new Promise((r) => setTimeout(r, extra));
+    // S().holdRpc = { check_in: true } parks every call until a test releases it:
+    // window.__fakeSupabase.held.shift()('ok' | 'fail')
+    if (S().holdRpc && S().holdRpc[name]) {
+      const mode = await new Promise((res) => { (S().held = S().held || []).push(res); });
+      if (mode === 'fail') return { data: null, error: pgError('TypeError: Failed to fetch', '') };
+    }
     const bad = injected(name);
     if (bad) return { data: null, error: bad };
     if ((S().denyRpc || []).includes(name)) return { data: null, error: pgError('permission denied for function ' + name, '42501') };
     const fn = FUNCS[name];
     if (!fn) return { data: null, error: pgError('function ' + name + ' not found', '42883') };
-    try { return { data: fn(args || {}), error: null }; } catch (e) { return { data: null, error: e }; }
+    try {
+      const data = fn(args || {});
+      const drop = S().dropReply && S().dropReply[name];
+      if (drop && drop > 0) { S().dropReply[name] = drop - 1; return { data: null, error: pgError('TypeError: Failed to fetch', '') }; }
+      return { data, error: null };
+    } catch (e) { return { data: null, error: e }; }
   }
 
   // Table reads: select / insert / update / delete / eq / order / range / single.
@@ -141,7 +292,10 @@
         return { data: { subscription: { unsubscribe() { A().listeners = A().listeners.filter((f) => f !== fn); } } } };
       },
       async signInAnonymously() {
+        A().anonCalls = (A().anonCalls || 0) + 1;
+        if (A().signInDelay) await new Promise((r) => setTimeout(r, A().signInDelay));
         await wait();
+        if (A().alwaysSignInError) return { data: { user: null, session: null }, error: A().alwaysSignInError };
         A().user = { id: A().nextAnonUid || 'anon-' + Math.random().toString(36).slice(2, 8), is_anonymous: true, email: null };
         emit('SIGNED_IN');
         return { data: { user: A().user, session: { user: A().user } }, error: null };
@@ -165,7 +319,13 @@
         emit('SIGNED_IN');
         return { data: { user: A().user, session: { user: A().user } }, error: null };
       },
-      async signOut() { await wait(); A().user = null; emit('SIGNED_OUT'); return { error: null }; },
+      async signOut(opts) { A().signOutCalls = (A().signOutCalls || 0) + 1; A().lastSignOutArgs = opts || null; await wait(); A().user = null; emit('SIGNED_OUT'); return { error: null }; },
+      async refreshSession() {
+        await wait();
+        A().refreshCalls = (A().refreshCalls || 0) + 1;
+        if (!A().user || A().refreshFails) return { data: { user: null, session: null }, error: authErr('refresh_token_not_found', 'Invalid Refresh Token: Refresh Token Not Found') };
+        return { data: { user: A().user, session: { user: A().user } }, error: null };
+      },
       async resetPasswordForEmail() { await wait(); return { data: {}, error: A().nextResetError || null }; },
     };
   }

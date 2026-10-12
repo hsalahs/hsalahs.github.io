@@ -76,6 +76,7 @@
     'PGRST116': 'not-found',
     'PGRST301': 'no-session',
     'PGRST302': 'no-session',
+    'PGRST303': 'no-session',
   };
   const AUTH_CODES = {
     'invalid_credentials': 'invalid-credential',
@@ -343,5 +344,221 @@
     },
   };
 
-  window.Data = { DataError, normalizeError, ready, platform, client, camel, iso, makePoller, timedFetch, invite };
+  // ---- Auth (the door scanner's part) --------------------------------------
+
+  function normUser(u) {
+    return u ? { uid: u.id, email: u.email || '', isAnonymous: !!u.is_anonymous } : null;
+  }
+
+  async function authCall(fn) {
+    let res;
+    try { res = await fn(); } catch (e) { throw normalizeError(e); }
+    if (res && res.error) throw normalizeError(res.error);
+    return res ? res.data : null;
+  }
+
+  const auth = {
+    // The signed-in user restored from this browser, or null. A stored session
+    // that can no longer be refreshed reads as signed out.
+    async current() {
+      try {
+        const res = await client().auth.getSession();
+        return normUser(res && res.data && res.data.session ? res.data.session.user : null);
+      } catch (e) { return null; }
+    },
+    // cb(user | null, event) on every change, also from another tab of this
+    // browser. Returns the unsubscribe function.
+    onChange(cb) {
+      const res = client().auth.onAuthStateChange((event, session) => { cb(normUser(session ? session.user : null), event); });
+      const sub = res && res.data && res.data.subscription;
+      return () => { try { if (sub) sub.unsubscribe(); } catch (e) {} };
+    },
+    async signInAnon() {
+      const d = await authCall(() => client().auth.signInAnonymously());
+      return normUser(d && d.user);
+    },
+    async signInWithPassword(email, password) {
+      const d = await authCall(() => client().auth.signInWithPassword({ email, password }));
+      return normUser(d && d.user);
+    },
+    async signOut() {
+      await authCall(() => client().auth.signOut());
+    },
+    async isAdmin() {
+      return (await rpc('is_admin_me')) === true;
+    },
+  };
+
+  // ---- Door scanner ---------------------------------------------------------
+
+  const SCAN_COUNTER_MS = 4000;
+  const SCAN_NAMES_MS = 10000;
+  const SCAN_FULL_MS = 60000;
+  const GUEST_PAGE = 1000;       // the server caps a response at 1000 rows
+  const CURSOR_MARGIN_MS = 60000;  // commit order vs changed_at, see supabase/README.md
+
+  // The sign-in itself is no longer good (JWT expired for good, session gone,
+  // user deleted). A plain NO_SESSION (the door code changed) is a different
+  // thing: the identity is fine, only the door session is refused.
+  function isAuthFailure(e) {
+    return !!e && e.code === 'no-session' && !/\bNO_SESSION\b/.test(e.message || '');
+  }
+
+  // First try to refresh the token (a request can race the automatic refresh);
+  // if that fails, drop the dead identity and sign in anonymously again so the
+  // code screen can work. Returns 'refreshed' or 'reset'. Calls that fail at
+  // the same time share one healing.
+  let healing = null;
+  function healIdentity() {
+    if (healing) return healing;
+    healing = (async () => {
+      try {
+        const r = await client().auth.refreshSession();
+        if (r && !r.error && r.data && r.data.session) return 'refreshed';
+      } catch (e) {}
+      try { await client().auth.signOut({ scope: 'local' }); } catch (e) {}
+      try { await client().auth.signInAnonymously(); } catch (e) {}
+      return 'reset';
+    })().finally(() => { healing = null; });
+    return healing;
+  }
+
+  // One door rpc. An auth failure heals the identity; reads then run once more
+  // (nothing was executed), a write is never repeated (retry:false).
+  async function scanRpc(name, args, retry) {
+    try { return await rpc(name, args); } catch (e) {
+      if (!isAuthFailure(e)) throw e;
+      const how = await healIdentity();
+      if (how === 'refreshed' && retry !== false) {
+        try { return await rpc(name, args); } catch (e2) {
+          if (!isAuthFailure(e2)) throw e2;
+          await healIdentity();
+          throw new DataError('auth-lost', e2.message, e2.cause || e2);
+        }
+      }
+      throw new DataError('auth-lost', e.message, e.cause || e);
+    }
+  }
+
+  function firstRow(d) { return Array.isArray(d) ? d[0] : d; }
+
+  function guestRow(r) {
+    return { id: r.id, name: r.name, scanned: !!r.scanned, scannedAt: iso(r.scanned_at), vip: !!r.vip, changedAt: r.changed_at || '' };
+  }
+
+  // Every row of door_guests, paged until a page comes back short. since = null:
+  // the whole list (keyset on name, id); since = ISO: only guests changed after
+  // it (keyset on changed_at, id). Rows are merged by id, so a row that moves
+  // between pages while the loop runs is kept once. cursor = the newest
+  // changed_at minus one minute (never earlier than since): pass it back as the
+  // next since. A page can only miss a row committed more than a minute after
+  // its changed_at.
+  async function scanGuests(eventId, sinceIso) {
+    const byId = new Map();
+    let since = sinceIso || null, afterName = null, afterId = null;
+    for (let pages = 0; pages < 500; pages++) {
+      const page = await scanRpc('door_guests', {
+        p_event_id: eventId, p_since: since, p_after_name: afterName, p_after_id: afterId, p_limit: GUEST_PAGE,
+      });
+      const list = Array.isArray(page) ? page : [];
+      list.forEach((r) => { byId.set(r.id, guestRow(r)); });
+      if (list.length < GUEST_PAGE) break;
+      const last = list[list.length - 1];
+      if (sinceIso) { since = last.changed_at; afterId = last.id; } else { afterName = last.name; afterId = last.id; }
+    }
+    const rows = Array.from(byId.values());
+    let maxMs = 0;
+    rows.forEach((r) => { const t = new Date(r.changedAt).getTime(); if (t > maxMs) maxMs = t; });
+    let cursor = sinceIso || null;
+    if (maxMs) {
+      const c = maxMs - CURSOR_MARGIN_MS;
+      const floor = sinceIso ? new Date(sinceIso).getTime() : 0;
+      cursor = new Date(Math.max(c, floor)).toISOString();
+    }
+    return { rows, cursor, full: !sinceIso };
+  }
+
+  const scan = {
+    // 'ok' | 'wrong' | 'locked'
+    async start(eventId, pin) {
+      const r = await scanRpc('start_scan_session', { p_event_id: eventId, p_pin: String(pin == null ? '' : pin) });
+      if (r === 'ok' || r === 'wrong' || r === 'locked') return r;
+      throw new DataError('unknown', 'start_scan_session returned ' + r);
+    },
+    // Is this device's door session still good?
+    async valid(eventId) {
+      return (await scanRpc('scan_session_valid', { p_event_id: eventId })) === true;
+    },
+    async end(eventId) {
+      await scanRpc('end_scan_session', { p_event_id: eventId });
+    },
+    // The scanner header numbers; null when the event is gone. lastChange moves
+    // on every guest insert / delete / check-in / undo / rename / VIP edit.
+    async event(eventId) {
+      const row = firstRow(await scanRpc('door_event', { p_event_id: eventId }));
+      if (!row) return null;
+      return { name: row.name, guestCount: row.guest_count || 0, scannedCount: row.scanned_count || 0, lastChange: row.last_change || '' };
+    },
+    // One check-in. No automatic retry: if the answer is lost the guard at the
+    // door scans again and the server answers 'duplicate'.
+    // outcome: 'allowed' | 'duplicate' | 'not_found' | 'no_session'
+    async checkIn(eventId, guestId) {
+      const row = firstRow(await scanRpc('check_in', { p_event_id: eventId, p_guest_id: guestId }, false));
+      const o = row && row.outcome;
+      if (o !== 'allowed' && o !== 'duplicate' && o !== 'not_found' && o !== 'no_session') throw new DataError('unknown', 'check_in returned ' + o);
+      return {
+        outcome: o,
+        guestName: row.guest_name || '',
+        vip: !!row.vip,
+        scannedAt: iso(row.scanned_at),
+        scannedCount: typeof row.scanned_count === 'number' ? row.scanned_count : null,
+      };
+    },
+    guests: scanGuests,
+    // Live numbers and names. onCounter(event) every 4 s; the names are read
+    // every 10 s but only when lastChange moved (as a delta from the cursor),
+    // plus a full read every 60 s (that is what notices deleted guests).
+    // Both pause while the page is hidden and run at once when it returns.
+    // opts.since = cursor of the list the page already shows (null = none),
+    // opts.lastChange = the lastChange that list matches (null = unknown, so
+    // the first change check reads a delta). onGuests({ rows, cursor, full,
+    // lastChange }); onError(err, 'counter' | 'names') for a failed poll (the poller backs off).
+    watch(eventId, opts) {
+      const o = opts || {};
+      let cursor = o.since || null;
+      let seen = o.lastChange === undefined ? null : o.lastChange;
+      let latest;
+      let lastFullAt = Date.now();
+      let stopped = false;
+      const fail = (e, kind) => { if (!stopped && o.onError) o.onError(e, kind); throw e; };
+      const counter = makePoller(async () => {
+        let ev;
+        try { ev = await scan.event(eventId); } catch (e) { fail(e, 'counter'); }
+        if (stopped || !ev) return;
+        latest = ev.lastChange;
+        if (o.onCounter) o.onCounter(ev);
+      }, SCAN_COUNTER_MS);
+      const names = makePoller(async () => {
+        const due = Date.now() - lastFullAt >= SCAN_FULL_MS;
+        if (!due && (latest === undefined || latest === seen)) return;
+        const full = due || !cursor;
+        const at = latest;
+        let res;
+        try { res = await scanGuests(eventId, full ? null : cursor); } catch (e) { fail(e, 'names'); }
+        if (stopped) return;
+        cursor = res.cursor;
+        if (full) lastFullAt = Date.now();
+        seen = at;
+        if (o.onGuests) o.onGuests({ rows: res.rows, cursor: res.cursor, full: res.full, lastChange: at });
+      }, SCAN_NAMES_MS);
+      counter.start();
+      names.start();
+      return {
+        stop() { stopped = true; counter.stop(); names.stop(); },
+        refresh() { counter.refresh(); },
+      };
+    },
+  };
+
+  window.Data = { DataError, normalizeError, ready, platform, client, camel, iso, makePoller, timedFetch, invite, auth, scan };
 })();
