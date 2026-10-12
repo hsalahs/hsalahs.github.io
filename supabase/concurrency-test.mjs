@@ -44,6 +44,15 @@ try {
   const [c] = await sql(`select guest_count from public.events where id = 'zzconc1'`);
   console.log(`concurrent adds at the cap (4 of 5 used): succeeded=${okAdds} (expect 1), guest_count=${c.guest_count} (expect 5)`);
   if (okAdds !== 1 || c.guest_count !== 5) bad++;
+  // 4) lockout under parallel guessing: 30 parallel wrong codes from ONE device -> exactly 10 answered 'wrong', the rest 'locked'
+  const DEV = '00000000-0000-0000-0000-00000000c0c1';
+  await sql(`insert into public.event_secrets (event_id, scan_pin) values ('zzconc1', '424242') on conflict (event_id) do update set scan_pin = '424242'`);
+  const asDev = (q) => `begin; select set_config('request.jwt.claims', '{"sub":"${DEV}","role":"authenticated","is_anonymous":true}', true); set local role authenticated; ${q}; commit;`;
+  const tries = await Promise.all(Array.from({ length: 30 }, () => sql(asDev(`select public.start_scan_session('zzconc1', '000000') as r`))));
+  const wrong = tries.filter((r) => r[0].r === 'wrong').length;
+  const locked = tries.filter((r) => r[0].r === 'locked').length;
+  console.log(`30 parallel wrong codes, one device: wrong=${wrong} (expect 10) locked=${locked} (expect 20)`);
+  if (wrong !== 10 || locked !== 20) bad++;
 } finally {
   await cleanup();
 }
