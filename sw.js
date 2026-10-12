@@ -1,10 +1,11 @@
 // Bump this whenever the shell files change together (scan.html now depends
-// on signInAnonymously/deleteField exported by firebase-init.js): a new
+// on signInAnonymously/deleteField exported by firebase-init.js; the Supabase
+// client files join the set for the scanner's move to Supabase): a new
 // name makes the worker re-precache them all as one coherent set, so the
 // offline fallback can never pair a new page with an old helper file.
-const CACHE_NAME = 'dawaat-scan-v18';
+const CACHE_NAME = 'dawaat-scan-v19';
 const SHELL_FILES = [
-  'scan.html', 'firebase-init.js', 'icons.js', 'utils.js', 'vendor/qr-scanner.umd.min.js', 'vendor/qr-scanner-worker.min.js', 'icons/logo.svg',
+  'scan.html', 'firebase-init.js', 'supabase-config.js', 'data.js', 'vendor/supabase.min.js', 'icons.js', 'utils.js', 'vendor/qr-scanner.umd.min.js', 'vendor/qr-scanner-worker.min.js', 'icons/logo.svg',
   'fonts/ibm-plex-sans-arabic-400-arabic.woff2', 'fonts/ibm-plex-sans-arabic-400-latin.woff2', 'fonts/ibm-plex-sans-arabic-500-arabic.woff2', 'fonts/ibm-plex-sans-arabic-500-latin.woff2', 'fonts/ibm-plex-sans-arabic-700-arabic.woff2', 'fonts/ibm-plex-sans-arabic-700-latin.woff2', 'fonts/playfair-display-700-latin.woff2', 'fonts/reem-kufi-700-arabic.woff2', 'fonts/reem-kufi-700-latin.woff2'];
 
 self.addEventListener('install', (event) => {

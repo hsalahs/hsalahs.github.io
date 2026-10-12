@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubFirebase, seedFakeFirebase, stubSupabase, seedInviteStore } = require('./helpers');
 
 // Narrow phones (320 = the smallest still in use, 375 = the most common): no
 // page may scroll sideways, even with long names, emails and links — the
@@ -41,6 +41,8 @@ for (const width of [320, 375]) {
       await page.setViewportSize({ width, height: 760 });
       await stubFirebase(page);
       await seedFakeFirebase(page, { user, store });
+      await stubSupabase(page);
+      await seedInviteStore(page, { store });
       await page.goto(url);
       await ready(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);

@@ -10,6 +10,14 @@ const STUBS = {
 // Replaces the real Firebase SDK with the in-memory fake, and short-circuits
 // every other third-party host (fonts, qrcodejs, jszip, qr-scanner CDNs) so
 // tests run fully offline and deterministically. Call before page.goto().
+const blocked = new WeakSet();
+async function blockExternal(page) {
+  if (blocked.has(page)) return;
+  blocked.add(page);
+  await page.route(/^https:\/\/(?!.*127\.0\.0\.1).*$/, (route) => route.abort());
+  await page.route('**/vendor/qrcode.min.js*', (route) => route.abort());
+}
+
 async function stubFirebase(page) {
   // Playwright matches routes in reverse registration order (last registered
   // wins), so the broad blocker must be registered FIRST and the specific
@@ -18,12 +26,11 @@ async function stubFirebase(page) {
   // Any other external host: fail fast instead of hanging on a blocked
   // sandbox proxy. Pages under test don't exercise QR/ZIP/camera features,
   // so missing qrcodejs/jszip/qr-scanner globals are fine for these specs.
-  await page.route(/^https:\/\/(?!.*127\.0\.0\.1).*$/, (route) => route.abort());
+  await blockExternal(page);
 
   // The pages now try our own copy of qrcodejs first. It is aborted by default
   // so the older specs, which stub the CDN copy, keep their meaning; a spec
   // that wants the local file calls routeQr() afterwards.
-  await page.route('**/vendor/qrcode.min.js*', (route) => route.abort());
 
   for (const [url, file] of Object.entries(STUBS)) {
     const body = fs.readFileSync(path.join(__dirname, 'mocks', file), 'utf8');
@@ -79,4 +86,63 @@ async function routeQr(page, opts = {}) {
   return { hits, setLocal: (m) => { state.local = m; }, setCdn: (m) => { state.cdn = m; } };
 }
 
-module.exports = { stubFirebase, seedFakeFirebase, routeQr };
+// Replaces the Supabase client (vendor/supabase.min.js) with the in-memory
+// fake in tests/mocks/supabase.stub.js and gives the page a test config, so
+// pages that load supabase-config.js + vendor/supabase.min.js + data.js run
+// offline. Same external-host blocking as stubFirebase. Call before page.goto().
+async function stubSupabase(page) {
+  await blockExternal(page);
+  const stub = fs.readFileSync(path.join(__dirname, 'mocks', 'supabase.stub.js'), 'utf8');
+  await page.route('**/vendor/supabase.min.js*', (route) => route.fulfill({ contentType: 'text/javascript', body: stub }));
+  await page.route('**/supabase-config.js*', (route) => route.fulfill({
+    contentType: 'text/javascript',
+    body: "window.SUPABASE_CONFIG = { url: 'https://stub.supabase.test', anonKey: 'anon-test-key' };",
+  }));
+}
+
+// Seeds the fake Supabase server before the page's own script runs. Rows use
+// the database's snake_case names:
+//   events:   { id: { name, type, date, venue, maps_link, theme, welcome_message, paid, guest_limit } }
+//   slugs:    { slug: eventId }
+//   requests: { eventId: { reqId: { status, guest_id, vip, name } } }
+//   tables:   { tableName: [rows] }   (plain table reads, capped by maxRows)
+// fail: { rpcName: { error: { message, code } | 'network', times } }
+async function seedFakeSupabase(page, { events = {}, slugs = {}, requests = {}, tables = {}, user = null, fail = {}, latency = 0, maxRows = 1000 } = {}) {
+  await page.addInitScript((seed) => {
+    window.__fakeSupabase = Object.assign({
+      calls: [],
+      denyRpc: [],
+      auth: { user: seed.user, listeners: [], accounts: {}, nextSignInError: null, nextResetError: null, nextAnonUid: null },
+    }, seed.state);
+  }, { user, state: { events, slugs, requests, tables, fail, latency, maxRows } });
+}
+
+// Turns the Firebase-shaped store the invite specs were written with
+// ({ events, slugs, 'events/<id>/requests' }) into a fake Supabase seed, so a
+// spec reads the same: camelCase event fields become the database's columns,
+// slugs become slug -> event id, requests move under their event. Extra
+// options (fail, latency, user ...) are passed through to seedFakeSupabase.
+async function seedInviteStore(page, { store = {}, ...rest } = {}) {
+  const events = {};
+  for (const [id, e] of Object.entries(store.events || {})) {
+    const { mapsLink, welcomeMessage, guestLimit, ...keep } = e;
+    events[id] = { ...keep };
+    if (mapsLink !== undefined) events[id].maps_link = mapsLink;
+    if (welcomeMessage !== undefined) events[id].welcome_message = welcomeMessage;
+    if (guestLimit !== undefined) events[id].guest_limit = guestLimit;
+  }
+  const slugs = {};
+  for (const [name, v] of Object.entries(store.slugs || {})) slugs[name] = v.eventId;
+  const requests = {};
+  for (const [key, docs] of Object.entries(store)) {
+    const m = key.match(/^events\/([^/]+)\/requests$/);
+    if (!m) continue;
+    requests[m[1]] = {};
+    for (const [rid, r] of Object.entries(docs)) {
+      requests[m[1]][rid] = { status: r.status, guest_id: r.guestId || null, vip: !!r.vip, name: r.name };
+    }
+  }
+  return seedFakeSupabase(page, { events, slugs, requests, ...rest });
+}
+
+module.exports = { stubFirebase, seedFakeFirebase, routeQr, stubSupabase, seedFakeSupabase, seedInviteStore };

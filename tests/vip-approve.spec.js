@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubFirebase, seedFakeFirebase, stubSupabase, seedInviteStore } = require('./helpers');
 
 const EVENT = {
   name: 'حفل تجريبي', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض',
@@ -172,15 +172,15 @@ const QR_STAND_IN = `window.QRCode = function (el) {
 window.QRCode.CorrectLevel = { H: 2, M: 0, L: 1, Q: 3 };`;
 
 async function openInvite(page, reqExtra) {
-  await stubFirebase(page);
+  await stubSupabase(page);
   await page.route(/qrcodejs.*qrcode\.min\.js/, (route) => route.fulfill({ contentType: 'text/javascript', body: QR_STAND_IN }));
-  await seedFakeFirebase(page, {
+  await seedInviteStore(page, {
     store: {
       events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } },
-      'events/e1/requests': { 'REQ-1': { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABC', createdAt: 'x', ...reqExtra } },
+      'events/e1/requests': { 'REQ-TEST-0000000000000000001': { name: 'سارة', reqId: 'REQ-TEST-0000000000000000001', status: 'approved', guestId: 'WD-ABC', createdAt: 'x', ...reqExtra } },
     },
   });
-  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-1'); });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-TEST-0000000000000000001'); });
   await page.goto('/invite.html?event=e1');
   await expect(page.locator('#card-wrap img')).toBeVisible();
 }
@@ -207,11 +207,11 @@ test('invite: an approved request without vip draws the normal light card', asyn
   expect(Math.max(...p.badge)).toBeGreaterThan(200);
 });
 
-test('invite: flipping vip on the live request re-renders the open card, both ways', async ({ page }) => {
+test('invite: when the request turns VIP (or stops being VIP) the next check re-renders the open card, both ways', async ({ page }) => {
   await openInvite(page, {});
   const set = (vip) => page.evaluate((vip) => {
-    const { doc, setDoc } = window._fsFns;
-    return setDoc(doc(window._db, 'events', 'e1', 'requests', 'REQ-1'), { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABC', createdAt: 'x', vip });
+    window.__fakeSupabase.requests.e1['REQ-TEST-0000000000000000001'].vip = vip;
+    watchStatus();
   }, vip);
   await set(true);
   await expect.poll(async () => Math.max(...(await cardPixels(page)).bg)).toBeLessThan(40);
@@ -251,8 +251,8 @@ test('invite: an older card build that finishes last cannot overwrite the card a
     window.buildInviteCard = (ev, g) => orig(ev, g).then((c) => new Promise((r) => setTimeout(() => r(c), g.vip ? 0 : 1500)));
   });
   const set = (vip) => page.evaluate((vip) => {
-    const { doc, setDoc } = window._fsFns;
-    return setDoc(doc(window._db, 'events', 'e1', 'requests', 'REQ-1'), { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABC', createdAt: 'x', vip });
+    window.__fakeSupabase.requests.e1['REQ-TEST-0000000000000000001'].vip = vip;
+    watchStatus();
   }, vip);
   await set(false);
   await page.waitForTimeout(300);

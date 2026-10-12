@@ -1,16 +1,16 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedInviteStore } = require('./helpers');
 
 const KINDS = ['wedding', 'graduation', 'event'];
 
 for (const type of KINDS) {
   test(`invite page layout shift stays under 0.1 while the ${type} event loads late`, async ({ page }) => {
-    await stubFirebase(page);
-    await seedFakeFirebase(page, {
+    await stubSupabase(page);
+    await seedInviteStore(page, {
       store: { events: { e1: { name: 'حفل تجريبي طويل الاسم قليلًا', date: '2030-01-01', venue: 'قاعة الأفراح - الرياض', mapsLink: 'https://maps.google.com/?q=1', theme: 'gold', type } } },
+      latency: 800,
     });
     await page.addInitScript(() => {
-      window.__getDocDelays = { 'events/e1': 800 };
       window.__cls = 0;
       new PerformanceObserver((list) => {
         for (const e of list.getEntries()) if (!e.hadRecentInput) window.__cls += e.value;

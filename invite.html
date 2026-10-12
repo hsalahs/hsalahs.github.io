@@ -40,8 +40,7 @@
 <meta name="twitter:image" content="https://da3wt.com/icons/og-image.jpg">
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<script type="module" src="firebase-init-lite.js"></script>
-<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="preconnect" href="https://gunizkapwatixvbfliva.supabase.co">
 <link rel="preload" as="font" type="font/woff2" href="fonts/ibm-plex-sans-arabic-400-arabic.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="fonts/reem-kufi-700-arabic.woff2" crossorigin>
 <style>
@@ -253,11 +252,14 @@
 <script src="icons.js"></script>
 <script src="utils.js"></script>
 <script src="format.js"></script>
+<script src="supabase-config.js"></script>
+<script src="vendor/supabase.min.js"></script>
+<script src="data.js"></script>
 <script>
 const params = new URLSearchParams(window.location.search);
 // ?event=<id> is the original link; ?s=<name> comes from a readable link like
 // da3wt.com/hala-turki (404.html forwards it here) and is looked up in
-// slugs/{name} in init().
+// the slugs table (Data.invite.resolveSlug) in init().
 let eventId = params.get('event');
 const slugParam = (params.get('s') || '').toLowerCase();
 const card = document.getElementById('card');
@@ -403,6 +405,7 @@ function startDemo() {
 }
 
 let submitting = false;
+let submitReq = null;
 
 function setFormMsg(text, info) {
   const el = document.getElementById('rsvp-msg');
@@ -426,8 +429,10 @@ async function submitRequest() {
     setTimeout(() => renderApproved(DEMO_EVENT, { name, id: 'WD-DEMO2026A' }), 1800);
     return;
   }
-  const { doc, setDoc } = window._fsFns;
-  const reqId = newReqId();
+  // A failed send may still have reached the server: retrying with the same
+  // id (and name) cannot create a second request.
+  if (!submitReq || submitReq.name !== name) submitReq = { id: newReqId(), name };
+  const reqId = submitReq.id;
   const btn = document.getElementById('rsvp-btn');
   submitting = true;
   btn.disabled = true;
@@ -436,10 +441,8 @@ async function submitRequest() {
   // letting the guest think nothing happened and tap again.
   const slowTimer = setTimeout(() => setFormMsg('طلبك لسا يُرسل، تأكد من الإنترنت وانتظر لحظات', true), 8000);
   try {
-    // The document's name IS the request id (the security rules require it).
-    await setDoc(doc(window._db, 'events', eventId, 'requests', reqId), {
-      name, reqId, status: 'pending', createdAt: new Date().toISOString()
-    });
+    // The request id is chosen here and is the guest's only key to it.
+    await Data.invite.submitRequest(eventId, reqId, name);
   } catch (e) {
     clearTimeout(slowTimer);
     console.error(e);
@@ -451,7 +454,8 @@ async function submitRequest() {
   }
   clearTimeout(slowTimer);
   submitting = false;
-  // The request was already written to Firestore above — an unguarded
+  submitReq = null;
+  // The request was already saved above — an unguarded
   // throw here would leave the guest stuck without their pending-status
   // screen even though their RSVP went through, likely making them think
   // it failed and re-submit.
@@ -479,7 +483,7 @@ function renderRejected() {
 
 function retryRequest() {
   shownKey = null;
-  if (statusUnsub) { statusUnsub(); statusUnsub = null; }
+  if (statusWatch) { statusWatch.stop(); statusWatch = null; }
   try { localStorage.removeItem('inv_reqid_' + eventId); } catch (e) {}
   myReqId = null;
   renderForm(currentEvent);
@@ -888,14 +892,10 @@ function renderPreparing() {
 }
 
 let renderedGuestId = null;
-let statusUnsub = null;
+let statusWatch = null;
 
-// The request document is named after its own secret id, and this page opens
-// that one document directly. It can no longer ask "give me all requests
-// where reqId == mine" — that's a list query, and listing requests is now
-// limited to the organizer and the admin (it used to be open to anyone with
-// the invite link, which exposed every guest's name and, once approved,
-// their barcode id). One guest can't open another's request because
+// The guest's page asks about ONE request by its secret id (get_request);
+// it cannot list requests. One guest can't ask for another's request because
 // the id is 128 random bits they never see.
 let reqShown = false;
 let shownKey = null;
@@ -929,55 +929,47 @@ function renderReqError() {
 }
 
 function watchStatus() {
-  const { doc, onSnapshot } = window._fsFns;
-  if (statusUnsub) { statusUnsub(); statusUnsub = null; }
+  if (statusWatch) { statusWatch.stop(); statusWatch = null; }
   clearCheckTimer();
   shownKey = null;
-  // includeMetadataChanges: when the connection returns, the server's "still
-  // missing" (or the real request) can arrive as a metadata-only change, which
-  // the SDK otherwise never delivers. The handler skips unchanged states.
-  statusUnsub = onSnapshot(doc(window._db, 'events', eventId, 'requests', myReqId), { includeMetadataChanges: true }, (snap) => {
-    if (!snap.exists()) {
-      // Offline, the SDK answers from its cache first: a request it hasn't
-      // cached yet looks "missing" but isn't deleted. Only a server answer
-      // counts, otherwise the guest would lose the key to their own request.
-      if (snap.metadata && snap.metadata.fromCache) {
-        if (!reqShown) renderChecking();
+  // Called from a retry button: say we are checking. The first call (from
+  // init) keeps the loading line that is already on screen.
+  if (!document.getElementById('loading')) renderChecking();
+  statusWatch = Data.invite.watchRequest(eventId, myReqId, {
+    onChange(req) {
+      if (!req) {
+        clearCheckTimer();
+        // Nothing under this id: a request the organizer deleted. There's
+        // nothing to wait for — let the guest register again.
+        renderedGuestId = null;
+        retryRequest();
+        setFormMsg('تم حذف طلبك من صاحب الدعوة، تقدر تسجّل من جديد');
         return;
       }
+      reqShown = true;
       clearCheckTimer();
-      // Nothing under this id: a request made before requests were named
-      // after their id, or one the organizer deleted. Either way there's
-      // nothing to wait for — let the guest register again.
-      renderedGuestId = null;
-      retryRequest();
-      setFormMsg('تم حذف طلبك من صاحب الدعوة، تقدر تسجّل من جديد');
-      return;
+      const key = req.status + '|' + (req.guestId || '') + '|' + (req.name || '') + '|' + (req.vip ? 1 : 0);
+      if (key === shownKey) return;
+      shownKey = key;
+      if (req.status === 'pending') { renderedGuestId = null; renderPending(req.name); }
+      else if (req.status === 'rejected') { renderedGuestId = null; renderRejected(); }
+      else if (req.status === 'approved') {
+        // The barcode id is copied onto the request when the organizer
+        // approves it. The card is drawn from the request alone: the guest
+        // list is not readable here, so a guest the organizer deleted
+        // afterwards still shows their card (the door refuses it).
+        if (!req.guestId) { renderedGuestId = null; renderPreparing(); return; }
+        const cardKey = req.guestId + '|' + (req.vip ? 1 : 0);
+        if (renderedGuestId === cardKey) return;
+        renderedGuestId = cardKey;
+        renderApproved(currentEvent, { name: req.name, id: req.guestId, vip: !!req.vip });
+      }
+    },
+    onError(e) {
+      // A failed check is not a deleted request: keep the saved key.
+      console.error(e);
+      renderReqError();
     }
-    reqShown = true;
-    clearCheckTimer();
-    const req = snap.data();
-    const key = req.status + '|' + (req.guestId || '') + '|' + (req.name || '') + '|' + (req.vip ? 1 : 0);
-    if (key === shownKey) return;
-    shownKey = key;
-    if (req.status === 'pending') { renderedGuestId = null; renderPending(req.name); }
-    else if (req.status === 'rejected') { renderedGuestId = null; renderRejected(); }
-    else if (req.status === 'approved') {
-      // The barcode id is copied onto the request when the organizer
-      // approves it — this page can't read the guests collection (it's no
-      // longer world-readable). An approval that predates that gets its id
-      // filled in the next time the organizer opens their dashboard, and
-      // this same listener picks it up.
-      if (!req.guestId) { renderedGuestId = null; renderPreparing(); return; }
-      const cardKey = req.guestId + '|' + (req.vip ? 1 : 0);
-      if (renderedGuestId === cardKey) return;
-      renderedGuestId = cardKey;
-      renderApproved(currentEvent, { name: req.name, id: req.guestId, vip: !!req.vip });
-    }
-  }, (e) => {
-    // A failed listener is not a deleted request: keep the saved key.
-    console.error(e);
-    renderReqError();
   });
 }
 
@@ -990,12 +982,11 @@ function showBadLink() {
 }
 
 async function init() {
-  const { doc, getDoc } = window._fsFns;
   if (!eventId && slugParam) {
     try {
-      const s = await getDoc(doc(window._db, 'slugs', slugParam));
-      if (!s.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذا الرابط غير موجود</div><div class="help-line">' + CHECK_LINK + '</div>'; return; }
-      eventId = s.data().eventId;
+      const id = await Data.invite.resolveSlug(slugParam);
+      if (!id) { card.innerHTML = '<div class="status-msg">⚠️ هذا الرابط غير موجود</div><div class="help-line">' + CHECK_LINK + '</div>'; return; }
+      eventId = id;
       if (!validEventId(eventId)) { showBadLink(); return; }
       try { myReqId = localStorage.getItem('inv_reqid_' + eventId) || null; } catch (e) {}
       // Keep the readable link in the address bar (a reload goes through 404.html again).
@@ -1008,9 +999,9 @@ async function init() {
     }
   }
   if (!validEventId(eventId)) { showBadLink(); return; }
-  let snap;
+  let ev;
   try {
-    snap = await getDoc(doc(window._db, 'events', eventId));
+    ev = await Data.invite.event(eventId);
   } catch (e) {
     // Same "trapped forever" failure the splash fix closed, one layer
     // deeper: a dropped connection here used to leave a guest stuck on
@@ -1020,8 +1011,8 @@ async function init() {
     document.getElementById('retry-msg').onclick = init;
     return;
   }
-  if (!snap.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذه المناسبة غير موجودة</div><div class="help-line">' + CHECK_LINK + '</div>'; return; }
-  currentEvent = snap.data();
+  if (!ev) { card.innerHTML = '<div class="status-msg">⚠️ هذه المناسبة غير موجودة</div><div class="help-line">' + CHECK_LINK + '</div>'; return; }
+  currentEvent = ev;
   if (currentEvent.name) document.title = String(currentEvent.name).slice(0, 60) + ' | دعوات';
   document.body.setAttribute('data-theme', currentEvent.theme || 'gold');
   if (window.showInviteKind) window.showInviteKind(eventTypeOf(currentEvent));
@@ -1032,20 +1023,15 @@ async function init() {
 
 if (isDemo) {
   startDemo();          // needs no database at all
-} else if (window._db) {
+} else if (window.Data) {
   init();
 } else {
-  // Same "trapped forever" failure other pages' init guards close: a slow
-  // or dropped connection while firebase-init-lite.js's own CDN imports load
-  // means appDbReady never fires, leaving this stuck on "جاري التحميل..."
-  // forever with no way out.
-  const appDbTimeout = setTimeout(() => {
-    const el = document.getElementById('loading');
-    el.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
-    el.style.cursor = 'pointer';
-    el.onclick = () => location.reload();
-  }, 8000);
-  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); init(); });
+  // A script that did not load (the page's error banner also offers a reload)
+  // must not leave this stuck on "جاري التحميل..." forever with no way out.
+  const el = document.getElementById('loading');
+  el.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
+  el.style.cursor = 'pointer';
+  el.onclick = () => location.reload();
 }
 </script>
 </body>
