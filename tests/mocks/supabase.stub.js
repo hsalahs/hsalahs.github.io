@@ -324,6 +324,7 @@
         await wait();
         A().refreshCalls = (A().refreshCalls || 0) + 1;
         if (A().refreshNetworkFails) return { data: { user: null, session: null }, error: { name: 'AuthRetryableFetchError', message: 'Failed to fetch', status: 0 } };
+        if (A().refreshFailCode) return { data: { user: null, session: null }, error: authErr(A().refreshFailCode, 'refresh failed: ' + A().refreshFailCode) };
         if (!A().user || A().refreshFails) return { data: { user: null, session: null }, error: authErr('refresh_token_not_found', 'Invalid Refresh Token: Refresh Token Not Found') };
         return { data: { user: A().user, session: { user: A().user } }, error: null };
       },

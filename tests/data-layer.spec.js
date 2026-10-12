@@ -662,6 +662,20 @@ test('two door calls that hit a dead sign-in at the same moment heal it once (on
   expect(out).toEqual({ codes: ['auth-lost', 'auth-lost'], anon: 1 });
 });
 
+for (const code of ['user_not_found', 'invalid_grant']) {
+  test(`a refresh that fails with ${code} means a dead sign-in: the identity is replaced (never stuck offline)`, async ({ page }) => {
+    await openSb(page, { seed: { ...DOOR_SEED, user: { id: 'gone', is_anonymous: true, email: null } } });
+    const out = await page.evaluate(async (c) => {
+      const jwt = { message: 'JWT expired', code: 'PGRST301', status: 401 };
+      window.__fakeSupabase.auth.refreshFailCode = c;
+      window.__fakeSupabase.fail = { door_event: { error: jwt, times: 1 } };
+      const code = await Data.scan.event('e1').catch((e) => e.code);
+      return { code, anon: window.__fakeSupabase.auth.anonCalls };
+    }, code);
+    expect(out).toEqual({ code: 'auth-lost', anon: 1 });
+  });
+}
+
 test('Data.auth: current, onChange, signInAnon, signInWithPassword, isAdmin, signOut', async ({ page }) => {
   await openSb(page, { seed: { admins: ['a@x.com'], accounts: { 'a@x.com': { id: 'adm', password: 'pw' } } } });
   const out = await page.evaluate(async () => {

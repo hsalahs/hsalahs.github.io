@@ -407,7 +407,7 @@
   // Only these refresh errors mean the stored sign-in is really dead; a
   // network failure (AuthRetryableFetchError, a thrown fetch error) must not
   // cost the device its identity and door session.
-  const DEAD_TOKEN = /refresh_token_not_found|refresh_token_already_used|session_not_found|bad_jwt|session missing|invalid refresh token/i;
+  const DEAD_TOKEN = /refresh_token_not_found|refresh_token_already_used|session_not_found|bad_jwt|user_not_found|invalid_grant|session missing|invalid refresh token/i;
   function deadToken(err) {
     return !!err && (DEAD_TOKEN.test(String(err.code || '')) || DEAD_TOKEN.test(String(err.message || '')));
   }
@@ -425,7 +425,7 @@
       try {
         const r = await client().auth.refreshSession();
         if (r && !r.error && r.data && r.data.session) return 'refreshed';
-        err = (r && r.error) || new Error('no session');
+        err = (r && r.error) || new Error('session missing');   // nothing stored to refresh = a dead sign-in
       } catch (e) { err = e; }
       if (!deadToken(err)) return 'offline';
       try { await client().auth.signOut({ scope: 'local' }); } catch (e) {}
