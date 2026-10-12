@@ -137,7 +137,8 @@ export function getFirestore() {
 // initializeFirestore(app, { localCache }) — the stub has no real IndexedDB
 // cache to set up, so this is just getFirestore under the real SDK's name,
 // keeping firebase-init.js's import list the same in tests and in prod.
-export function initializeFirestore() {
+export function initializeFirestore(app, settings) {
+  window.__fsTabManager = settings && settings.localCache && settings.localCache.settings && settings.localCache.settings.tabManager;
   return { fake: true };
 }
 export function persistentLocalCache(settings) {
@@ -145,6 +146,9 @@ export function persistentLocalCache(settings) {
 }
 export function persistentMultipleTabManager() {
   return { kind: 'multi-tab' };
+}
+export function persistentSingleTabManager(settings) {
+  return { kind: 'single-tab', settings };
 }
 
 export function doc(db, ...segs) {

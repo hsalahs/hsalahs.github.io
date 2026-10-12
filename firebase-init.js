@@ -7,7 +7,7 @@ import {
   onAuthStateChanged, signOut, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, persistentSingleTabManager,
   collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp,
   doc, setDoc, getDoc, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc, getCountFromServer
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -40,8 +40,21 @@ const auth = initializeAuth(app, {
 // listener here resumes from that cache and the server sends only what
 // changed since — not the whole guest list again — which is what keeps a
 // busy event day from burning through the free plan's daily read quota.
+// The installed iPhone/iPad home-screen app keeps the previous page alive
+// (frozen) while the next one opens; with the multi-tab manager that old
+// page still holds the primary lease, so the new page's first read hangs
+// until the app goes to the background. Single-tab with forceOwnership
+// takes the lease at once. Safari tabs, Android and desktop are unchanged.
+let iosStandalone = false;
+try {
+  iosStandalone = navigator.standalone === true ||
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) && window.matchMedia('(display-mode: standalone)').matches);
+} catch (e) {}
+window._fsTab = iosStandalone ? 'single' : 'multi';
 const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  localCache: persistentLocalCache({
+    tabManager: iosStandalone ? persistentSingleTabManager({ forceOwnership: true }) : persistentMultipleTabManager(),
+  }),
 });
 
 window._auth = auth;

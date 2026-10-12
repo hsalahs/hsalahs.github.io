@@ -410,3 +410,62 @@ test.describe('review round 3', () => {
     await expect(page.locator('#dashboard')).toBeHidden();
   });
 });
+
+const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+
+test.describe('Firestore tab manager', () => {
+  const tab = (page) => page.evaluate(() => ({ mode: window._fsTab, mgr: window.__fsTabManager }));
+
+  test('default (browser tab, desktop) uses the multi-tab manager', async ({ page }) => {
+    await setup(page);
+    await page.goto('/app.html?timing=1');
+    await expect(page.locator('.event-card')).toHaveCount(1);
+    const t = await tab(page);
+    expect(t.mode).toBe('multi');
+    expect(t.mgr.kind).toBe('multi-tab');
+    await expect(page.locator('#timing-line')).toContainText('tab:multi');
+  });
+
+  test.describe('iPhone home-screen app', () => {
+    test.use({ userAgent: IPHONE_UA });
+    test('navigator.standalone gives single-tab with forceOwnership', async ({ page }) => {
+      await page.addInitScript(() => { Object.defineProperty(navigator, 'standalone', { value: true, configurable: true }); });
+      await setup(page);
+      await page.goto('/app.html?timing=1');
+      await expect(page.locator('.event-card')).toHaveCount(1);
+      const t = await tab(page);
+      expect(t.mode).toBe('single');
+      expect(t.mgr).toEqual({ kind: 'single-tab', settings: { forceOwnership: true } });
+      await expect(page.locator('#timing-line')).toContainText('tab:single');
+    });
+    test('event.html also gets single-tab and still loads', async ({ page }) => {
+      await page.addInitScript(() => { Object.defineProperty(navigator, 'standalone', { value: true, configurable: true }); });
+      await setup(page);
+      await page.goto('/event.html?id=e1&timing=1');
+      await expect(page.locator('.guest-item')).toHaveCount(2);
+      expect((await tab(page)).mode).toBe('single');
+      await expect(page.locator('#timing-line')).toContainText('tab:single');
+    });
+    test('iPhone Safari tab (not installed) stays multi-tab', async ({ page }) => {
+      await setup(page);
+      await page.goto('/app.html');
+      await expect(page.locator('.event-card')).toHaveCount(1);
+      expect((await tab(page)).mode).toBe('multi');
+    });
+  });
+
+  test.describe('Android installed app', () => {
+    test.use({ userAgent: ANDROID_UA });
+    test('display-mode standalone on Android stays multi-tab', async ({ page }) => {
+      await page.addInitScript(() => {
+        const mm = window.matchMedia.bind(window);
+        window.matchMedia = (q) => /display-mode:\s*standalone/.test(q) ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} } : mm(q);
+      });
+      await setup(page);
+      await page.goto('/app.html');
+      await expect(page.locator('.event-card')).toHaveCount(1);
+      expect((await tab(page)).mode).toBe('multi');
+    });
+  });
+});
