@@ -57,7 +57,7 @@ function tmShow() {
     }
   } catch (e) {}
   var sw = 'sw:' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes' : 'no');
-  line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + (TM.err ? ' || err: ' + TM.err : '');
+  line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + ' tab:' + (window._fsTab || '?') + (TM.err ? ' || err: ' + TM.err : '');
 }
 function tmark(k) {
   TM.m.push(k + ' ' + Math.round(performance.now()));
