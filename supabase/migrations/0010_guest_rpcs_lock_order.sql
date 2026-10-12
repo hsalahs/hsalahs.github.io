@@ -48,7 +48,11 @@ begin
   if p_name is not null and char_length(nm) not between 1 and 100 then raise exception 'BAD_NAME' using errcode = '22023'; end if;
   perform 1 from public.events e where e.id = p_event_id for no key update;
   update public.guests set name = coalesce(nm, name), vip = coalesce(p_vip, vip) where event_id = p_event_id and id = p_guest_id;
-  return found;
+  if not found then return false; end if;
+  -- the guest's registration request mirrors the VIP flag (the guest's own page reads it): same transaction
+  -- (lock order event -> guest -> request, like approve_requests)
+  if p_vip is not null then update public.requests set vip = p_vip where event_id = p_event_id and guest_id = p_guest_id; end if;
+  return true;
 end $$;
 
 -- The owner's manual check-in undo (or re-check): same effect on scanned_count as the door.

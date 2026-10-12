@@ -29,4 +29,14 @@ select pg_temp.t_eq('removing a checked-in guest lowers scanned_count too', $$se
 select pg_temp.t_eq('...count is 1', $$select scanned_count from public.events where id='t1'$$, '1');
 select pg_temp.t_eq('...remove', $$select public.remove_guest('t1','WD-1')::text$$, 'true', 'authenticated', pg_temp.uid('A'));
 select pg_temp.t_eq('...counts are 0/0', $$select guest_count || '/' || scanned_count from public.events where id='t1'$$, '0/0');
+-- reviewer follow-ups
+insert into public.guests (event_id, id, name, req_id) values ('t1', 'WD-R', 'reqguest', repeat('q', 20));
+update public.requests set status = 'approved', guest_id = 'WD-R' where event_id = 't1' and id = repeat('q', 20);
+select pg_temp.t_eq('set_guest vip also updates the guest''s request', $$select public.set_guest('t1','WD-R',null,true)::text$$, 'true', 'authenticated', pg_temp.uid('A'));
+select pg_temp.t_eq('the request flag followed', $$select vip::text from public.requests where event_id='t1' and id=repeat('q', 20)$$, 'true');
+select pg_temp.t_eq('set_guest with two nulls changes nothing and returns true', $$select public.set_guest('t1','WD-R',null,null)::text$$, 'true', 'authenticated', pg_temp.uid('A'));
+select pg_temp.t_eq('name and vip together', $$select public.set_guest('t1','WD-R','both',false)::text$$, 'true', 'authenticated', pg_temp.uid('A'));
+select pg_temp.t_eq('...both stored', $$select name || '/' || vip::text from public.guests where event_id='t1' and id='WD-R'$$, 'both/false');
+select pg_temp.t_eq('admin checks a guest in by hand', $$select public.set_guest_scanned('t1','WD-R',true)::text$$, 'true', 'authenticated', pg_temp.uid('ADM'));
+select pg_temp.t_eq('admin removes a guest', $$select public.remove_guest('t1','WD-R')::text$$, 'true', 'authenticated', pg_temp.uid('ADM'));
 select * from pg_temp.report();

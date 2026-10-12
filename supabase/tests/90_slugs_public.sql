@@ -55,4 +55,10 @@ select pg_temp.t_eq('a short base is rejected by the length rule on candidates b
 -- deleting an event frees its name
 select pg_temp.t_ok('delete the event', $$select public.delete_event('t6')$$, 'authenticated', pg_temp.uid('A'));
 select pg_temp.t_eq('and its name', $$select coalesce(public.resolve_slug('auto-one'), 'free')$$, 'free', 'anon');
+-- reviewer follow-ups: length bounds, long auto base, trigger-level guard
+insert into public.events (id, owner_uid, name) values ('ta', pg_temp.uid('A'), 'a'), ('tb', pg_temp.uid('A'), 'b'), ('tc', pg_temp.uid('A'), 'c');
+select pg_temp.t_eq('3-char slug is the minimum', $$select public.claim_slug('ta', 'abc')$$, 'abc', 'authenticated', pg_temp.uid('A'));
+select pg_temp.t_eq('40-char slug is the maximum', format($$select char_length(public.claim_slug('ta', %L))::text$$, repeat('a', 40)), '40', 'authenticated', pg_temp.uid('A'));
+select pg_temp.t_eq('a 34-char auto base is accepted', format($$select char_length(public.auto_claim_slug('tb', %L))::text$$, repeat('b', 34)), '34', 'authenticated', pg_temp.uid('A'));
+select pg_temp.t_eq('a 36-char auto base is refused (no room for -xxxx)', format($$select coalesce(public.auto_claim_slug('tc', %L), 'null')$$, repeat('c', 36)), 'null', 'authenticated', pg_temp.uid('A'));
 select * from pg_temp.report();

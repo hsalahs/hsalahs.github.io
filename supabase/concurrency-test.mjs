@@ -113,6 +113,14 @@ try {
   const newPath3 = await race('zzconc-lo4', asOwner(`select outcome from public.check_in('zzconc-lo4', 'G-1')`));
   console.log(`lock order: old path deadlocks=${oldPath} (expect >=1 = the check can see it), set_guest_scanned=${newPath}, remove_guest=${newPath2}, check_in=${newPath3} (expect 0 each)`);
   if (oldPath < 1 || newPath || newPath2 || newPath3) bad++;
+  // 11) the same readable name claimed by two events at once: exactly one wins, the other gets SLUG_TAKEN (not a raw 23505)
+  await sql(`delete from public.events where id in ('zzconc-s1','zzconc-s2'); insert into public.events (id, owner_uid, name, paid) values ('zzconc-s1', '${OWNER}', 'a', true), ('zzconc-s2', '${OWNER}', 'b', true)`);
+  const cl = await Promise.allSettled(['zzconc-s1', 'zzconc-s2', 'zzconc-s1', 'zzconc-s2'].map((id) => sql(asOwner(`select public.claim_slug('${id}', 'zzconc-race-name')`))));
+  const won = cl.filter((x) => x.status === 'fulfilled').length;
+  const bad23505 = cl.filter((x) => x.status === 'rejected' && /23505|duplicate key/i.test(String(x.reason))).length;
+  const [sl] = await sql(`select count(*)::int n from public.slugs where slug = 'zzconc-race-name'`);
+  console.log(`4 parallel claims of one name by 2 events: succeeded=${won}, raw 23505 errors=${bad23505} (expect 0), rows=${sl.n} (expect 1)`);
+  if (bad23505 || sl.n !== 1) bad++;
 } finally {
   await cleanup();
 }

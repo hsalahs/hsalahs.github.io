@@ -32,8 +32,8 @@ create or replace function public.claim_slug(p_event_id text, p_slug text) retur
 language plpgsql security definer set search_path = '' as $$
 declare ev public.events%rowtype; s text := coalesce(p_slug, '');
 begin
-  select * into ev from public.events where id = p_event_id for update;
-  if not found or not (ev.owner_uid = (select auth.uid()) or app_private.is_admin()) then
+  select * into ev from public.events where id = p_event_id for no key update;
+  if not found or coalesce(not (ev.owner_uid = (select auth.uid()) or app_private.is_admin()), true) then
     raise exception 'NOT_ALLOWED' using errcode = '42501';
   end if;
   if s <> '' then
@@ -45,7 +45,13 @@ begin
     if exists (select 1 from public.slugs where slug = s) then raise exception 'SLUG_TAKEN' using errcode = 'P0001'; end if;
   end if;
   delete from public.slugs where event_id = p_event_id;
-  if s <> '' then insert into public.slugs (slug, event_id, owner_uid) values (s, p_event_id, ev.owner_uid); end if;
+  if s <> '' then
+    begin
+      insert into public.slugs (slug, event_id, owner_uid) values (s, p_event_id, ev.owner_uid);
+    exception when unique_violation then   -- another event claimed the same name at the same moment
+      raise exception 'SLUG_TAKEN' using errcode = 'P0001';
+    end;
+  end if;
   update public.events set slug = nullif(s, ''), slug_decided = true where id = p_event_id;
   return nullif(s, '');
 end $$;
@@ -58,18 +64,22 @@ language plpgsql security definer set search_path = '' as $$
 declare
   ev public.events%rowtype; cand text; tries text[];
 begin
-  select * into ev from public.events where id = p_event_id for update;
-  if not found or ev.owner_uid <> (select auth.uid()) then raise exception 'NOT_ALLOWED' using errcode = '42501'; end if;
+  select * into ev from public.events where id = p_event_id for no key update;
+  if not found or coalesce(ev.owner_uid <> (select auth.uid()), true) then raise exception 'NOT_ALLOWED' using errcode = '42501'; end if;
   if ev.slug_decided or ev.slug is not null then return ev.slug; end if;
-  if p_base is null or p_base !~ '^[a-z0-9][a-z0-9-]{0,34}[a-z0-9]$' then return null; end if;
+  if p_base is null or p_base !~ '^[a-z0-9][a-z0-9-]{0,33}[a-z0-9]$' then return null; end if;
   tries := array[p_base, p_base || '-2', p_base || '-3', p_base || '-4', p_base || '-' || substr(md5(random()::text || clock_timestamp()::text), 1, 4)];
   foreach cand in array tries loop
     if cand ~ '^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$' and cand not in ('index','app','event','invite','scan','guide','icons','tests',
          'sitemap','robots','manifest','sw','utils','format','admin','login','www','api','404','privacy')
        and not exists (select 1 from public.slugs where slug = cand) then
-      insert into public.slugs (slug, event_id, owner_uid) values (cand, p_event_id, ev.owner_uid);
-      update public.events set slug = cand, slug_decided = true where id = p_event_id;
-      return cand;
+      begin
+        insert into public.slugs (slug, event_id, owner_uid) values (cand, p_event_id, ev.owner_uid);
+        update public.events set slug = cand, slug_decided = true where id = p_event_id;
+        return cand;
+      exception when unique_violation then
+        null;   -- another event took this name a moment ago: try the next candidate
+      end;
     end if;
   end loop;
   return null;
