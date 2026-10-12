@@ -976,3 +976,24 @@ test('the invitation page asks the server for exactly its own rows: event_public
     { name: 'get_request', args: { p_event_id: 'e1', p_req_id: 'REQ-MINE-0000000000000000' } },
   ]);
 });
+
+test('approved card stays after a failed poll, and the next good poll keeps it', async ({ page }) => {
+  await page.clock.install();
+  await stubSupabase(page);
+  await page.route(/qrcodejs.*qrcode\.min\.js/, (route) => route.fulfill({ contentType: 'text/javascript', body: QR_STAND_IN }));
+  await seedInviteStore(page, {
+    store: { events: { e1: EV1 }, 'events/e1/requests': { [MINE]: { name: 'سارة', reqId: MINE, status: 'approved', guestId: 'WD-ABC', createdAt: 'x' } } },
+  });
+  await page.addInitScript((id) => { localStorage.setItem('inv_reqid_e1', id); }, MINE);
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#card-wrap img')).toBeVisible({ timeout: 10000 });
+  await page.evaluate(() => { window.__fakeSupabase.fail = { get_request: { error: 'network', times: 1 } }; });
+  const before = await getRequestCalls(page);
+  await page.clock.fastForward(POLL);
+  await expect.poll(() => getRequestCalls(page)).toBeGreaterThan(before);
+  await page.waitForTimeout(200);
+  await expect(page.locator('#card-wrap img')).toBeVisible();
+  await expect(page.locator('#card')).not.toContainText('تعذّر تحميل طلبك');
+  await page.clock.fastForward(30000);
+  await expect(page.locator('#card-wrap img')).toBeVisible();
+});

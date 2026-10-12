@@ -153,7 +153,7 @@ test('normalizeError maps the SQL error names, Postgres codes and Auth codes of 
       nosession: n({ message: 'NO_SESSION', code: '42501' }),
       notAllowed: n({ message: 'NOT_ALLOWED', code: '42501' }),
       rls: n({ message: 'new row violates row-level security policy', code: '42501' }),
-      pending: n({ message: 'duplicate key value violates unique constraint', code: '23505' }),
+      dup: n({ message: 'duplicate key', code: '23505' }),
       single: n({ message: 'JSON object requested', code: 'PGRST116' }),
       evNf: n({ message: 'EVENT_NOT_FOUND', code: 'P0002' }),
       reqNf: n({ message: 'REQUEST_NOT_FOUND', code: 'P0002' }),
@@ -186,7 +186,7 @@ test('normalizeError maps the SQL error names, Postgres codes and Auth codes of 
   });
   expect(out).toEqual({
     cap: 'cap-reached', limit: 'limit-reached', ceiling: 'ceiling-reached', full: 'requests-full', slug: 'slug-taken',
-    nosession: 'no-session', notAllowed: 'permission', rls: 'permission', pending: 'request-pending', single: 'not-found',
+    nosession: 'no-session', notAllowed: 'permission', rls: 'permission', dup: '23505', single: 'not-found',
     evNf: 'not-found', reqNf: 'not-found', userNf: 'not-found',
     badName: 'bad-input', badInput: 'bad-input', badReq: 'bad-input', badSlug: 'bad-input', batch: 'bad-input',
     notPending: 'already-handled', noDelAdmin: 'cannot-delete-admin',
@@ -550,7 +550,45 @@ test('the vendored supabase.min.js is the real client: createClient works, and a
 test('the vendored supabase.min.js is the pinned file: version string, size and hash', async () => {
   const fs = require('fs'); const crypto = require('crypto');
   const buf = fs.readFileSync(path.join(__dirname, '..', 'vendor', 'supabase.min.js'));
+  expect(buf.length).toBe(217945);
+  expect(buf.toString('utf8')).toContain('2.117.2');
   expect(crypto.createHash('sha256').update(buf).digest('hex')).toBe('59d39487c3589843b410322d8a3d562ce022aba1e5ccb16898ef3fb2a0da2ecd');
   expect(fs.readFileSync(path.join(__dirname, '..', 'vendor', 'supabase.LICENSE.txt'), 'utf8')).toContain('MIT License');
-  expect(fs.readFileSync(path.join(__dirname, '..', 'supabase-config.js'), 'utf8')).not.toMatch(/service_role|secret/i);
+});
+
+test('supabase-config.js holds only a public key: empty, sb_publishable_..., or a JWT whose role is anon', async () => {
+  const fs = require('fs');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'supabase-config.js'), 'utf8');
+  const cfg = {};
+  new Function('window', src)(cfg);
+  const key = cfg.SUPABASE_CONFIG.anonKey;
+  expect(cfg.SUPABASE_CONFIG.url).toBe('https://gunizkapwatixvbfliva.supabase.co');
+  if (key === '') return;
+  if (key.startsWith('sb_publishable_')) return;
+  const parts = key.split('.');
+  expect(parts.length).toBe(3);
+  const payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+  expect(payload.role).toBe('anon');
+});
+
+test('the timed fetch still works and times out when AbortController is missing, and says «unsupported» without fetch', async ({ page }) => {
+  await page.clock.install();
+  await page.route('**/hang/**', () => {});
+  await page.route('**/fast/**', (r) => r.fulfill({ contentType: 'application/json', body: '{"a":1}' }));
+  await openSb(page);
+  await page.evaluate(() => {
+    window.AbortController = undefined;
+    window.__r = {};
+    window.Data.timedFetch('/fast/x').then((r) => r.json()).then((j) => { window.__r.fast = j; });
+    window.Data.timedFetch('/hang/x').catch((e) => { window.__r.hang = window.Data.normalizeError(e).code; });
+  });
+  await advance(page, 1000);
+  expect(await page.evaluate(() => window.__r)).toEqual({ fast: { a: 1 } });
+  await advance(page, 15000);
+  expect(await page.evaluate(() => window.__r)).toEqual({ fast: { a: 1 }, hang: 'timeout' });
+  const code = await page.evaluate(async () => {
+    window.fetch = undefined;
+    try { await window.Data.timedFetch('/x'); return 'none'; } catch (e) { return window.Data.normalizeError(e).code; }
+  });
+  expect(code).toBe('unsupported');
 });

@@ -70,9 +70,9 @@
     ['DATA_TIMEOUT', 'timeout'],
     ['DATA_OFFLINE', 'offline'],
   ];
+  const SQL_RES = SQL_MESSAGES.map(([name, code]) => [new RegExp('\\b' + name + '\\b'), code]);
   const PG_CODES = {
     '42501': 'permission',
-    '23505': 'request-pending',
     'PGRST116': 'not-found',
     'PGRST301': 'no-session',
     'PGRST302': 'no-session',
@@ -96,8 +96,8 @@
 
   function mapSupabase(e) {
     const msg = String(e.message || '');
-    for (const [name, code] of SQL_MESSAGES) {
-      if (new RegExp('\\b' + name + '\\b').test(msg)) return code;
+    for (const [re, code] of SQL_RES) {
+      if (re.test(msg)) return code;
     }
     const raw = e.code ? String(e.code) : '';
     if (AUTH_CODES[raw]) return AUTH_CODES[raw];
@@ -189,17 +189,26 @@
   // client libraries pass through in their error message and normalizeError
   // turns into DataError('timeout'). Offline browsers throw a TypeError.
   function timedFetch(input, init) {
+    if (typeof fetch !== 'function') return Promise.reject(new DataError('unsupported', 'fetch is not available'));
     const url = typeof input === 'string' ? input : (input && input.url) || '';
     const ms = /\/rpc\/check_in(\?|$)/.test(url) ? CHECK_IN_TIMEOUT_MS : TIMEOUT_MS;
-    const ctl = new AbortController();
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
     const outer = init && init.signal;
-    if (outer) {
+    if (ctl && outer) {
       if (outer.aborted) ctl.abort();
       else outer.addEventListener('abort', () => ctl.abort(), { once: true });
     }
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, ms);
-    return fetch(input, Object.assign({}, init, { signal: ctl.signal })).then(
+    let timer = null;
+    const deadline = new Promise((_resolve, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        if (ctl) ctl.abort();
+        reject(tagged('DataTimeout', 'DATA_TIMEOUT'));
+      }, ms);
+    });
+    const opts = ctl ? Object.assign({}, init, { signal: ctl.signal }) : init;
+    const req = fetch(input, opts).then(
       (res) => { clearTimeout(timer); return res; },
       (err) => {
         clearTimeout(timer);
@@ -208,6 +217,9 @@
         throw tagged('DataOffline', 'DATA_OFFLINE: ' + (err && err.message ? err.message : 'network'));
       }
     );
+    req.catch(() => {});
+    deadline.catch(() => {});
+    return Promise.race([req, deadline]);
   }
 
   let sbClient = null;

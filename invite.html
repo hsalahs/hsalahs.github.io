@@ -968,6 +968,9 @@ function watchStatus() {
     onError(e) {
       // A failed check is not a deleted request: keep the saved key.
       console.error(e);
+      // Something is already on screen (a card, the waiting note): keep it,
+      // the next check retries by itself.
+      if (shownKey !== null) return;
       renderReqError();
     }
   });
