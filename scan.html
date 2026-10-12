@@ -922,7 +922,7 @@ async function runSync(force) {
     console.error('names sync error:', e);
     if (e && e.code === 'permission-denied') { sessionRevoked(); return; }
     if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
-      setTimeout(() => location.reload(), 800);
+      setTimeout(() => { if (!window._leaving) location.reload(); }, 800);
       return;
     }
     deltaFailed = true;
@@ -1133,7 +1133,7 @@ async function loadGuestsOnce(force) {
     if (hadList && (rosterErr || (roster && roster.metadata && roster.metadata.fromCache))) {
       if (rosterErr && rosterErr.code === 'permission-denied') { sessionRevoked(); return 'stale'; }
       if (rosterErr && window._isFirestoreTerminated && window._isFirestoreTerminated(rosterErr)) {
-        setTimeout(() => location.reload(), 800);
+        setTimeout(() => { if (!window._leaving) location.reload(); }, 800);
         return 'stale';
       }
       deltaFailed = true;
@@ -1539,7 +1539,7 @@ async function handleScan(raw) {
       }
       if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
         status.textContent = '⏳ انقطع الاتصال — جاري تحديث الصفحة...';
-        setTimeout(() => location.reload(), 800);
+        setTimeout(() => { if (!window._leaving) location.reload(); }, 800);
         return;
       }
       status.textContent = '⚠️ تعذّر تسجيل الدخول — تأكد من الإنترنت وحاول مرة ثانية';

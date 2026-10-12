@@ -94,6 +94,7 @@ window.addEventListener('pagehide', () => {
 });
 window.addEventListener('pageshow', (e) => { if (e.persisted || firestorePageHidden) location.reload(); });
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && window._leaving) { location.reload(); return; }
   if (document.visibilityState === 'visible' && firestorePageHidden) location.reload();
 });
 window._isFirestoreTerminated = (e) => !!(e && /already been terminated/i.test(e.message || ''));
@@ -122,9 +123,10 @@ window._leave = async (url) => {
   clearTimeout(timer);
   try { sessionStorage.setItem('fsleave', String(Math.round(performance.now() - t0))); } catch (e) {}
   location.assign(url);
-  // The client is gone: if the navigation was cancelled and this page is
-  // still showing, reload it for a working one.
-  setTimeout(() => { if (document.visibilityState === 'visible') location.reload(); }, 3000);
+  // No reload while the navigation is slow (it would cancel it). If it never
+  // happens, a later tap may try again; and a user who backgrounds the app
+  // and comes back to this terminated page gets a reload (visibilitychange).
+  setTimeout(() => { leaveStarted = false; }, 10000);
 };
 try {
   const lv = sessionStorage.getItem('fsleave');
@@ -166,8 +168,20 @@ if (fsMarkPage && iosStandalone) {
     try { sessionStorage.removeItem('fsauto'); } catch (e) {}
   };
   try { getDocFromCache(doc(db, '__probe', 'x')).then(probeDone, probeDone); } catch (e) { probeDone(); }
-  probeTimer = setTimeout(() => {
-    if (probeAnswered || firestorePageHidden || document.visibilityState !== 'visible') return;
+  let probeDeferred = false;
+  const probeCheck = () => {
+    if (probeAnswered || firestorePageHidden) return;
+    if (document.visibilityState !== 'visible') {
+      if (!probeDeferred) {
+        probeDeferred = true;
+        document.addEventListener('visibilitychange', function again() {
+          if (document.visibilityState !== 'visible') return;
+          document.removeEventListener('visibilitychange', again);
+          probeCheck();
+        });
+      }
+      return;
+    }
     try {
       if (sessionStorage.getItem('fsauto')) return;
       sessionStorage.setItem('fsmode', 'memory');
@@ -175,7 +189,8 @@ if (fsMarkPage && iosStandalone) {
     } catch (e) { return; }
     fsMark('auto-memory');
     location.reload();
-  }, 6000);
+  };
+  probeTimer = setTimeout(probeCheck, 6000);
 }
 
 window.dispatchEvent(new Event('appDbReady'));

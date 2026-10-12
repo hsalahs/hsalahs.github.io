@@ -2468,8 +2468,9 @@ function showErr(e) {
   // Safety net for the reload in firebase-init.js: never leave the customer
   // on a page whose connection is gone for good.
   if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
+    if (window._leaving) return;
     showToast('⏳ انقطع الاتصال — جاري تحديث الصفحة...');
-    setTimeout(() => location.reload(), 800);
+    setTimeout(() => { if (!window._leaving) location.reload(); }, 800);
     return;
   }
   alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);

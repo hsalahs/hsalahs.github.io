@@ -698,19 +698,77 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
     await page.waitForURL('**/guide.html');
   });
 
-  test('if the navigation is cancelled and the page is still visible after 3 s, it reloads', async ({ page }) => {
+  // page.evaluate waits for a pending navigation, so these tests watch the
+  // page's load/navigation events and the held request instead.
+  test('a slow navigation is not cancelled by a reload', async ({ page }) => {
     await standalone(page);
     await setup(page);
     await page.goto('/app.html');
     await expect(page.locator('.event-card')).toHaveCount(1);
-    await page.clock.install();
-    await page.evaluate(() => { window.__mark = 1; });
-    await page.route('**/guide.html', (r) => r.abort());
-    const reloaded = page.waitForEvent('load');
+    const seen = [];
+    page.on('load', () => seen.push('load'));
+    page.on('framenavigated', (f) => seen.push(f.url()));
+    await page.route('**/guide.html', async (r) => { await new Promise((x) => setTimeout(x, 6500)); await r.continue().catch(() => {}); });
     await page.evaluate(() => window._leave('guide.html'));
-    await page.clock.runFor(3500);
-    await reloaded.catch(() => {});
+    await page.waitForTimeout(5000);
+    expect(seen).toEqual([]);
+    await page.waitForURL('**/guide.html');
+  });
+
+  test('coming back (visible again) to a page that was left reloads it; a normal page does not', async ({ page }) => {
+    await standalone(page);
+    await setup(page);
+    await page.goto('/app.html');
+    await expect(page.locator('.event-card')).toHaveCount(1);
+    const fire = () => page.evaluate(() => {
+      window.__mark = 1;
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await fire();
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => window.__mark)).toBe(1);
+    await page.evaluate(() => { window._leaving = true; });
+    const reloaded = page.waitForEvent('load');
+    await fire();
+    await reloaded;
     await expect.poll(() => page.evaluate(() => window.__mark === undefined)).toBe(true);
+  });
+
+  test('a later tap works again after 10 s if the first navigation never happened', async ({ page }) => {
+    await standalone(page);
+    await setup(page);
+    await page.goto('/app.html');
+    await expect(page.locator('.event-card')).toHaveCount(1);
+    let requests = 0;
+    await page.route('**/guide.html', async (r) => { requests++; await new Promise((x) => setTimeout(x, 30000)); await r.abort().catch(() => {}); });
+    await page.evaluate(() => {
+      window._leave('guide.html');
+      setTimeout(() => window._leave('guide.html'), 1500);
+      setTimeout(() => window._leave('guide.html'), 11000);
+    });
+    await expect.poll(() => requests, { timeout: 5000 }).toBe(1);
+    await page.waitForTimeout(3000);
+    expect(requests).toBe(1);
+    await expect.poll(() => requests, { timeout: 12000 }).toBe(2);
+  });
+
+  test('event.html: a terminated error raised while leaving shows no toast, does not reload, and the navigation arrives', async ({ page }) => {
+    await standalone(page);
+    await page.addInitScript(() => { window.__terminateHang = true; });
+    await setup(page);
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
+    const alerts = [];
+    page.on('dialog', (d) => { alerts.push(d.message()); d.dismiss(); });
+    await page.evaluate(() => {
+      window.__mark = 1;
+      window._leave('app.html');
+      showErr(Object.assign(new Error('The client has already been terminated.'), { code: 'failed-precondition' }));
+    });
+    await expect(page.locator('#toast')).not.toContainText('انقطع الاتصال');
+    await page.waitForURL('**/app.html');
+    expect(alerts).toEqual([]);
   });
 
   for (const [name, attrs, extra] of [
@@ -817,6 +875,23 @@ test.describe('Stalled cache watchdog (iOS home-screen app)', () => {
       expect(await page.evaluate(() => [window._fsMode, window.__fsSettings.localCache.kind])).toEqual(['default', 'persistent']);
     });
   }
+
+  test('a watchdog that fires while the page is hidden re-checks when it becomes visible', async ({ page }) => {
+    await standalone(page);
+    await hangUnlessMemory(page);
+    await page.addInitScript(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); });
+    await setup(page);
+    await page.goto('/app.html');
+    await page.waitForTimeout(6800);
+    expect(await flags(page)).toEqual([null, null]);
+    const reloaded = page.waitForEvent('load');
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await reloaded;
+    expect(await page.evaluate(() => window.__fsSettings.localCache.kind)).toBe('memory');
+  });
 
   test('a second stall with fsauto already set does not reload again', async ({ page }) => {
     await standalone(page);
