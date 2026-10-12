@@ -10,5 +10,5 @@ Nothing here touches the live Firebase site.
 
 ## Before cutover (must not be forgotten)
 - **Staging has «Confirm email» turned OFF** (the Free plan's built-in mail only reaches team members). It MUST be turned back ON, with custom SMTP configured, before the cutover.
-- Anonymous sign-ins must be enabled; CAPTCHA (Turnstile) recommended before cutover.
-- The admin row: `insert into app_private.admins select id from auth.users where email = 'hsallah@outlook.sa'` after the founder signs up on staging.
+- Anonymous sign-ins are enabled on staging. **CAPTCHA (e.g. Cloudflare Turnstile, free) on anonymous sign-in MUST be enabled before cutover** (founder's requirement): it limits abuse of the door sessions. It needs a client change too.
+- The admin row on staging is done (hsallah@outlook.sa). Production needs the same one-time insert: `insert into app_private.admins select id from auth.users where email = 'hsallah@outlook.sa'`.

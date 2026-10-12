@@ -41,8 +41,9 @@ if (mode === 'migrate' || mode === 'all') {
 }
 if (mode === 'test' || mode === 'all') {
   for (const f of files('tests')) {
-    if (f.startsWith('00_')) continue; // harness, prepended to each test
-    const harness = readFileSync(join(root, 'tests', '00_harness.sql'), 'utf8');
+    if (/^0\d_/.test(f)) continue; // 00_ harness, 01_ fixtures: prepended to each test
+    const harness = files('tests').filter((x) => /^0\d_/.test(x))
+      .map((x) => readFileSync(join(root, 'tests', x), 'utf8')).join('\n');
     const body = readFileSync(join(root, 'tests', f), 'utf8');
     try {
       const rows = await sql(harness + '\n' + body);

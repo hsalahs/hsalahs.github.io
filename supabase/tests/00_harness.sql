@@ -9,6 +9,14 @@
 begin;
 create temp table results (name text, pass boolean, detail text);
 
+-- fixture ids: {A} owner, {B} other owner, {D} door device (anonymous), {ADM} admin
+create function pg_temp.uid(k text) returns uuid language sql immutable as $$
+  select ('00000000-0000-0000-0000-0000000000' || case k when 'A' then 'a1' when 'B' then 'b2' when 'D' then 'd3' when 'ADM' then 'ad' end)::uuid;
+$$;
+create function pg_temp.fx(q text) returns text language sql immutable as $$
+  select replace(replace(replace(replace(q, '{A}', pg_temp.uid('A')::text), '{B}', pg_temp.uid('B')::text), '{D}', pg_temp.uid('D')::text), '{ADM}', pg_temp.uid('ADM')::text);
+$$;
+
 create function pg_temp.as_role(p_role text, p_uid uuid, p_anon boolean) returns void
 language plpgsql as $$
 begin
@@ -29,7 +37,7 @@ declare err text;
 begin
   begin
     perform pg_temp.as_role(p_role, p_uid, p_anon);
-    execute p_sql;
+    execute pg_temp.fx(p_sql);
     execute 'reset role';
     insert into results values (p_name, true, null);
   exception when others then
@@ -46,7 +54,7 @@ declare err text; succeeded boolean := false;
 begin
   begin
     perform pg_temp.as_role(p_role, p_uid, p_anon);
-    execute p_sql;
+    execute pg_temp.fx(p_sql);
     succeeded := true;
     raise exception 'rollback_marker';  -- undo whatever the statement did
   exception when others then
@@ -67,7 +75,7 @@ declare got text;
 begin
   begin
     perform pg_temp.as_role(p_role, p_uid, p_anon);
-    execute p_sql into got;
+    execute pg_temp.fx(p_sql) into got;
   exception when others then
     got := 'ERROR: ' || sqlerrm;
   end;
