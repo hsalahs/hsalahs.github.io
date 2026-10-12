@@ -486,7 +486,7 @@ test.describe('Firestore mode override and stuck-page probes', () => {
   });
 
   test('an unknown fsmode value behaves like default', async ({ page }) => {
-    await page.addInitScript(() => { localStorage.setItem('fsmode', 'bogus'); });
+    await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'bogus'); });
     await setup(page);
     await page.goto('/app.html?timing=1');
     await expect(page.locator('.event-card')).toHaveCount(1);
@@ -496,7 +496,7 @@ test.describe('Firestore mode override and stuck-page probes', () => {
 
   for (const url of ['/app.html?timing=1', '/event.html?id=e1&timing=1']) {
     test(`${url}: fsmode=memory uses memoryLocalCache, shows mode:memory and the switch-back button`, async ({ page }) => {
-      await page.addInitScript(() => { localStorage.setItem('fsmode', 'memory'); });
+      await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'memory'); });
       await setup(page);
       await page.goto(url);
       await expect(page.locator('#timing-line')).toContainText('mode:memory');
@@ -508,7 +508,7 @@ test.describe('Firestore mode override and stuck-page probes', () => {
   }
 
   test('fsmode=long keeps the persistent cache and forces long polling', async ({ page }) => {
-    await page.addInitScript(() => { localStorage.setItem('fsmode', 'long'); });
+    await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'long'); });
     await setup(page);
     await page.goto('/app.html?timing=1');
     await expect(page.locator('#timing-line')).toContainText('mode:long');
@@ -518,12 +518,12 @@ test.describe('Firestore mode override and stuck-page probes', () => {
   });
 
   test('the switch-back button removes the key and reloads', async ({ page }) => {
-    await page.addInitScript(() => { if (!sessionStorage.getItem('seen')) { sessionStorage.setItem('seen', '1'); localStorage.setItem('fsmode', 'memory'); } });
+    await page.addInitScript(() => { if (!localStorage.getItem('seen')) { localStorage.setItem('seen', '1'); sessionStorage.setItem('fsmode', 'memory'); } });
     await setup(page);
     await page.goto('/app.html?timing=1');
     await page.locator('#timing-btns button', { hasText: 'رجوع للوضع العادي' }).click();
     await expect(page.locator('.event-card')).toHaveCount(1);
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('fsmode'))).toBeNull();
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('fsmode'))).toBeNull();
     expect((await settings(page)).mode).toBe('default');
   });
 
@@ -550,7 +550,7 @@ test.describe('Firestore mode override and stuck-page probes', () => {
       const reloaded = page.waitForEvent('load');
       await btns.nth(0).click();
       await reloaded;
-      expect(await page.evaluate(() => localStorage.getItem('fsmode'))).toBe('memory');
+      expect(await page.evaluate(() => sessionStorage.getItem('fsmode'))).toBe('memory');
     });
   }
 
@@ -563,7 +563,7 @@ test.describe('Firestore mode override and stuck-page probes', () => {
     const reloaded = page.waitForEvent('load');
     await page.locator('#timing-btns button').nth(1).click();
     await reloaded;
-    expect(await page.evaluate(() => localStorage.getItem('fsmode'))).toBe('long');
+    expect(await page.evaluate(() => sessionStorage.getItem('fsmode'))).toBe('long');
   });
 
   test('event.html: a cache probe that misses is labelled miss', async ({ page }) => {
@@ -587,4 +587,48 @@ test.describe('Firestore mode override and stuck-page probes', () => {
     await page.locator('#auth-loading').click();
     await reloaded;
   });
+
+  test('the mode set by a button is in sessionStorage, not localStorage', async ({ page }) => {
+    await page.clock.install();
+    await setup(page);
+    await page.addInitScript(() => { window.__hangAuth = true; });
+    await page.goto('/app.html');
+    await page.clock.runFor(27000);
+    const reloaded = page.waitForEvent('load');
+    await page.locator('#timing-btns button').nth(0).click();
+    await reloaded;
+    expect(await page.evaluate(() => [sessionStorage.getItem('fsmode'), localStorage.getItem('fsmode')])).toEqual(['memory', null]);
+  });
+
+  test('a localStorage fsmode (old key) is ignored', async ({ page }) => {
+    await page.addInitScript(() => { localStorage.setItem('fsmode', 'memory'); });
+    await setup(page);
+    await page.goto('/app.html');
+    await expect(page.locator('.event-card')).toHaveCount(1);
+    expect((await settings(page)).mode).toBe('default');
+  });
+
+  test('scan.html ignores fsmode', async ({ page }) => {
+    await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'memory'); });
+    await setup(page);
+    await page.goto('/scan.html');
+    await page.waitForFunction(() => window._fsMode);
+    const t = await settings(page);
+    expect(t.mode).toBe('default');
+    expect(t.s.localCache.kind).toBe('persistent');
+  });
+
+  for (const [pageUrl, host] of [['/app.html', '#auth-loading'], ['/event.html?id=e1', '#loading-msg']]) {
+    test(`${pageUrl}: stuck then recovered removes the line and the buttons`, async ({ page }) => {
+      await page.clock.install();
+      await setup(page);
+      await page.addInitScript(() => { window.__hangAuth = true; });
+      await page.goto(pageUrl);
+      await page.clock.runFor(27000);
+      await expect(page.locator('#timing-btns')).toHaveCount(1);
+      await page.evaluate((h) => { document.querySelector(h).style.display = 'none'; tmark('recovered'); }, host);
+      await expect(page.locator('#timing-line')).toHaveCount(0);
+      await expect(page.locator('#timing-btns')).toHaveCount(0);
+    });
+  }
 });

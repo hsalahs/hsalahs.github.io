@@ -51,11 +51,13 @@ try {
     (/iPad|iPhone|iPod/.test(navigator.userAgent) && window.matchMedia('(display-mode: standalone)').matches);
 } catch (e) {}
 // Measurement override (set from the stuck-page buttons or by hand):
-// localStorage fsmode = 'memory' (no IndexedDB cache) or 'long' (the same
-// cache plus forced long-polling). Anything else is the normal behaviour.
+// sessionStorage fsmode = 'memory' (no IndexedDB cache) or 'long' (the same
+// cache plus forced long-polling). Session-only, so it resets when the app
+// is reopened. Only app.html and event.html honour it, never the door
+// scanner. Anything else is the normal behaviour.
 let fsMode = 'default';
 try {
-  const m = localStorage.getItem('fsmode');
+  const m = /\/(app|event)(\.html)?$/.test(location.pathname) ? sessionStorage.getItem('fsmode') : null;
   if (m === 'memory' || m === 'long') fsMode = m;
 } catch (e) {}
 window._fsMode = fsMode;

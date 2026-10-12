@@ -38,7 +38,12 @@ function tmShow() {
   var line = document.getElementById('timing-line');
   // Shown only because the page got stuck: once it recovers, the line goes
   // with the loading message instead of staying on top of the page.
-  if (host.style.display === 'none' && !TM.param) { if (line) line.remove(); return; }
+  if (host.style.display === 'none' && !TM.param) {
+    if (line) line.remove();
+    var bx = document.getElementById('timing-btns');
+    if (bx) bx.remove();
+    return;
+  }
   if (!line) {
     line = document.createElement('div');
     line.id = 'timing-line';
@@ -61,7 +66,7 @@ function tmShow() {
   line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + ' tab:' + (window._fsTab || '?') + ' mode:' + (window._fsMode || '?') + (TM.err ? ' || err: ' + TM.err : '');
 }
 function tmSetMode(v) {
-  try { if (v) localStorage.setItem('fsmode', v); else localStorage.removeItem('fsmode'); } catch (e) {}
+  try { if (v) sessionStorage.setItem('fsmode', v); else sessionStorage.removeItem('fsmode'); } catch (e) {}
   location.reload();
 }
 function tmButtons(line) {
@@ -75,7 +80,7 @@ function tmButtons(line) {
     var b = document.createElement('button');
     b.type = 'button';
     b.textContent = d[0];
-    b.style.cssText = 'background:none;border:1px solid #8d8a84;color:#8d8a84;border-radius:8px;font-size:12px;font-family:inherit;padding:8px 12px;margin:4px;cursor:pointer;';
+    b.style.cssText = 'background:none;border:1px solid #8d8a84;color:#8d8a84;border-radius:8px;font-size:12px;font-family:inherit;padding:12px 14px;min-height:44px;margin:4px;cursor:pointer;';
     b.onclick = function () { tmSetMode(d[1]); };
     box.appendChild(b);
   });
@@ -98,7 +103,7 @@ function tmProbes(cacheFn) {
   } catch (e) {}
   tmProbe('idb', function (fin) {
     var r = indexedDB.open('__probe');
-    r.onsuccess = function () { try { r.result.close(); indexedDB.deleteDatabase('__probe'); } catch (e) {} fin('ok'); };
+    r.onsuccess = function () { try { r.result.close(); var dr = indexedDB.deleteDatabase('__probe'); dr.onblocked = dr.onerror = function () {}; } catch (e) {} fin('ok'); };
     r.onerror = function () { fin('err'); };
   });
   if (cacheFn) tmProbe('cache', cacheFn);
