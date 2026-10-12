@@ -312,8 +312,8 @@
       return row ? camel(row) : null;
     },
     // Calls cb.onChange(request | null) after every answer and cb.onError(err)
-    // on a failed one. Polls while the request is pending or rejected and
-    // stops for good once it is approved with its barcode id.
+    // on a failed one. Keeps polling (also after approval, so a VIP change
+    // shows live) until stop(), pagehide, or the request is gone (null).
     watchRequest(eventId, reqId, cb) {
       let poller = null, dead = false;
       poller = makePoller(async () => {
@@ -324,7 +324,7 @@
         }
         if (dead) return;
         if (cb.onChange) cb.onChange(req);
-        if (req && req.status === 'approved' && req.guestId) poller.stop();
+        if (!req) { dead = true; poller.stop(); }
       }, INVITE_POLL_MS);
       poller.start();
       return { stop: () => { dead = true; poller.stop(); }, refresh: () => poller.refresh() };

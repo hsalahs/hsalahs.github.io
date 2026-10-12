@@ -324,7 +324,7 @@ test('the fake server refuses a request once pending ones reach max(limit, 50), 
   expect(out).toEqual({ full: 'requests-full', first: 1000, second: 500 });
 });
 
-test('watchRequest polls every 12 s while pending, reports each answer, and stops once approved with a barcode id', async ({ page }) => {
+test('watchRequest polls every 12 s, also after approval, reports each answer, and stops when the request is gone', async ({ page }) => {
   await page.clock.install();
   const rid = 'REQ-' + 'B'.repeat(32);
   await openSb(page, { seed: { events: { e1: { name: 'x', date: 'd' } }, requests: { e1: { [rid]: { status: 'pending', guest_id: null, vip: false, name: 'سارة' } } } } });
@@ -341,10 +341,15 @@ test('watchRequest polls every 12 s while pending, reports each answer, and stop
   await page.evaluate((rid) => { Object.assign(window.__fakeSupabase.requests.e1[rid], { status: 'approved', guest_id: 'WD-1' }); }, rid);
   await page.clock.fastForward(13500);
   await expect.poll(calls).toBe(3);
+  await page.clock.fastForward(13500);
+  await expect.poll(calls).toBe(4);                  // still polling after approval
+  await page.evaluate((rid) => { delete window.__fakeSupabase.requests.e1[rid]; }, rid);
+  await page.clock.fastForward(13500);
+  await expect.poll(calls).toBe(5);
   await page.clock.fastForward(120000);
   await page.waitForTimeout(100);
-  expect(await calls()).toBe(3);                     // stopped
-  expect(await page.evaluate(() => window.__seen)).toEqual(['pending', 'pending', 'approved']);
+  expect(await calls()).toBe(5);                     // gone: stopped
+  expect(await page.evaluate(() => window.__seen)).toEqual(['pending', 'pending', 'approved', 'approved', null]);
 });
 
 test('watchRequest.stop() ends it, and an answer that arrives after stop() is ignored', async ({ page }) => {

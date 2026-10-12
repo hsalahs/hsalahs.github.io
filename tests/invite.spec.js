@@ -886,7 +886,7 @@ async function openPending(page, extra = {}) {
 }
 const getRequestCalls = (page) => page.evaluate(() => window.__fakeSupabase.calls.filter((c) => c.name === 'get_request').length);
 
-test('a pending request becomes the card by itself on the next check, drawn once, and checking then stops', async ({ page }) => {
+test('a pending request becomes the card by itself on the next check, drawn once, and checking continues', async ({ page }) => {
   await page.clock.install();
   await openPending(page);
   await page.evaluate((id) => { Object.assign(window.__fakeSupabase.requests.e1[id], { status: 'approved', guest_id: 'WD-ABC' }); }, MINE);
@@ -894,10 +894,25 @@ test('a pending request becomes the card by itself on the next check, drawn once
   await expect(page.locator('#card-wrap img')).toBeVisible({ timeout: 10000 });
   await page.evaluate(() => { document.querySelector('#card-wrap img').dataset.mark = '1'; });
   const before = await getRequestCalls(page);
-  await page.clock.fastForward(60000);
-  await page.waitForTimeout(200);
-  expect(await getRequestCalls(page)).toBe(before);
+  await page.clock.fastForward(POLL);
+  await expect.poll(() => getRequestCalls(page)).toBeGreaterThan(before);
   await expect(page.locator('#card-wrap img[data-mark="1"]')).toHaveCount(1);
+});
+
+test('a VIP flip on an approved request shows on the open card live, both ways', async ({ page }) => {
+  await page.clock.install();
+  await openPending(page);
+  await page.evaluate((id) => { Object.assign(window.__fakeSupabase.requests.e1[id], { status: 'approved', guest_id: 'WD-ABC' }); }, MINE);
+  await page.clock.fastForward(POLL);
+  await expect(page.locator('#card-wrap img')).toBeVisible({ timeout: 10000 });
+  const bg = () => page.evaluate(() => Math.max(...Array.from(cardCanvas.getContext('2d').getImageData(60, 700, 1, 1).data.slice(0, 3))));
+  expect(await bg()).toBeGreaterThan(200);
+  await page.evaluate((id) => { window.__fakeSupabase.requests.e1[id].vip = true; }, MINE);
+  await page.clock.fastForward(POLL);
+  await expect.poll(bg).toBeLessThan(40);
+  await page.evaluate((id) => { window.__fakeSupabase.requests.e1[id].vip = false; }, MINE);
+  await page.clock.fastForward(POLL);
+  await expect.poll(bg).toBeGreaterThan(200);
 });
 
 test('an unchanged pending request does not re-render the screen on each check', async ({ page }) => {
