@@ -706,7 +706,7 @@ async function lockOrClose() {
     try { qrScanner.destroy(); } catch (_) {}
     qrScanner = null;
   }
-  location.href = 'event.html?id=' + encodeURIComponent(eventId);
+  goTo('event.html?id=' + encodeURIComponent(eventId));
 }
 
 // Lets whoever is holding an unlocked device end their own session — e.g.

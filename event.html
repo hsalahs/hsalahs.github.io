@@ -75,7 +75,6 @@ function tmButtons(line) {
   box.id = 'timing-btns';
   box.style.cssText = 'direction:rtl;text-align:center;padding:0 18px 16px;';
   var defs = [['جرّب بدون ذاكرة', 'memory'], ['جرّب اتصال بديل', 'long']];
-  if (window._fsMode && window._fsMode !== 'default') defs.push(['رجوع للوضع العادي', '']);
   defs.forEach(function (d) {
     var b = document.createElement('button');
     b.type = 'button';
@@ -476,7 +475,7 @@ setTimeout(() => {
   <div id="dashboard" style="display:none">
     <div class="toolbar">
       <button class="icon-btn" onclick="toggleTopMenu()" aria-label="القائمة"><i data-ic="menu" data-size="21"></i><span class="nav-badge" id="top-menu-badge" style="display:none;"></span></button>
-      <button class="icon-btn" onclick="window.location.href='app.html';" title="كل مناسباتي" aria-label="كل مناسباتي"><i data-ic="clipboard-list" data-size="21"></i></button>
+      <button class="icon-btn" onclick="goTo('app.html');" title="كل مناسباتي" aria-label="كل مناسباتي"><i data-ic="clipboard-list" data-size="21"></i></button>
       <!-- Grouped, each icon in a soft chip; "خروج" last and in red so it isn't hit by mistake. -->
       <div class="dropdown-menu" id="top-menu" style="display:none;">
         <div class="menu-grp">الضيوف</div>
@@ -496,10 +495,10 @@ setTimeout(() => {
         <div class="menu-grp">المناسبة</div>
         <button onclick="closeTopMenu(); toggleEditEvent();"><span class="chip"><i data-ic="pencil"></i></span><span>تعديل المناسبة</span></button>
         <button id="payment-menu-item" onclick="handlePaymentMenuClick()"></button>
-        <button onclick="window.location.href='app.html';"><span class="chip"><i data-ic="clipboard-list"></i></span><span>كل مناسباتي</span></button>
+        <button onclick="goTo('app.html');"><span class="chip"><i data-ic="clipboard-list"></i></span><span>كل مناسباتي</span></button>
         <button onclick="location.reload();"><span class="chip"><i data-ic="refresh-cw"></i></span><span>تحديث الصفحة</span></button>
         <div class="menu-sep"></div>
-        <button onclick="window.location.href='guide.html';"><span class="chip"><i data-ic="book-open"></i></span><span>دليل الاستخدام</span></button>
+        <button onclick="goTo('guide.html');"><span class="chip"><i data-ic="book-open"></i></span><span>دليل الاستخدام</span></button>
         <button class="menu-danger" onclick="closeTopMenu(); doLogout();"><span class="chip"><i data-ic="log-out"></i></span><span>خروج</span></button>
       </div>
     </div>
@@ -1132,7 +1131,7 @@ async function deleteThisEvent() {
       });
     } catch (e) { console.error('accountLimits decrement failed:', e); }
 
-    window.location.href = 'app.html';
+    goTo('app.html');
   } catch (e) {
     alert('صار خطأ أثناء الحذف: ' + (e.code || '') + ' — ' + e.message);
     console.error(e);
@@ -1141,7 +1140,7 @@ async function deleteThisEvent() {
 
 function doLogout() {
   const { signOut } = window._authFns;
-  signOut(window._auth).then(() => { window.location.href = 'app.html'; });
+  signOut(window._auth).then(() => { goTo('app.html'); });
 }
 
 let dashboardStarted = false;

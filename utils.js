@@ -279,3 +279,10 @@ function confirmEventDelete({ name, guestCount }) {
     input.focus();
   });
 }
+
+// Navigation between pages that use Firestore: in the iOS home-screen app it
+// frees the connection first (firebase-init.js _leave), elsewhere it is a
+// plain navigation.
+function goTo(url) {
+  if (window._leave) window._leave(url); else window.location.href = url;
+}
