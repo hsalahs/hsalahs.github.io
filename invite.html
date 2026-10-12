@@ -92,6 +92,11 @@
     --accent-rgb:176,141,87; --text-main:#2A2419; --text-soft:#7A7060;
     --glass-bg:rgba(255,255,255,0.55);
   }
+  /* The ivory accent is too light for text on its cream background (2.8:1);
+     text in the accent colour uses a deeper tone (4.7:1). Buttons keep theirs. */
+  [data-theme="ivory"] h1, [data-theme="ivory"] .inv-kind, [data-theme="ivory"] .countdown,
+  [data-theme="ivory"] .maps-link, [data-theme="ivory"] .guest-name, [data-theme="ivory"] .btn.kind-btn,
+  [data-theme="ivory"] .rsvp-note b, [data-theme="ivory"] .pend-note b { color:#86672F; }
 
   body {
     font-family:'IBM Plex Sans Arabic',sans-serif; background:var(--bg-base); color:var(--text-main); min-height:100vh;
@@ -322,7 +327,9 @@ function startCountdown(eventData) {
   function tick() {
     const diff = target - Date.now();
     if (diff <= 0) {
-      el.textContent = '🎉 وصل الموعد 🎉';
+      // The event day only (until 8pm the next day); after that, no countdown at all.
+      if (diff > -86400000) el.textContent = '🎉 وصل الموعد 🎉';
+      else el.style.display = 'none';
       clearInterval(countdownTimer);
       countdownTimer = null;
       return;
@@ -339,6 +346,12 @@ function startCountdown(eventData) {
   tick();
   countdownTimer = setInterval(tick, 30000);
 }
+
+// The tap-to-retry messages (role="button") also answer Enter / Space.
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if ((e.key === 'Enter' || e.key === ' ') && t && t.getAttribute && t.getAttribute('role') === 'button') { e.preventDefault(); t.click(); }
+});
 
 function renderForm(eventData) {
   card.innerHTML = `
@@ -836,7 +849,7 @@ async function renderApproved(eventData, guest) {
     ${eventInfoHtml(eventData)}
     <div id="card-wrap" style="margin-top:16px;"></div>
     <div class="help-line" id="press-hint" style="display:none;">إذا ما نزلت الصورة، اضغط مطولًا عليها واختر حفظ</div>
-    <button class="btn" id="save-btn" style="margin-top:14px; display:none;" onclick="downloadInviteCard()">⬇️ حفظ الدعوة</button>
+    <button class="btn" id="save-btn" style="margin-top:14px; display:none;" onclick="downloadInviteCard()">${ic('download', 16)} حفظ الدعوة</button>
     <div class="help-line" id="save-hint" style="display:none;">احفظ الدعوة أو صوّر الشاشة</div>
     ${demoScanNote}
   `;
@@ -848,7 +861,7 @@ async function renderApproved(eventData, guest) {
     try { await loadQrLib(); built = await buildInviteCard(eventData, guest); } catch (e) { built = null; }
     if (mySeq !== cardSeq || !document.body.contains(wrap)) return;
     if (!built) {
-      wrap.innerHTML = '<div class="status-msg" id="qr-retry" style="cursor:pointer">⚠️ تعذّر تجهيز البطاقة بسبب ضعف الإنترنت — اضغط هنا للمحاولة مرة ثانية</div>';
+      wrap.innerHTML = '<div class="status-msg" id="qr-retry" role="button" tabindex="0" style="cursor:pointer">⚠️ تعذّر تجهيز البطاقة بسبب ضعف الإنترنت — اضغط هنا للمحاولة مرة ثانية</div>';
       document.getElementById('qr-retry').onclick = drawCard;
       return;
     }
@@ -989,7 +1002,7 @@ async function init() {
       try { history.replaceState(null, '', '/' + slugParam); } catch (e) {}
     } catch (e) {
       console.error(e);
-      card.innerHTML = '<div class="status-msg" id="retry-msg" style="cursor:pointer">⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية</div>';
+      card.innerHTML = '<div class="status-msg" id="retry-msg" role="button" tabindex="0" style="cursor:pointer">⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية</div>';
       document.getElementById('retry-msg').onclick = init;
       return;
     }
@@ -1003,12 +1016,13 @@ async function init() {
     // deeper: a dropped connection here used to leave a guest stuck on
     // "جاري التحميل..." forever with no way to actually RSVP.
     console.error(e);
-    card.innerHTML = '<div class="status-msg" id="retry-msg" style="cursor:pointer">⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية</div>';
+    card.innerHTML = '<div class="status-msg" id="retry-msg" role="button" tabindex="0" style="cursor:pointer">⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية</div>';
     document.getElementById('retry-msg').onclick = init;
     return;
   }
   if (!snap.exists()) { card.innerHTML = '<div class="status-msg">⚠️ هذه المناسبة غير موجودة</div><div class="help-line">' + CHECK_LINK + '</div>'; return; }
   currentEvent = snap.data();
+  if (currentEvent.name) document.title = String(currentEvent.name).slice(0, 60) + ' | دعوات';
   document.body.setAttribute('data-theme', currentEvent.theme || 'gold');
   if (window.showInviteKind) window.showInviteKind(eventTypeOf(currentEvent));
 

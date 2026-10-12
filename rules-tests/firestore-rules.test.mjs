@@ -349,6 +349,17 @@ await check('unauthenticated: cannot claim', () => assertFails(unauth().doc('slu
 await check('another user cannot delete it', () => assertFails(user('other9', 'o9@example.com').doc('slugs/hala-turki').delete()));
 await check('the owner can release it', () => assertSucceeds(owner().doc('slugs/hala-turki').delete()));
 await check('...and then it can be claimed again', () => assertSucceeds(owner().doc('slugs/hala-turki').set(slug('sl1'))));
+await check('«privacy» is reserved too (the privacy page)', () => assertFails(owner().doc('slugs/privacy').set(slug('sl1'))));
+
+console.log('\nwelcome message length (WELCOME_MAX 400):');
+await testEnv.withSecurityRulesDisabled(ctx => ctx.firestore().doc('events/wm1').set({ name: 'WM', ownerUid: 'owner1', paid: false, guestCount: 0 }));
+await check('the owner can save a 400-character welcome message', () => assertSucceeds(owner().doc('events/wm1').update({ welcomeMessage: 'ا'.repeat(400) })));
+await check('...but not 401 characters', () => assertFails(owner().doc('events/wm1').update({ welcomeMessage: 'ا'.repeat(401) })));
+await check('...and not a non-text value', () => assertFails(owner().doc('events/wm1').update({ welcomeMessage: { long: true } })));
+await check('the owner can clear it', () => assertSucceeds(owner().doc('events/wm1').update({ welcomeMessage: '' })));
+await testEnv.withSecurityRulesDisabled(ctx => ctx.firestore().doc('events/wm1').update({ welcomeMessage: 'x'.repeat(600) }));
+await check('an older, longer message does not block editing the other details', () => assertSucceeds(owner().doc('events/wm1').update({ name: 'WM 2' })));
+await check('the admin is not limited', () => assertSucceeds(admin().doc('events/wm1').update({ welcomeMessage: 'x'.repeat(700) })));
 
 await testEnv.cleanup();
 console.log(`\n${passed} passed, ${failed} failed`);

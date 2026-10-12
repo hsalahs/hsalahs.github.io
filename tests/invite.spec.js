@@ -11,6 +11,22 @@ test('shows the RSVP form for a real event and an error for a missing one', asyn
   await expect(page.locator('#card')).toContainText('حفل تجريبي');
 });
 
+test('tab title is the event name; the countdown shows on the day and disappears after it', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-01-01T21:00:00+03:00') });
+  await stubFirebase(page);
+  await seedFakeFirebase(page, {
+    store: { events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } } },
+  });
+  await page.goto('/invite.html?event=e1');
+  await expect(page.locator('#g-name')).toBeVisible();
+  await expect(page).toHaveTitle('حفل تجريبي | دعوات');
+  await expect(page.locator('#countdown')).toContainText('وصل الموعد');
+  await page.clock.setSystemTime(new Date('2026-01-03T12:00:00+03:00'));
+  await page.reload();
+  await expect(page.locator('#g-name')).toBeVisible();
+  await expect(page.locator('#countdown')).toBeHidden();
+});
+
 test('a bad event id shows an error instead of the form', async ({ page }) => {
   await stubFirebase(page);
   await seedFakeFirebase(page, { store: { events: {} } });
