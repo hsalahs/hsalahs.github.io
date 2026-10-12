@@ -69,7 +69,7 @@ create function pg_temp.stash() returns void language sql security definer as $$
 create function pg_temp.moved() returns text language sql security definer as $$
   select case when (select guests_changed_at from public.events where id = 'tl') is not distinct from (select v from lcs) then 'same' else 'moved' end $$;
 grant execute on function pg_temp.stash(), pg_temp.moved() to public;
-select pg_temp.t_eq('a new event has no last_change yet', $$select (last_change is null)::text from public.door_event('tl')$$, 'true', 'authenticated', pg_temp.uid('D'), true);
+select pg_temp.t_eq('a new event already has a last_change (never empty)', $$select (last_change is not null)::text from public.door_event('tl')$$, 'true', 'authenticated', pg_temp.uid('D'), true);
 select pg_temp.stash();
 insert into public.guests (event_id, id, name) values ('tl', 'L-1', 'one'), ('tl', 'L-2', 'two'), ('tl', 'L-3', 'three');
 select pg_temp.t_eq('adding guests moves last_change', $$select pg_temp.moved()$$, 'moved');

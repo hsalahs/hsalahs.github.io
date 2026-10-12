@@ -6,6 +6,8 @@
 -- (c) is_admin_me(): lets the client ask "am I the admin?" without reading the admin list.
 
 alter table public.events add column if not exists guests_changed_at timestamptz;
+alter table public.events alter column guests_changed_at set default clock_timestamp();
+update public.events set guests_changed_at = clock_timestamp() where guests_changed_at is null;
 
 create or replace function app_private.guests_after_insert() returns trigger
 language plpgsql security definer set search_path = '' as $$

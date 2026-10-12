@@ -694,3 +694,35 @@ test('normalizeError: PGRST303 (JWT claims) is a lost sign-in like PGRST301', as
   const code = await page.evaluate(() => Data.normalizeError({ message: 'JWT cryptographic operation failed', code: 'PGRST303' }).code);
   expect(code).toBe('no-session');
 });
+
+test('Data.scan.guests with since set pages a delta of more than 1000 rows without gaps or duplicates', async ({ page }) => {
+  const many = Array.from({ length: 2300 }, (_, i) => ({ id: 'WD-' + String(i).padStart(5, '0'), name: 'n' + i, scanned: false, scanned_at: null, vip: false, changed_at: '2026-03-01T10:' + String(Math.floor(i / 60)).padStart(2, '0') + ':' + String(i % 60).padStart(2, '0') + '.000000+00:00' }));
+  await openSb(page, { seed: { ...DOOR_SEED, doors: { e1: { pin: '123456', guests: many, lastChange: 'x' } } } });
+  const out = await page.evaluate(async () => {
+    const r = await Data.scan.guests('e1', '2026-03-01T09:00:00.000Z');
+    const pages = window.__fakeSupabase.calls.filter((c) => c.name === 'door_guests');
+    return { n: r.rows.length, u: new Set(r.rows.map((x) => x.id)).size, pages: pages.length, second: pages[1].args };
+  });
+  expect(out.n).toBe(2300);
+  expect(out.u).toBe(2300);
+  expect(out.pages).toBe(3);
+  expect(out.second.p_after_id).toBe('WD-00999');
+  expect(out.second.p_since).toMatch(/^2026-03-01T10:16:39/);
+});
+
+test('poller: after a long backoff, returning from hidden runs at once and a success returns to the base interval', async ({ page }) => {
+  await poller(page);
+  await page.evaluate(() => { window.__mode = 'fail'; window.__p.start(); });
+  await advance(page, 300000);
+  const hide = (h) => page.evaluate((hidden) => { window.__hidden = hidden; document.dispatchEvent(new Event('visibilitychange')); }, h);
+  await hide(true);
+  const n0 = (await times(page)).length;
+  await advance(page, 200000);
+  expect((await times(page)).length).toBe(n0);
+  await page.evaluate(() => { window.__mode = 'ok'; });
+  await hide(false);
+  await advance(page, 500);
+  expect((await times(page)).length).toBe(n0 + 1);
+  await advance(page, 12000);
+  expect((await times(page)).length).toBe(n0 + 2);
+});

@@ -565,6 +565,37 @@ test('mid-event the sign-in dies for good: the code screen says they were signed
   expect(await serverScanned(page)).toBe(0);
 });
 
+test('check-in rejected for an expired token that refreshes fine: the error overlay (rescan), not the code screen, and the check-in is not repeated', async ({ page }) => {
+  await openUnlocked(page, [{ id: 'WD-A', name: 'أ' }]);
+  await fake(page, () => { window.__fakeSupabase.fail = { check_in: { error: { message: 'JWT expired', code: 'PGRST301', status: 401 }, times: 1 } }; });
+  await page.locator('#manual-code').fill('WD-A');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+  await expect(page.locator('#result-overlay.rs-error')).toBeVisible();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  expect((await calls(page, 'check_in')).length).toBe(1);
+  expect(await page.evaluate(() => window.__fakeSupabase.auth.refreshCalls)).toBe(1);
+  await page.waitForTimeout(500);
+  await page.locator('#result-overlay').click();
+  await page.locator('#manual-code').fill('WD-A');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+});
+
+test('a refresh that cannot reach the server keeps the identity and the door session: no new anonymous user, scanner stays open', async ({ page }) => {
+  await page.clock.install();
+  await openUnlocked(page, [{ id: 'WD-A', name: 'أ' }]);
+  await fake(page, () => {
+    window.__fakeSupabase.auth.refreshNetworkFails = true;
+    window.__fakeSupabase.fail = { door_event: { error: { message: 'JWT expired', code: 'PGRST301', status: 401 }, times: 1 } };
+  });
+  await page.clock.fastForward(4500);
+  await expect.poll(() => fake(page, () => window.__fakeSupabase.auth.refreshCalls)).toBe(1);
+  await page.waitForTimeout(200);
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  const st = await page.evaluate(() => ({ user: window.__fakeSupabase.auth.user, anon: window.__fakeSupabase.auth.anonCalls || 0, out: window.__fakeSupabase.auth.signOutCalls || 0, session: window.__fakeSupabase.sessions.e1['anon-1'] }));
+  expect(st).toEqual({ user: { id: 'anon-1', is_anonymous: true, email: null }, anon: 0, out: 0, session: '123456' });
+});
+
 // ---- the scanner follows the event's colour theme (accents only) ----
 
 const rgb = (hex) => { const n = parseInt(hex.slice(1), 16); return `rgb(${n >> 16}, ${(n >> 8) & 255}, ${n & 255})`; };

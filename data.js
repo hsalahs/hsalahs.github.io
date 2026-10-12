@@ -404,18 +404,30 @@
     return !!e && e.code === 'no-session' && !/\bNO_SESSION\b/.test(e.message || '');
   }
 
-  // First try to refresh the token (a request can race the automatic refresh);
-  // if that fails, drop the dead identity and sign in anonymously again so the
-  // code screen can work. Returns 'refreshed' or 'reset'. Calls that fail at
-  // the same time share one healing.
+  // Only these refresh errors mean the stored sign-in is really dead; a
+  // network failure (AuthRetryableFetchError, a thrown fetch error) must not
+  // cost the device its identity and door session.
+  const DEAD_TOKEN = /refresh_token_not_found|refresh_token_already_used|session_not_found|bad_jwt|session missing|invalid refresh token/i;
+  function deadToken(err) {
+    return !!err && (DEAD_TOKEN.test(String(err.code || '')) || DEAD_TOKEN.test(String(err.message || '')));
+  }
+
+  // First try to refresh the token (a request can race the automatic refresh).
+  // 'refreshed': it worked. 'offline': the refresh could not reach the server,
+  // the identity is kept. 'reset': the token is really dead, so the identity is
+  // dropped and the device signs in anonymously again (the code screen can then
+  // work). Calls that fail at the same time share one healing.
   let healing = null;
   function healIdentity() {
     if (healing) return healing;
     healing = (async () => {
+      let err = null;
       try {
         const r = await client().auth.refreshSession();
         if (r && !r.error && r.data && r.data.session) return 'refreshed';
-      } catch (e) {}
+        err = (r && r.error) || new Error('no session');
+      } catch (e) { err = e; }
+      if (!deadToken(err)) return 'offline';
       try { await client().auth.signOut({ scope: 'local' }); } catch (e) {}
       try { await client().auth.signInAnonymously(); } catch (e) {}
       return 'reset';
@@ -424,16 +436,20 @@
   }
 
   // One door rpc. An auth failure heals the identity; reads then run once more
-  // (nothing was executed), a write is never repeated (retry:false).
+  // (nothing was executed). A write (retry:false) is never repeated: after a
+  // successful refresh it fails like a network error and the supervisor
+  // scans again.
   async function scanRpc(name, args, retry) {
     try { return await rpc(name, args); } catch (e) {
       if (!isAuthFailure(e)) throw e;
       const how = await healIdentity();
-      if (how === 'refreshed' && retry !== false) {
+      if (how === 'offline') throw new DataError('offline', e.message, e.cause || e);
+      if (how === 'refreshed') {
+        if (retry === false) throw new DataError('offline', e.message, e.cause || e);
         try { return await rpc(name, args); } catch (e2) {
           if (!isAuthFailure(e2)) throw e2;
-          await healIdentity();
-          throw new DataError('auth-lost', e2.message, e2.cause || e2);
+          const again = await healIdentity();
+          throw new DataError(again === 'reset' ? 'auth-lost' : 'offline', e2.message, e2.cause || e2);
         }
       }
       throw new DataError('auth-lost', e.message, e.cause || e);
