@@ -1774,15 +1774,17 @@ test('polling: a returning page (focus) refreshes at once', async ({ page }) => 
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 من 2');
 });
 
-test('polling: a failed counter poll shows the connection banner and the next good one hides it; the scanner stays open', async ({ page }) => {
+test('polling: a failed counter poll is silent (no banner, scanner stays open) and the next good one carries on', async ({ page }) => {
   await page.clock.install();
   await openUnlocked(page, G(2));
   await fake(page, () => { window.__fakeSupabase.fail = { door_event: { error: 'network', times: 1 } }; });
   await page.clock.fastForward(4500);
-  await expect(page.locator('#connection-banner')).toBeVisible();
-  await expect(page.locator('#scanner-view')).toBeVisible();
-  await page.clock.fastForward(9000);
+  await expect.poll(() => fake(page, () => window.__fakeSupabase.fail.door_event.times)).toBe(0);
   await expect(page.locator('#connection-banner')).toBeHidden();
+  await expect(page.locator('#scanner-view')).toBeVisible();
+  await srv(page, 'checkIn', 'e1', 'WD-G1');
+  await page.clock.fastForward(9000);
+  await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 1 من 2');
 });
 
 test('polling: a failed names poll keeps the list and says "تعذّر التحديث" without the connection banner', async ({ page }) => {

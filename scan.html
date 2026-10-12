@@ -970,7 +970,6 @@ function onScanCounter(ev) {
   eventData.lastChange = ev.lastChange;
   eventData.guestCount = ev.guestCount;
   applyServerCount(ev.scannedCount);
-  refreshConnectionBanner(true);
   // nothing changed since the list was read: it is as fresh as this answer
   if (ev.lastChange === listLastChange) {
     lastSyncAt = Date.now();
@@ -988,8 +987,6 @@ function onScanError(e, kind) {
   if (kind === 'names') {
     deltaFailed = true;
     if (listIsOpen()) renderOfflineList();
-  } else {
-    refreshConnectionBanner(false);
   }
 }
 
@@ -998,6 +995,7 @@ function onScanError(e, kind) {
 // longer in it were deleted. A guest this device checked in a moment ago is
 // not turned back to "not entered" by an answer that may predate it.
 function mergeGuests(rows, full) {
+  // times (✓ دخل HH:MM) only come from changed-names answers, as before; the full list has none
   const byId = new Map();
   guests.forEach(g => { byId.set(g.id, g); });
   const seen = new Set();
@@ -1014,7 +1012,7 @@ function mergeGuests(rows, full) {
     const mine = localAdmitAt[r.id] && Date.now() - localAdmitAt[r.id] < LOCAL_WIN_MS;
     g.scanned = r.scanned || (!!g.scanned && !!mine);
     if (g.scanned) {
-      if (!localCheckinTimes[r.id] && r.scannedAt) {
+      if (!full && !localCheckinTimes[r.id] && r.scannedAt) {
         const when = new Date(r.scannedAt);
         if (!isNaN(when.getTime())) localCheckinTimes[r.id] = listTime(when);
       }
