@@ -30,7 +30,7 @@
      the small line under the loading message only shows with ?timing=1 or
      when loading gets stuck (25 s), so a stall on the home-screen app, where
      no ?timing=1 can be typed, can still be photographed. -->
-<script>var TM = { m: [], err: '', param: /[?&]timing=1(&|$)/.test(location.search) }; TM.show = TM.param;
+<script>var TM = { m: [], err: '', stuck: false, param: /[?&]timing=1(&|$)/.test(location.search) }; TM.show = TM.param;
 var TM_HOST = 'auth-loading', TM_RES = ['firebase-init.js', 'firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'utils.js', 'icons.js', 'format.js'];
 function tmShow() {
   var host = document.getElementById(TM_HOST);
@@ -57,7 +57,54 @@ function tmShow() {
     }
   } catch (e) {}
   var sw = 'sw:' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes' : 'no');
-  line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + ' tab:' + (window._fsTab || '?') + (TM.err ? ' || err: ' + TM.err : '');
+  if (TM.stuck || (TM.param && window._fsMode && window._fsMode !== 'default')) tmButtons(line);
+  line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + ' tab:' + (window._fsTab || '?') + ' mode:' + (window._fsMode || '?') + (TM.err ? ' || err: ' + TM.err : '');
+}
+function tmSetMode(v) {
+  try { if (v) localStorage.setItem('fsmode', v); else localStorage.removeItem('fsmode'); } catch (e) {}
+  location.reload();
+}
+function tmButtons(line) {
+  if (document.getElementById('timing-btns')) return;
+  var box = document.createElement('div');
+  box.id = 'timing-btns';
+  box.style.cssText = 'direction:rtl;text-align:center;padding:0 18px 16px;';
+  var defs = [['جرّب بدون ذاكرة', 'memory'], ['جرّب اتصال بديل', 'long']];
+  if (window._fsMode && window._fsMode !== 'default') defs.push(['رجوع للوضع العادي', '']);
+  defs.forEach(function (d) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = d[0];
+    b.style.cssText = 'background:none;border:1px solid #8d8a84;color:#8d8a84;border-radius:8px;font-size:12px;font-family:inherit;padding:8px 12px;margin:4px;cursor:pointer;';
+    b.onclick = function () { tmSetMode(d[1]); };
+    box.appendChild(b);
+  });
+  line.parentNode.insertBefore(box, line.nextSibling);
+}
+function tmProbe(label, fn) {
+  var t0 = performance.now(), done = false;
+  var to = setTimeout(function () { if (!done) { done = true; tmark(label + ' hang'); } }, 5000);
+  function fin(res) {
+    if (done) return;
+    done = true; clearTimeout(to);
+    tmark(label + ' ' + res + ' ' + Math.round(performance.now() - t0) + 'ms');
+  }
+  try { fn(fin); } catch (e) { fin('err'); }
+}
+function tmProbes(cacheFn) {
+  try {
+    var sa = navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    tmark('standalone ' + (sa ? 'yes' : 'no') + ' hist ' + history.length);
+  } catch (e) {}
+  tmProbe('idb', function (fin) {
+    var r = indexedDB.open('__probe');
+    r.onsuccess = function () { try { r.result.close(); indexedDB.deleteDatabase('__probe'); } catch (e) {} fin('ok'); };
+    r.onerror = function () { fin('err'); };
+  });
+  if (cacheFn) tmProbe('cache', cacheFn);
+  tmProbe('net', function (fin) {
+    fetch('https://firestore.googleapis.com/', { mode: 'no-cors', cache: 'no-store' }).then(function () { fin('ok'); }, function () { fin('err'); });
+  });
 }
 function tmark(k) {
   TM.m.push(k + ' ' + Math.round(performance.now()));
@@ -1036,6 +1083,7 @@ setTimeout(() => {
   if (!el || el.style.display === 'none' || el.onclick || el.textContent.trim() !== 'جاري التحميل...') return;
   el.textContent = 'الاتصال بطيء، لحظات…';
   tmark('slow');
+  tmProbes();
 }, SLOW_LOADING_MS);
 setTimeout(() => {
   const el = document.getElementById('auth-loading');
@@ -1045,6 +1093,7 @@ setTimeout(() => {
   const t = el.textContent.trim();
   if (t !== 'جاري التحميل...' && t !== 'الاتصال بطيء، لحظات…') return;
   TM.show = true;
+  TM.stuck = true;
   tmark('stuck');
   el.textContent = '⚠️ التحميل تأخر — اضغط هنا للمحاولة مرة ثانية';
   el.style.cursor = 'pointer';
