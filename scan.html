@@ -447,12 +447,10 @@ function showPinError(msg) {
   err.style.display = 'block';
 }
 
-// Code screen texts. 'locked' (too many wrong codes from this device) has no
-// wording of its own yet: it shows the "wrong" text until the founder approves
-// a message (docs/mockups/door-lockout.html has a proposal).
+// Code screen texts. 'locked' = too many wrong codes from this device.
 const PIN_TEXT = {
   wrong: 'رقم غير صحيح',
-  locked: 'رقم غير صحيح',
+  locked: 'الدخول مقفل مؤقتًا، حاول بعد قليل أو كلّم صاحب المناسبة',
   offline: '⚠️ تعذّر الاتصال — تأكد من الإنترنت وحاول مرة ثانية',
 };
 

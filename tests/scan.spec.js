@@ -113,7 +113,7 @@ test('after 10 wrong codes this device is locked: even the right code is refused
   }
   await unlockWith(page, '123456');
   await expect(page.locator('#pin-err')).toBeVisible();
-  await expect(page.locator('#pin-err')).toHaveText(await page.evaluate(() => PIN_TEXT.locked));
+  await expect(page.locator('#pin-err')).toHaveText('الدخول مقفل مؤقتًا، حاول بعد قليل أو كلّم صاحب المناسبة');
   await expect(page.locator('#scanner-view')).toBeHidden();
   expect(await page.evaluate(() => window.__fakeSupabase.sessions.e1 || {})).toEqual({});
   expect(await page.evaluate(() => Data.scan.start('e1', '123456'))).toBe('locked');
