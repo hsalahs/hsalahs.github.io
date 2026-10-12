@@ -139,10 +139,14 @@ export function getFirestore() {
 // keeping firebase-init.js's import list the same in tests and in prod.
 export function initializeFirestore(app, settings) {
   window.__fsTabManager = settings && settings.localCache && settings.localCache.settings && settings.localCache.settings.tabManager;
+  window.__fsSettings = settings;
   return { fake: true };
 }
 export function persistentLocalCache(settings) {
   return { kind: 'persistent', settings };
+}
+export function memoryLocalCache() {
+  return { kind: 'memory' };
 }
 export function persistentMultipleTabManager() {
   return { kind: 'multi-tab' };
@@ -248,6 +252,15 @@ export function getDoc(ref) {
   const snap = makeDocSnap(ref.collPath, ref.id, coll[ref.id]);
   if (window.__rosterFromCache && ref.path.endsWith('/roster/list')) snap.metadata = { fromCache: true };
   return Promise.resolve(snap);
+}
+
+// Cache-only read (the diagnostics probe): window.__cacheProbe = 'hang' never
+// answers, 'miss' rejects like an uncached doc, otherwise it answers.
+export function getDocFromCache(ref) {
+  if (window.__cacheProbe === 'hang') return new Promise(() => {});
+  if (window.__cacheProbe === 'miss') return Promise.reject(Object.assign(new Error('miss'), { code: 'unavailable' }));
+  const coll = F().store[ref.collPath] || {};
+  return Promise.resolve(makeDocSnap(ref.collPath, ref.id, coll[ref.id]));
 }
 
 export function getDocs(refOrQuery) {

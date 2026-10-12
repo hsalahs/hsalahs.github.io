@@ -7,9 +7,9 @@ import {
   onAuthStateChanged, signOut, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, persistentSingleTabManager,
+  initializeFirestore, persistentLocalCache, memoryLocalCache, persistentMultipleTabManager, persistentSingleTabManager,
   collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp,
-  doc, setDoc, getDoc, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc, getCountFromServer
+  doc, setDoc, getDoc, getDocFromCache, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc, getCountFromServer
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -50,18 +50,29 @@ try {
   iosStandalone = navigator.standalone === true ||
     (/iPad|iPhone|iPod/.test(navigator.userAgent) && window.matchMedia('(display-mode: standalone)').matches);
 } catch (e) {}
-window._fsTab = iosStandalone ? 'single' : 'multi';
-const db = initializeFirestore(app, {
+// Measurement override (set from the stuck-page buttons or by hand):
+// sessionStorage fsmode = 'memory' (no IndexedDB cache) or 'long' (the same
+// cache plus forced long-polling). Session-only, so it resets when the app
+// is reopened. Only app.html and event.html honour it, never the door
+// scanner. Anything else is the normal behaviour.
+let fsMode = 'default';
+try {
+  const m = /\/(app|event)(\.html)?$/.test(location.pathname) ? sessionStorage.getItem('fsmode') : null;
+  if (m === 'memory' || m === 'long') fsMode = m;
+} catch (e) {}
+window._fsMode = fsMode;
+window._fsTab = fsMode === 'memory' ? 'none' : (iosStandalone ? 'single' : 'multi');
+const db = initializeFirestore(app, fsMode === 'memory' ? { localCache: memoryLocalCache() } : Object.assign({
   localCache: persistentLocalCache({
     tabManager: iosStandalone ? persistentSingleTabManager({ forceOwnership: true }) : persistentMultipleTabManager(),
   }),
-});
+}, fsMode === 'long' ? { experimentalForceLongPolling: true } : {}));
 
 window._auth = auth;
 window._db = db;
 window._eventsCol = collection(db, 'events');
 window._authFns = { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInAnonymously, onAuthStateChanged, signOut, sendPasswordResetEmail };
-window._fsFns = { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, setDoc, getDoc, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc, getCountFromServer };
+window._fsFns = { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, doc, setDoc, getDoc, getDocFromCache, updateDoc, deleteField, increment, runTransaction, getDocs, deleteDoc, getCountFromServer };
 // Firestore shuts its local cache down on every `pagehide`, and on iOS
 // Safari it also stops the whole client for good. If Safari then brings the
 // same page back (back button / back-forward cache, or the tab coming back

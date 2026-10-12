@@ -469,3 +469,166 @@ test.describe('Firestore tab manager', () => {
     });
   });
 });
+
+test.describe('Firestore mode override and stuck-page probes', () => {
+  const settings = (page) => page.evaluate(() => ({ mode: window._fsMode, s: window.__fsSettings }));
+
+  test('default: unchanged settings, mode:default, no buttons, no line on a fast load', async ({ page }) => {
+    await setup(page);
+    await page.goto('/app.html');
+    await expect(page.locator('.event-card')).toHaveCount(1);
+    const t = await settings(page);
+    expect(t.mode).toBe('default');
+    expect(t.s.localCache.kind).toBe('persistent');
+    expect(t.s.experimentalForceLongPolling).toBeUndefined();
+    await expect(page.locator('#timing-line')).toHaveCount(0);
+    await expect(page.locator('#timing-btns')).toHaveCount(0);
+  });
+
+  test('an unknown fsmode value behaves like default', async ({ page }) => {
+    await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'bogus'); });
+    await setup(page);
+    await page.goto('/app.html?timing=1');
+    await expect(page.locator('.event-card')).toHaveCount(1);
+    expect((await settings(page)).mode).toBe('default');
+    await expect(page.locator('#timing-btns')).toHaveCount(0);
+  });
+
+  for (const url of ['/app.html?timing=1', '/event.html?id=e1&timing=1']) {
+    test(`${url}: fsmode=memory uses memoryLocalCache, shows mode:memory and the switch-back button`, async ({ page }) => {
+      await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'memory'); });
+      await setup(page);
+      await page.goto(url);
+      await expect(page.locator('#timing-line')).toContainText('mode:memory');
+      const t = await settings(page);
+      expect(t.s.localCache).toEqual({ kind: 'memory' });
+      await expect(page.locator('#timing-btns button')).toHaveCount(3);
+      await expect(page.locator('#timing-btns button').nth(2)).toHaveText('رجوع للوضع العادي');
+    });
+  }
+
+  test('fsmode=long keeps the persistent cache and forces long polling', async ({ page }) => {
+    await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'long'); });
+    await setup(page);
+    await page.goto('/app.html?timing=1');
+    await expect(page.locator('#timing-line')).toContainText('mode:long');
+    const t = await settings(page);
+    expect(t.s.localCache.kind).toBe('persistent');
+    expect(t.s.experimentalForceLongPolling).toBe(true);
+  });
+
+  test('the switch-back button removes the key and reloads', async ({ page }) => {
+    await page.addInitScript(() => { if (!localStorage.getItem('seen')) { localStorage.setItem('seen', '1'); sessionStorage.setItem('fsmode', 'memory'); } });
+    await setup(page);
+    await page.goto('/app.html?timing=1');
+    await page.locator('#timing-btns button', { hasText: 'رجوع للوضع العادي' }).click();
+    await expect(page.locator('.event-card')).toHaveCount(1);
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('fsmode'))).toBeNull();
+    expect((await settings(page)).mode).toBe('default');
+  });
+
+  for (const [pageUrl, host] of [['/app.html', '#auth-loading'], ['/event.html?id=e1', '#loading-msg']]) {
+    test(`${pageUrl}: a stuck page shows probes and the two buttons; the first sets fsmode=memory and reloads`, async ({ page }) => {
+      await page.clock.install();
+      await setup(page);
+      await page.addInitScript(() => { window.__hangAuth = true; window.__cacheProbe = 'hang'; });
+      await page.goto(pageUrl);
+      await page.clock.runFor(9000);
+      await expect(page.locator('#timing-btns')).toHaveCount(0);
+      await page.clock.runFor(18000);
+      await expect(page.locator(host)).toContainText('التحميل تأخر');
+      const text = await page.locator('#timing-line').textContent();
+      expect(text).toMatch(/standalone no hist \d+/);
+      expect(text).toMatch(/idb ok \d+ms/);
+      expect(text).toMatch(/net (ok|err) \d+ms/);
+      if (pageUrl.startsWith('/event')) expect(text).toContain('cache hang');
+      expect(text).toContain('mode:default');
+      const btns = page.locator('#timing-btns button');
+      await expect(btns).toHaveCount(2);
+      await expect(btns.nth(0)).toHaveText('جرّب بدون ذاكرة');
+      await expect(btns.nth(1)).toHaveText('جرّب اتصال بديل');
+      const reloaded = page.waitForEvent('load');
+      await btns.nth(0).click();
+      await reloaded;
+      expect(await page.evaluate(() => sessionStorage.getItem('fsmode'))).toBe('memory');
+    });
+  }
+
+  test('the second button sets fsmode=long', async ({ page }) => {
+    await page.clock.install();
+    await setup(page);
+    await page.addInitScript(() => { window.__hangAuth = true; });
+    await page.goto('/app.html');
+    await page.clock.runFor(27000);
+    const reloaded = page.waitForEvent('load');
+    await page.locator('#timing-btns button').nth(1).click();
+    await reloaded;
+    expect(await page.evaluate(() => sessionStorage.getItem('fsmode'))).toBe('long');
+  });
+
+  test('event.html: a cache probe that misses is labelled miss', async ({ page }) => {
+    await page.clock.install();
+    await setup(page);
+    await page.addInitScript(() => { window.__hangAuth = true; window.__cacheProbe = 'miss'; });
+    await page.goto('/event.html?id=e1');
+    await page.clock.runFor(9000);
+    await expect(page.locator('#timing-line')).toHaveCount(0);
+    await page.clock.runFor(18000);
+    expect(await page.locator('#timing-line').textContent()).toMatch(/cache miss \d+ms/);
+  });
+
+  test('tapping the stuck message still retries', async ({ page }) => {
+    await page.clock.install();
+    await setup(page);
+    await page.addInitScript(() => { window.__hangAuth = true; });
+    await page.goto('/app.html');
+    await page.clock.runFor(27000);
+    const reloaded = page.waitForEvent('load');
+    await page.locator('#auth-loading').click();
+    await reloaded;
+  });
+
+  test('the mode set by a button is in sessionStorage, not localStorage', async ({ page }) => {
+    await page.clock.install();
+    await setup(page);
+    await page.addInitScript(() => { window.__hangAuth = true; });
+    await page.goto('/app.html');
+    await page.clock.runFor(27000);
+    const reloaded = page.waitForEvent('load');
+    await page.locator('#timing-btns button').nth(0).click();
+    await reloaded;
+    expect(await page.evaluate(() => [sessionStorage.getItem('fsmode'), localStorage.getItem('fsmode')])).toEqual(['memory', null]);
+  });
+
+  test('a localStorage fsmode (old key) is ignored', async ({ page }) => {
+    await page.addInitScript(() => { localStorage.setItem('fsmode', 'memory'); });
+    await setup(page);
+    await page.goto('/app.html');
+    await expect(page.locator('.event-card')).toHaveCount(1);
+    expect((await settings(page)).mode).toBe('default');
+  });
+
+  test('scan.html ignores fsmode', async ({ page }) => {
+    await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'memory'); });
+    await setup(page);
+    await page.goto('/scan.html');
+    await page.waitForFunction(() => window._fsMode);
+    const t = await settings(page);
+    expect(t.mode).toBe('default');
+    expect(t.s.localCache.kind).toBe('persistent');
+  });
+
+  for (const [pageUrl, host] of [['/app.html', '#auth-loading'], ['/event.html?id=e1', '#loading-msg']]) {
+    test(`${pageUrl}: stuck then recovered removes the line and the buttons`, async ({ page }) => {
+      await page.clock.install();
+      await setup(page);
+      await page.addInitScript(() => { window.__hangAuth = true; });
+      await page.goto(pageUrl);
+      await page.clock.runFor(27000);
+      await expect(page.locator('#timing-btns')).toHaveCount(1);
+      await page.evaluate((h) => { document.querySelector(h).style.display = 'none'; tmark('recovered'); }, host);
+      await expect(page.locator('#timing-line')).toHaveCount(0);
+      await expect(page.locator('#timing-btns')).toHaveCount(0);
+    });
+  }
+});
