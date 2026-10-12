@@ -700,7 +700,7 @@ test('a failed send that may have reached the server is retried with the same id
   expect(ids[0]).toBe(ids[1]);
 });
 
-test('every refusal of a send (requests full, bad name, event gone) shows the same Arabic message and keeps the form usable', async ({ page }) => {
+test('a refused send keeps the form usable: bad name / event gone show the generic message, a full queue says who to ask', async ({ page }) => {
   await stubSupabase(page);
   await seedInviteStore(page, { store: { events: { e1: EV1 }, 'events/e1/requests': {} } });
   await page.goto('/invite.html?event=e1');
@@ -708,7 +708,7 @@ test('every refusal of a send (requests full, bad name, event gone) shows the sa
   for (const message of ['REQUESTS_FULL', 'BAD_NAME', 'EVENT_NOT_FOUND']) {
     await page.evaluate((m) => { window.__fakeSupabase.fail = { submit_request: { error: { message: m, code: 'P0001' } } }; }, message);
     await page.locator('#rsvp-btn').click();
-    await expect(page.locator('#rsvp-msg')).toHaveText('تعذّر إرسال طلبك، جرّب مرة ثانية');
+    await expect(page.locator('#rsvp-msg')).toHaveText(message === 'REQUESTS_FULL' ? 'قائمة التسجيل ممتلئة حاليًا. تواصل مع صاحب الدعوة.' : 'تعذّر إرسال طلبك، جرّب مرة ثانية');
     await expect(page.locator('#rsvp-btn')).toBeEnabled();
   }
   expect(await page.evaluate(() => localStorage.getItem('inv_reqid_e1'))).toBeNull();
@@ -723,7 +723,7 @@ test('the server\'s cap on waiting requests: a full queue refuses the next one (
   await page.goto('/invite.html?event=e1');
   await page.locator('#g-name').fill('سارة');
   await page.locator('#rsvp-btn').click();
-  await expect(page.locator('#rsvp-msg')).toHaveText('تعذّر إرسال طلبك، جرّب مرة ثانية');
+  await expect(page.locator('#rsvp-msg')).toHaveText('قائمة التسجيل ممتلئة حاليًا. تواصل مع صاحب الدعوة.');
   await page.evaluate(() => { const r = window.__fakeSupabase.requests.e1; delete r[Object.keys(r)[0]]; });
   await page.locator('#rsvp-btn').click();
   await expect(page.locator('#card')).toContainText('بانتظار موافقة');

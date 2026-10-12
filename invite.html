@@ -449,7 +449,8 @@ async function submitRequest() {
     submitting = false;
     btn.disabled = false;
     btn.textContent = 'تأكيد الحضور';
-    setFormMsg('تعذّر إرسال طلبك، جرّب مرة ثانية');
+    // The owner's queue of pending requests is at its limit: retrying cannot help, so say who to ask.
+    setFormMsg(e && e.code === 'requests-full' ? 'قائمة التسجيل ممتلئة حاليًا. تواصل مع صاحب الدعوة.' : 'تعذّر إرسال طلبك، جرّب مرة ثانية');
     return;
   }
   clearTimeout(slowTimer);
