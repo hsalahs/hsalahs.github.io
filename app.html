@@ -30,12 +30,15 @@
      the small line under the loading message only shows with ?timing=1 or
      when loading gets stuck (25 s), so a stall on the home-screen app, where
      no ?timing=1 can be typed, can still be photographed. -->
-<script>var TM = { m: [], err: '', show: /[?&]timing=1(&|$)/.test(location.search) };
+<script>var TM = { m: [], err: '', param: /[?&]timing=1(&|$)/.test(location.search) }; TM.show = TM.param;
 var TM_HOST = 'auth-loading', TM_RES = ['firebase-init.js', 'firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'utils.js', 'icons.js', 'format.js'];
 function tmShow() {
   var host = document.getElementById(TM_HOST);
   if (!TM.show || !host) return;
   var line = document.getElementById('timing-line');
+  // Shown only because the page got stuck: once it recovers, the line goes
+  // with the loading message instead of staying on top of the page.
+  if (host.style.display === 'none' && !TM.param) { if (line) line.remove(); return; }
   if (!line) {
     line = document.createElement('div');
     line.id = 'timing-line';
@@ -628,6 +631,7 @@ function initAuthWatcher() {
 
 function handleAuthUser(user) {
   document.getElementById('auth-loading').style.display = 'none';
+  tmShow();
   // An anonymous identity is what scan.html signs a door device in with;
   // on the same browser it must not pass for "logged in" here — the
   // login form stays up, and a real sign-in replaces it.
