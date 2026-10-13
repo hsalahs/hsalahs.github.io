@@ -213,12 +213,13 @@
     },
     create_event(a) {
       const u = needCustomer();
+      const name = String(a.p_name == null ? '' : a.p_name).trim();
       if (!isAdminUser(u)) {
         const l = (limitsOf()[u.id] = limitsOf()[u.id] || { event_limit: 1, event_count: 0 });
         if (l.event_count >= l.event_limit) throw pgError('LIMIT_REACHED', 'P0001');
-        l.event_count++;
+        // the real function rolls the count back when the insert violates a check
+        if (!(name.length < 1 || name.length > 80)) l.event_count++;
       }
-      const name = String(a.p_name == null ? '' : a.p_name).trim();
       if (name.length < 1 || name.length > 80) throw pgError('new row for relation "events" violates check constraint "events_name_check"', '23514');
       const id = 'ev' + (++seq) + Math.random().toString(36).slice(2, 8);
       const row = (S().events = S().events || {})[id] = {

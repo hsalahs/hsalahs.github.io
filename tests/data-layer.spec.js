@@ -4,11 +4,11 @@ const { stubFirebase, seedFakeFirebase, stubSupabase, seedFakeSupabase } = requi
 
 const DATA_JS = path.join(__dirname, '..', 'data.js');
 
-// data.js is not loaded by any page yet, so it is injected into an existing one.
+// data.js is injected into a Firebase page (event.html); app.html now loads it itself.
 async function open(page) {
   await stubFirebase(page);
   await seedFakeFirebase(page);
-  await page.goto('/app.html');
+  await page.goto('/event.html?id=e1');
   await page.addScriptTag({ path: DATA_JS });
 }
 
@@ -18,7 +18,7 @@ test('Data is defined and loading it before Firebase is ready does not throw', a
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.route('**/firebase-init.js*', (r) => r.fulfill({ contentType: 'text/javascript', body: '' }));
-  await page.goto('/app.html');
+  await page.goto('/event.html?id=e1');
   await page.addScriptTag({ path: DATA_JS });
   const shape = await page.evaluate(() => ({
     db: typeof window._db, data: typeof window.Data, ready: typeof window.Data.ready,
