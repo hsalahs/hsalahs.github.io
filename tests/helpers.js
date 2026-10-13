@@ -184,4 +184,27 @@ async function seedAppStore(page, { user = null, admin = false, events = [], con
   });
 }
 
-module.exports = { stubFirebase, seedFakeFirebase, routeQr, stubSupabase, seedFakeSupabase, seedInviteStore, seedScan, seedAppStore };
+// The event dashboard's server (event.html and Data.event / Data.guests / Data.requests / Data.door).
+// One event, id e1. event: database columns (owner_uid defaults to `user`); guests: [{ id, name, scanned?, vip?,
+// changed_at?, registered_at? }]; requests: [{ id, name, vip?, status? ('pending'), created_at?, guest_id? }];
+// user: { id, email } (the owner; admin: true makes it the admin); pin: the door code.
+// Plain-object options after these are passed to seedFakeSupabase.
+async function seedEvent(page, { event = {}, guests = [], requests = [], user = null, admin = false, pin = '123456',
+  lastChange = '2026-01-01T00:00:00.000000+00:00', ...rest } = {}) {
+  const u = user ? Object.assign({ is_anonymous: false }, user) : null;
+  const ev = Object.assign({ name: 'حفل تجريبي', type: 'wedding', date: '2026-01-01', venue: 'الرياض', theme: 'gold', paid: false,
+    owner_uid: u ? u.id : null, owner_email: u ? u.email || '' : '', created_at: '2026-01-01T00:00:00.000000+00:00' }, event);
+  const rows = guests.map((g) => Object.assign({ scanned: false, scanned_at: null, vip: false, changed_at: '2026-01-01T00:00:00.000000+00:00',
+    registered_at: '2026-01-01T00:00:00.000000+00:00' }, g, g.scanned && !g.scanned_at ? { scanned_at: '2026-01-01T00:00:00.000000+00:00' } : {}));
+  const reqs = {};
+  requests.forEach((r, i) => {
+    reqs[r.id] = { status: r.status || 'pending', guest_id: r.guest_id || null, vip: !!r.vip, name: r.name,
+      created_at: r.created_at || '2026-01-01T00:' + String(i).padStart(2, '0') + ':00.000000+00:00' };
+  });
+  return seedFakeSupabase(page, {
+    events: { e1: ev }, doors: { e1: { pin, guests: rows, lastChange } }, requests: { e1: reqs },
+    user: u, admins: admin && u ? [u.email] : [], ...rest,
+  });
+}
+
+module.exports = { stubFirebase, seedFakeFirebase, routeQr, stubSupabase, seedFakeSupabase, seedInviteStore, seedScan, seedAppStore, seedEvent };
