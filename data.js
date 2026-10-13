@@ -73,6 +73,8 @@
   const SQL_RES = SQL_MESSAGES.map(([name, code]) => [new RegExp('\\b' + name + '\\b'), code]);
   const PG_CODES = {
     '42501': 'permission',
+    '23514': 'bad-input',
+    '22023': 'bad-input',
     'PGRST116': 'not-found',
     'PGRST301': 'no-session',
     'PGRST302': 'no-session',
@@ -85,6 +87,8 @@
     'user_already_exists': 'email-in-use',
     'weak_password': 'weak-password',
     'email_not_confirmed': 'email-not-confirmed',
+    'same_password': 'same-password',
+    'otp_expired': 'link-expired',
     'email_address_invalid': 'invalid-email',
     'over_request_rate_limit': 'rate-limited',
     'over_email_send_rate_limit': 'rate-limited',
@@ -387,6 +391,142 @@
     async isAdmin() {
       return (await rpc('is_admin_me')) === true;
     },
+    // { user, confirmed }. With «Confirm email» ON there is no session yet
+    // (confirmed false); an address that is already registered comes back as a
+    // user with no identities, which is reported as 'email-in-use'.
+    async signUp(email, password, redirectTo) {
+      const d = await authCall(() => client().auth.signUp({ email, password, options: redirectTo ? { emailRedirectTo: redirectTo } : {} }));
+      const u = d && d.user;
+      if (!u || (Array.isArray(u.identities) && u.identities.length === 0)) throw new DataError('email-in-use', 'email already registered');
+      return { user: normUser(u), confirmed: !!(d && d.session) };
+    },
+    async resend(email, redirectTo) {
+      await authCall(() => client().auth.resend({ type: 'signup', email, options: redirectTo ? { emailRedirectTo: redirectTo } : {} }));
+    },
+    async resetPassword(email, redirectTo) {
+      await authCall(() => client().auth.resetPasswordForEmail(email, redirectTo ? { redirectTo } : {}));
+    },
+    async updatePassword(newPassword) {
+      await authCall(() => client().auth.updateUser({ password: newPassword }));
+    },
+    // The reset e-mail link opens the app page with the tokens in the URL
+    // (#access_token=...&refresh_token=...&type=recovery, or ?token_hash=...&type=recovery,
+    // or #error_code=otp_expired for a used / old link). Call it ONCE on the app
+    // page before anything else (the sign-up confirmation link comes back the same
+    // way with type=signup: kind 'signup', the session is simply opened).
+    // null = this is not such a link (nothing is touched); { user, kind } = the session is open; { error } = the link is
+    // no good ('link-expired' or 'offline'). The tokens are cleared from the
+    // address bar at once and never logged.
+    async recoveryFromUrl() {
+      const h = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
+      const q = new URLSearchParams(String(location.search || ''));
+      const type = h.get('type') || q.get('type');
+      const failed = h.get('error') || h.get('error_code') || q.get('error_code');
+      const access = h.get('access_token'), refresh = h.get('refresh_token'), hashTok = q.get('token_hash');
+      const isRecovery = type === 'recovery' || type === 'signup' || (failed && /recovery|otp_expired|access_denied/i.test(failed + ' ' + (h.get('error_code') || '')));
+      if (!isRecovery) return null;
+      try {
+        const keep = new URLSearchParams(q);
+        ['token_hash', 'type', 'error', 'error_code', 'error_description'].forEach((k) => keep.delete(k));
+        const qs = keep.toString();
+        history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+      } catch (e) {}
+      if (failed) return { error: 'link-expired' };
+      try {
+        let res;
+        if (access && refresh) res = await client().auth.setSession({ access_token: access, refresh_token: refresh });
+        else if (hashTok) res = await client().auth.verifyOtp({ token_hash: hashTok, type: type === 'signup' ? 'signup' : 'recovery' });
+        else return { error: 'link-expired' };
+        if (res && res.error) {
+          const code = normalizeError(res.error).code;
+          return { error: code === 'offline' ? 'offline' : 'link-expired' };
+        }
+        const user = res && res.data && res.data.user;
+        return user ? { user: normUser(user), kind: type === 'signup' ? 'signup' : 'recovery' } : { error: 'link-expired' };
+      } catch (e) {
+        return { error: normalizeError(e).code === 'offline' ? 'offline' : 'link-expired' };
+      }
+    },
+  };
+
+  // ---- Organizer's events, account and the admin screens (app.html) -----------
+
+  function eventRow(r) {
+    const e = camel(r);
+    e.slug = e.slug || '';
+    e.createdAt = iso(e.createdAt);
+    return e;
+  }
+
+  const EVENT_PAGE = 1000;   // list_events is capped at 1000 rows per call
+
+  const events = {
+    // Every event of the signed-in customer (the admin: every event), newest first.
+    async list() {
+      const out = [];
+      let afterCreated = null, afterId = null;
+      for (let pages = 0; pages < 200; pages++) {
+        const page = await rpc('list_events', { p_after_created: afterCreated, p_after_id: afterId, p_limit: EVENT_PAGE });
+        const list = Array.isArray(page) ? page : [];
+        list.forEach((r) => out.push(eventRow(r)));
+        if (list.length < EVENT_PAGE) break;
+        const last = list[list.length - 1];
+        afterCreated = last.created_at; afterId = last.id;
+      }
+      return out;
+    },
+    // Returns the new event id. Errors: 'limit-reached', 'permission', 'bad-input'.
+    async create(ev) {
+      return rpc('create_event', {
+        p_name: ev.name, p_type: ev.type || '', p_date: ev.date || '', p_venue: ev.venue || '',
+        p_maps_link: ev.mapsLink || '', p_theme: ev.theme || '',
+      });
+    },
+    async remove(eventId) {
+      await rpc('delete_event', { p_event_id: eventId });
+    },
+  };
+
+  const account = {
+    // { eventLimit, eventCount, pendingRequest (id | null) }
+    async get() {
+      const row = firstRow(await rpc('my_account')) || {};
+      return { eventLimit: row.event_limit || 1, eventCount: row.event_count || 0, pendingRequest: row.pending_request || null };
+    },
+    // The customer's own +1 on the limit; returns the new limit.
+    async bumpLimit() { return rpc('bump_event_limit'); },
+    // { id, created }: created is false when a request was already waiting.
+    async requestExtraEvent() {
+      const row = firstRow(await rpc('request_extra_event')) || {};
+      return { id: row.id || null, created: row.created === true };
+    },
+  };
+
+  const admin = {
+    async requests() {
+      const rows = await rpc('admin_pending_requests');
+      return (Array.isArray(rows) ? rows : []).map((r) => ({ id: r.id, uid: r.uid, email: r.email || '', requestedAt: iso(r.requested_at) }));
+    },
+    async approveRequest(id) { await rpc('admin_approve_event_request', { p_id: id }); },
+    async rejectRequest(id) { await rpc('admin_reject_event_request', { p_id: id }); },
+    async activateEvent(eventId, limit) { await rpc('admin_activate_event', { p_event_id: eventId, p_limit: limit }); },
+    async accountsCount() { return (await rpc('admin_user_count')) || 0; },
+    // Every account, newest first, paged.
+    async accounts() {
+      const out = [];
+      let afterCreated = null, afterUid = null;
+      for (let pages = 0; pages < 200; pages++) {
+        const page = await rpc('admin_list_users', { p_after_created: afterCreated, p_after_uid: afterUid, p_limit: 1000 });
+        const list = Array.isArray(page) ? page : [];
+        list.forEach((r) => out.push({ uid: r.uid, email: r.email || '', createdAt: iso(r.created_at) }));
+        if (list.length < 1000) break;
+        const last = list[list.length - 1];
+        afterCreated = last.created_at; afterUid = last.uid;
+      }
+      return out;
+    },
+    // Takes the account off the admin's list only (the sign-in and events stay).
+    async removeAccountRecord(uid) { return (await rpc('admin_remove_user_record', { p_uid: uid })) === true; },
   };
 
   // ---- Door scanner ---------------------------------------------------------
@@ -576,5 +716,5 @@
     },
   };
 
-  window.Data = { DataError, normalizeError, ready, platform, client, camel, iso, makePoller, timedFetch, invite, auth, scan };
+  window.Data = { DataError, normalizeError, ready, platform, client, camel, iso, makePoller, timedFetch, invite, auth, scan, events, account, admin };
 })();

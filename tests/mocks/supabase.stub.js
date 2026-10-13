@@ -167,6 +167,142 @@
     },
   });
 
+
+  // ---- organizer app (supabase/migrations 0008, 0014) -----------------------
+  // S().events[id] may carry owner_uid, owner_email, created_at, paid, guest_limit, guest_count, scanned_count, slug.
+  // S().limits[uid] = { event_limit, event_count }; S().eventRequests = [{ id, uid, email, status, requested_at }];
+  // S().users = [{ uid, email, created_at }].
+  function needCustomer() {
+    const u = me();
+    if (!u || u.is_anonymous) throw pgError('NOT_ALLOWED', '42501');
+    return u;
+  }
+  function needAdmin() { const u = me(); if (!isAdminUser(u)) throw pgError('NOT_ALLOWED', '42501'); return u; }
+  const limitsOf = () => (S().limits = S().limits || {});
+  const reqsOf = () => (S().eventRequests = S().eventRequests || []);
+  const usersOf = () => (S().users = S().users || []);
+  function evRow(id, e) {
+    return {
+      id, owner_uid: e.owner_uid || null, owner_email: e.owner_email || '', name: e.name || '', type: e.type || '', date: e.date || '',
+      venue: e.venue || '', maps_link: e.maps_link || '', theme: e.theme || '', welcome_message: e.welcome_message || '',
+      paid: !!e.paid, guest_limit: e.guest_limit == null ? null : e.guest_limit, guest_count: e.guest_count || 0,
+      scanned_count: e.scanned_count || 0, slug: e.slug || null, slug_decided: !!e.slug_decided,
+      created_at: e.created_at || '2026-01-01T00:00:00.000000+00:00',
+    };
+  }
+  let seq = 0;
+  Object.assign(FUNCS, {
+    list_events(a) {
+      const u = needCustomer();
+      let lim = a.p_limit == null ? 1000 : a.p_limit;
+      if (lim < 1) throw pgError('BAD_INPUT', '22023');
+      lim = Math.min(lim, 1000);
+      let rows = Object.entries(S().events || {}).map(([id, e]) => evRow(id, e)).filter((r) => isAdminUser(u) || r.owner_uid === u.id);
+      rows.sort((x, y) => (tsKey(y.created_at) - tsKey(x.created_at)) || (x.id < y.id ? 1 : x.id > y.id ? -1 : 0));
+      if (a.p_after_created != null) {
+        const ac = tsKey(a.p_after_created);
+        rows = rows.filter((r) => tsKey(r.created_at) < ac || (tsKey(r.created_at) === ac && r.id < (a.p_after_id == null ? '￿' : a.p_after_id)));
+      }
+      return rows.slice(0, lim);
+    },
+    my_account() {
+      const u = needCustomer();
+      const l = limitsOf()[u.id] || { event_limit: 1, event_count: 0 };
+      const p = reqsOf().find((r) => r.uid === u.id && r.status === 'pending');
+      return [{ event_limit: l.event_limit, event_count: l.event_count, pending_request: p ? p.id : null }];
+    },
+    create_event(a) {
+      const u = needCustomer();
+      if (!isAdminUser(u)) {
+        const l = (limitsOf()[u.id] = limitsOf()[u.id] || { event_limit: 1, event_count: 0 });
+        if (l.event_count >= l.event_limit) throw pgError('LIMIT_REACHED', 'P0001');
+        l.event_count++;
+      }
+      const name = String(a.p_name == null ? '' : a.p_name).trim();
+      if (name.length < 1 || name.length > 80) throw pgError('new row for relation "events" violates check constraint "events_name_check"', '23514');
+      const id = 'ev' + (++seq) + Math.random().toString(36).slice(2, 8);
+      (S().events = S().events || {})[id] = {
+        name, type: a.p_type, date: a.p_date, venue: a.p_venue, maps_link: a.p_maps_link, theme: a.p_theme,
+        owner_uid: u.id, owner_email: u.email || '', paid: false, guest_count: 0, scanned_count: 0, created_at: stamp(),
+      };
+      return id;
+    },
+    delete_event(a) {
+      const u = needCustomer();
+      const e = (S().events || {})[a.p_event_id];
+      if (!e || !(e.owner_uid === u.id || isAdminUser(u))) throw pgError('NOT_ALLOWED', '42501');
+      delete S().events[a.p_event_id];
+      const l = limitsOf()[e.owner_uid];
+      if (l) l.event_count = Math.max(l.event_count - 1, 0);
+      return null;
+    },
+    bump_event_limit() {
+      const u = needCustomer();
+      const l = limitsOf()[u.id];
+      if (!l) throw pgError('NO_LIMIT_ROW', 'P0002');
+      if (l.event_limit >= 3) throw pgError('CEILING_REACHED', 'P0001');
+      l.event_limit++;
+      return l.event_limit;
+    },
+    request_extra_event() {
+      const u = needCustomer();
+      const have = reqsOf().find((r) => r.uid === u.id && r.status === 'pending');
+      if (have) return [{ id: have.id, created: false }];
+      const r = { id: 'rq-' + (++seq), uid: u.id, email: u.email || '', status: 'pending', requested_at: stamp() };
+      reqsOf().push(r);
+      return [{ id: r.id, created: true }];
+    },
+    admin_pending_requests() {
+      needAdmin();
+      return reqsOf().filter((r) => r.status === 'pending').slice(0, 500).map((r) => ({ id: r.id, uid: r.uid, email: r.email, requested_at: r.requested_at }));
+    },
+    admin_reject_event_request(a) {
+      needAdmin();
+      const r = reqsOf().find((x) => x.id === a.p_id);
+      if (!r) throw pgError('REQUEST_NOT_FOUND', 'P0002');
+      if (r.status !== 'pending') throw pgError('NOT_PENDING', 'P0001');
+      r.status = 'rejected';
+      return null;
+    },
+    admin_approve_event_request(a) {
+      needAdmin();
+      const r = reqsOf().find((x) => x.id === a.p_id);
+      if (!r) throw pgError('REQUEST_NOT_FOUND', 'P0002');
+      if (r.status !== 'pending') throw pgError('NOT_PENDING', 'P0001');
+      const l = limitsOf()[r.uid];
+      if (l) l.event_limit++; else limitsOf()[r.uid] = { event_limit: 2, event_count: 0 };
+      r.status = 'approved';
+      return null;
+    },
+    admin_activate_event(a) {
+      needAdmin();
+      if (a.p_limit == null || a.p_limit < 1 || a.p_limit > 2000) throw pgError('BAD_INPUT', '22023');
+      const e = (S().events || {})[a.p_event_id];
+      if (!e) throw pgError('EVENT_NOT_FOUND', 'P0002');
+      e.paid = true; e.guest_limit = a.p_limit;
+      return null;
+    },
+    admin_user_count() { needAdmin(); return usersOf().length; },
+    admin_list_users(a) {
+      needAdmin();
+      let lim = a.p_limit == null ? 500 : a.p_limit;
+      if (lim < 1) throw pgError('BAD_INPUT', '22023');
+      lim = Math.min(lim, 1000);
+      let rows = usersOf().slice().sort((x, y) => (tsKey(y.created_at) - tsKey(x.created_at)) || (x.uid < y.uid ? 1 : -1));
+      if (a.p_after_created != null) {
+        const ac = tsKey(a.p_after_created);
+        rows = rows.filter((r) => tsKey(r.created_at) < ac || (tsKey(r.created_at) === ac && r.uid < (a.p_after_uid || '￿')));
+      }
+      return rows.slice(0, lim).map((r) => Object.assign({}, r));
+    },
+    admin_remove_user_record(a) {
+      needAdmin();
+      const i = usersOf().findIndex((r) => r.uid === a.p_uid);
+      if (i >= 0) usersOf().splice(i, 1);
+      return i >= 0;
+    },
+  });
+
   // Server-side actions a test performs "from another device or the dashboard".
   window.__srv = {
     stamp,
@@ -309,15 +445,57 @@
         emit('SIGNED_IN');
         return { data: { user: A().user, session: { user: A().user } }, error: null };
       },
-      async signUp({ email, password }) {
+      async signUp({ email, password, options }) {
         await wait();
+        A().signUpCalls = (A().signUpCalls || []).concat([{ email, redirectTo: options && options.emailRedirectTo }]);
+        if (A().nextSignUpError) { const e = A().nextSignUpError; A().nextSignUpError = null; return { data: { user: null, session: null }, error: e }; }
         A().accounts = A().accounts || {};
-        if (A().accounts[email]) return { data: { user: null, session: null }, error: authErr('user_already_exists', 'User already registered') };
+        const exists = !!A().accounts[email];
+        if (exists && !A().confirmEmail) return { data: { user: null, session: null }, error: authErr('user_already_exists', 'User already registered') };
+        // Confirm email ON: an address that is already registered answers like a new one but with no identities
+        if (exists) return { data: { user: { id: A().accounts[email].id, email, identities: [] }, session: null }, error: null };
         if (String(password).length < 6) return { data: { user: null, session: null }, error: authErr('weak_password', 'Password should be at least 6 characters.') };
-        A().accounts[email] = { id: 'u-' + Object.keys(A().accounts).length, password };
-        A().user = { id: A().accounts[email].id, email, is_anonymous: false };
+        const id = 'u-' + Object.keys(A().accounts).length;
+        A().accounts[email] = { id, password, confirmed: !A().confirmEmail };
+        (S().users = S().users || []).push({ uid: id, email, created_at: stamp() });
+        if (A().confirmEmail) return { data: { user: { id, email, is_anonymous: false, identities: [{}] }, session: null }, error: null };
+        A().user = { id, email, is_anonymous: false };
         emit('SIGNED_IN');
         return { data: { user: A().user, session: { user: A().user } }, error: null };
+      },
+      async resend({ email }) {
+        await wait();
+        A().resendCalls = (A().resendCalls || []).concat([email]);
+        return { data: {}, error: A().nextResendError || null };
+      },
+      // the reset link: tokens 'good-access' / 'good-hash' open a session for A().recoveryUser, anything else is a dead link
+      async setSession({ access_token }) {
+        await wait();
+        if (A().networkDown) return { data: { user: null, session: null }, error: { name: 'AuthRetryableFetchError', message: 'Failed to fetch', status: 0 } };
+        if (access_token !== 'good-access' || !A().recoveryUser) return { data: { user: null, session: null }, error: authErr('bad_jwt', 'invalid JWT', 401) };
+        A().user = Object.assign({ is_anonymous: false }, A().recoveryUser);
+        A().recoverySessions = (A().recoverySessions || 0) + 1;
+        emit('SIGNED_IN');
+        return { data: { user: A().user, session: { user: A().user } }, error: null };
+      },
+      async verifyOtp({ token_hash, type }) {
+        await wait();
+        A().verifyCalls = (A().verifyCalls || []).concat([type]);
+        if (token_hash !== 'good-hash' || !A().recoveryUser) return { data: { user: null, session: null }, error: authErr('otp_expired', 'Email link is invalid or has expired', 403) };
+        A().user = Object.assign({ is_anonymous: false }, A().recoveryUser);
+        emit('SIGNED_IN');
+        return { data: { user: A().user, session: { user: A().user } }, error: null };
+      },
+      async updateUser({ password }) {
+        await wait();
+        if (!A().user) return { data: { user: null }, error: authErr('session_not_found', 'Auth session missing!', 401) };
+        if (A().nextUpdateError) { const e = A().nextUpdateError; A().nextUpdateError = null; return { data: { user: null }, error: e }; }
+        if (String(password).length < 6) return { data: { user: null }, error: authErr('weak_password', 'Password should be at least 6 characters.', 422) };
+        const acct = (A().accounts || {})[A().user.email];
+        if (acct && acct.password === password) return { data: { user: null }, error: authErr('same_password', 'New password should be different from the old password.', 422) };
+        if (acct) acct.password = password;
+        A().passwordUpdates = (A().passwordUpdates || 0) + 1;
+        return { data: { user: A().user }, error: null };
       },
       async signOut(opts) { A().signOutCalls = (A().signOutCalls || 0) + 1; A().lastSignOutArgs = opts || null; await wait(); A().user = null; emit('SIGNED_OUT'); return { error: null }; },
       async refreshSession() {
@@ -328,7 +506,11 @@
         if (!A().user || A().refreshFails) return { data: { user: null, session: null }, error: authErr('refresh_token_not_found', 'Invalid Refresh Token: Refresh Token Not Found') };
         return { data: { user: A().user, session: { user: A().user } }, error: null };
       },
-      async resetPasswordForEmail() { await wait(); return { data: {}, error: A().nextResetError || null }; },
+      async resetPasswordForEmail(email, opts) {
+        await wait();
+        A().resetCalls = (A().resetCalls || []).concat([{ email, redirectTo: opts && opts.redirectTo }]);
+        return { data: {}, error: A().nextResetError || null };
+      },
     };
   }
 

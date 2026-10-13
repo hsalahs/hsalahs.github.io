@@ -108,14 +108,14 @@ async function stubSupabase(page) {
 //   tables:   { tableName: [rows] }   (plain table reads, capped by maxRows)
 // fail: { rpcName: { error: { message, code } | 'network', times } }
 async function seedFakeSupabase(page, { events = {}, slugs = {}, requests = {}, tables = {}, user = null, fail = {}, latency = 0, maxRows = 1000,
-  doors = {}, sessions = {}, owners = {}, admins = [], accounts = {} } = {}) {
+  doors = {}, sessions = {}, owners = {}, admins = [], accounts = {}, limits = {}, eventRequests = [], users = [], authExtra = {} } = {}) {
   await page.addInitScript((seed) => {
     window.__fakeSupabase = Object.assign({
       calls: [],
       denyRpc: [],
-      auth: { user: seed.user, listeners: [], accounts: seed.accounts, nextSignInError: null, nextResetError: null, nextAnonUid: null },
+      auth: Object.assign({ user: seed.user, listeners: [], accounts: seed.accounts, nextSignInError: null, nextResetError: null, nextAnonUid: null }, seed.authExtra),
     }, seed.state);
-  }, { user, accounts, state: { events, slugs, requests, tables, fail, latency, maxRows, doors, sessions, owners, admins } });
+  }, { user, accounts, authExtra, state: { events, slugs, requests, tables, fail, latency, maxRows, doors, sessions, owners, admins, limits, eventRequests, users } });
 }
 
 // The door scanner's server in one call. Defaults: event e1 'حفل تجريبي', door code
@@ -163,4 +163,25 @@ async function seedInviteStore(page, { store = {}, ...rest } = {}) {
   return seedFakeSupabase(page, { events, slugs, requests, ...rest });
 }
 
-module.exports = { stubFirebase, seedFakeFirebase, routeQr, stubSupabase, seedFakeSupabase, seedInviteStore, seedScan };
+// The organizer app's server (app.html). user: { id, email } (signed in, not anonymous)
+// or null. events: [{ id, name, ... database columns }]: owner_uid defaults to
+// the user, created_at to a falling date so the first one is the newest.
+// limits: { uid: { event_limit, event_count } }; eventRequests: [{ id, uid, email, status, requested_at }];
+// users: [{ uid, email, created_at }]. admin: true makes `user` the admin.
+// confirmEmail / recoveryUser (a { id, email }) go to the fake auth: see supabase.stub.js.
+async function seedAppStore(page, { user = null, admin = false, events = [], confirmEmail = false, recoveryUser = null, accounts = {}, ...rest } = {}) {
+  const evs = {};
+  events.forEach((e, i) => {
+    const { id, ...row } = e;
+    evs[id] = Object.assign({ owner_uid: user ? user.id : null, created_at: '2026-01-' + String(28 - i).padStart(2, '0') + 'T00:00:00.000000+00:00' }, row);
+  });
+  const u = user ? Object.assign({ is_anonymous: false }, user) : null;
+  const acc = Object.assign({}, accounts);
+  if (u && !acc[u.email]) acc[u.email] = { id: u.id, password: 'secret12', confirmed: true };
+  return seedFakeSupabase(page, {
+    events: evs, user: u, admins: admin && u ? [u.email] : [], accounts: acc,
+    authExtra: { confirmEmail, recoveryUser }, ...rest,
+  });
+}
+
+module.exports = { stubFirebase, seedFakeFirebase, routeQr, stubSupabase, seedFakeSupabase, seedInviteStore, seedScan, seedAppStore };
