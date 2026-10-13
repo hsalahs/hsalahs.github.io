@@ -40,5 +40,5 @@ Timestamps come back as `timestamptz` with an offset: `data.js` must normalise w
 - **Staging has «Confirm email» turned OFF** (the Free plan's built-in mail only reaches team members). It MUST be turned back ON, with custom SMTP configured, before the cutover.
 - Anonymous sign-ins are enabled on staging; the anonymous sign-in rate limit stays at Supabase's default (a venue's Wi-Fi shares one IP). **CAPTCHA (e.g. Cloudflare Turnstile, free) on anonymous sign-in MUST be enabled before cutover** (founder's requirement); it needs a client change too.
 - The admin row on staging is done (hsallah@outlook.sa). Production needs the same one-time insert: `insert into app_private.admins select id from auth.users where email = 'hsallah@outlook.sa'`.
-- Pro plan (~USD 25/month, inside the USD 30 limit) only at cutover, and only with the founder's approval.
+- **Plan: start on the Free plan.** Upgrading (Pro, ~USD 25/month) is NOT planned: it happens only with the founder's explicit approval, after real usage (egress, database size) has been measured. Budget limit USD 30/month total.
 - The weekly cleanup of old anonymous accounts is scheduled with pg_cron (`cleanup-anonymous-users`, Sundays 03:30 UTC); check it is active on the production project.
