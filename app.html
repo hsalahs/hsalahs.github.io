@@ -776,12 +776,36 @@ async function handleAuthUser(user) {
   // on the same browser it must not pass for "logged in" here — the
   // login form stays up, and a real sign-in replaces it.
   if (user && !user.isAnonymous) {
+    // The last list this browser saw for this account is shown at once (with the
+    // admin flag it had); the server's answer about the account follows.
+    const cached = readCache(user.uid);
+    let painted = false;
+    if (cached) {
+      painted = true;
+      document.getElementById('auth-loading').style.display = 'none';
+      document.getElementById('auth-view').style.display = 'none';
+      document.getElementById('app-view').style.display = 'block';
+      document.getElementById('current-email').textContent = user.email || '';
+      shownUid = user.uid;
+      shownEmail = user.email || '';
+      shownAdmin = cached.admin;
+      document.getElementById('events-heading').textContent = cached.admin ? 'كل المناسبات (أدمن)' : 'مناسباتي';
+      applyEvents(cached.events, cached.acct);
+    }
     let admin;
     try { admin = await Data.auth.isAdmin(); } catch (e) {
-      if (seq === authSeq) showInitFailure(e);
+      if (seq !== authSeq) return;
+      if (painted) setTimeout(() => { if (seq === authSeq) handleAuthUser(user); }, 5000);
+      else showInitFailure(e);
       return;
     }
     if (seq !== authSeq) return;
+    if (painted && admin !== cached.admin) {
+      shownAdmin = admin;
+      lastEventsJson = '';
+      allEvents = [];
+      document.getElementById('events-list').innerHTML = '';
+    }
     document.getElementById('auth-loading').style.display = 'none';
     document.getElementById('auth-view').style.display = 'none';
     document.getElementById('app-view').style.display = 'block';
@@ -790,8 +814,6 @@ async function handleAuthUser(user) {
     shownEmail = user.email || '';
     shownAdmin = admin;
     document.getElementById('events-heading').textContent = admin ? 'كل المناسبات (أدمن)' : 'مناسباتي';
-    const cached = readCache(user.uid);
-    if (cached && cached.admin === admin) applyEvents(cached.events, cached.acct);
     startPollers();
   } else {
     document.getElementById('auth-loading').style.display = 'none';
@@ -871,7 +893,7 @@ function applyEvents(events, acct) {
   lastEventsJson = json;
   allEvents = events;
   if (acct) { myEventLimit = acct.eventLimit; myPendingRequestId = acct.pendingRequest; }
-  myEventsCount = shownAdmin ? events.filter(ev => ev.ownerUid === shownUid).length : events.length;
+  myEventsCount = shownAdmin ? events.filter(ev => ev.ownerUid === shownUid).length : (acct ? acct.eventCount : events.length);
   updateCreateGate(shownAdmin);
   renderEvents(ownerFilter ? events.filter(ev => ev.ownerUid === ownerFilter.uid) : events, shownAdmin);
   if (shownAdmin) {

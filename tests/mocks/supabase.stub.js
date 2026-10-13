@@ -221,10 +221,12 @@
       const name = String(a.p_name == null ? '' : a.p_name).trim();
       if (name.length < 1 || name.length > 80) throw pgError('new row for relation "events" violates check constraint "events_name_check"', '23514');
       const id = 'ev' + (++seq) + Math.random().toString(36).slice(2, 8);
-      (S().events = S().events || {})[id] = {
+      const row = (S().events = S().events || {})[id] = {
         name, type: a.p_type, date: a.p_date, venue: a.p_venue, maps_link: a.p_maps_link, theme: a.p_theme,
         owner_uid: u.id, owner_email: u.email || '', paid: false, guest_count: 0, scanned_count: 0, created_at: stamp(),
       };
+      // a page navigation wipes the fake server, so a test can ask to be told about every created event
+      if (typeof window.__onCreateEvent === 'function') window.__onCreateEvent(JSON.stringify(Object.assign({ id }, row)));
       return id;
     },
     delete_event(a) {
