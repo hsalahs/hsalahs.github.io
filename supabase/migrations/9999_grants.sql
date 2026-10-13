@@ -36,3 +36,8 @@ grant execute on function public.set_guest(text, text, text, boolean), public.se
 grant execute on function public.list_events(timestamptz, text, integer), public.my_account(), public.request_extra_event(),
   public.admin_pending_requests(), public.admin_reject_event_request(uuid), public.admin_activate_event(text, integer),
   public.admin_list_users(timestamptz, uuid, integer), public.admin_user_count(), public.admin_remove_user_record(uuid) to authenticated;
+
+-- event.html client API (0015): every function checks its caller inside
+grant execute on function public.event_live(text), public.owner_guests(text, timestamptz, text, text, integer),
+  public.owner_requests(text, timestamptz, text, integer), public.reject_request(text, text),
+  public.regenerate_door_code(text), public.remove_guests(text, text[]), public.admin_deactivate_event(text) to authenticated;

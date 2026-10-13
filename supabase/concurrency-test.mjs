@@ -19,12 +19,14 @@ const sql = async (query) => {
 // an open transaction is rolled back when the request ends, so commit explicitly
 const asOwner = (q) => `begin; select set_config('request.jwt.claims', '{"sub":"${OWNER}","role":"authenticated","is_anonymous":false}', true); set local role authenticated; ${q}; commit;`;
 const cleanup = () => sql(`delete from public.events where id like 'zzconc%' or owner_uid = '${OWNER}'; delete from public.account_limits where uid = '${OWNER}'; delete from public.users where uid = '${OWNER}'; delete from auth.users where id = '${OWNER}'`);
+const ONLY = process.env.ONLY || '';   // ONLY=12 runs just the last section
 let bad = 0;
 try {
   await cleanup();
   await sql(`insert into auth.users (id, email) values ('${OWNER}', 'zzconc@test.local');
     insert into public.events (id, owner_uid, name, paid) values ('zzconc1', '${OWNER}', 'concurrency', true);
     insert into public.guests (event_id, id, name) select 'zzconc1', 'WD-' || g, 'g' || g from generate_series(1, 3) g`);
+  if (!ONLY) {
   // 1) same barcode, N parallel connections
   const res = await Promise.all(Array.from({ length: N }, () => sql(asOwner(`select outcome from public.check_in('zzconc1', 'WD-1')`))));
   const outcomes = res.map((r) => r[0].outcome);
@@ -121,6 +123,32 @@ try {
   const [sl] = await sql(`select count(*)::int n from public.slugs where slug = 'zzconc-race-name'`);
   console.log(`4 parallel claims of one name by 2 events: succeeded=${won}, raw 23505 errors=${bad23505} (expect 0), rows=${sl.n} (expect 1)`);
   if (bad23505 || sl.n !== 1) bad++;
+  }
+  // 12) reject racing approve on the SAME request: exactly one wins, and a rejected request never gets a guest
+  let rejWins = 0, appWins = 0, ghosts = 0;
+  for (let round = 0; round < 3; round++) {
+    await sql(`delete from public.guests where event_id = 'zzconc1'; delete from public.requests where event_id = 'zzconc1';
+      insert into public.requests (event_id, id, name) select 'zzconc1', 'zzconc-rr-${round}-' || lpad(g::text, 10, '0'), 'r' || g from generate_series(1, ${N}) g`);
+    const jobs = [];
+    for (let g = 1; g <= N; g++) {
+      const rid = `zzconc-rr-${round}-${String(g).padStart(10, '0')}`;
+      jobs.push(sql(asOwner(`select public.reject_request('zzconc1', '${rid}')::text as r`)).then((r) => ['rej', rid, r[0].r]));
+      jobs.push(sql(asOwner(`select cardinality(approved)::text as r from public.approve_requests('zzconc1', '[{"req_id":"${rid}"}]')`)).then((r) => ['app', rid, r[0].r]));
+    }
+    const out = await Promise.all(jobs);
+    for (let g = 1; g <= N; g++) {
+      const rid = `zzconc-rr-${round}-${String(g).padStart(10, '0')}`;
+      const rej = out.find((o) => o[0] === 'rej' && o[1] === rid)[2] === 'true';
+      const app = out.find((o) => o[0] === 'app' && o[1] === rid)[2] === '1';
+      if (rej === app) bad++;
+      if (rej) rejWins++; else appWins++;
+    }
+    const [c] = await sql(`select (select count(*) from public.guests where event_id='zzconc1' and req_id like 'zzconc-rr-${round}-%' and req_id in (select id from public.requests where event_id='zzconc1' and status='rejected'))::int ghost,
+      (select count(*) from public.requests where event_id='zzconc1' and status='approved')::int a, (select count(*) from public.guests where event_id='zzconc1')::int g`);
+    ghosts += c.ghost;
+    if (c.ghost || c.a !== c.g) bad++;
+  }
+  console.log(`reject vs approve on the same request (3 rounds x ${N}): rejected=${rejWins} approved=${appWins}, guests for rejected requests=${ghosts} (expect 0), every request has exactly one winner`);
 } finally {
   await cleanup();
 }
