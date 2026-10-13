@@ -497,8 +497,11 @@
     async bumpLimit() { return rpc('bump_event_limit'); },
     // { id, created }: created is false when a request was already waiting.
     async requestExtraEvent() {
-      const row = firstRow(await rpc('request_extra_event')) || {};
-      return { id: row.id || null, created: row.created === true };
+      const row = firstRow(await rpc('request_extra_event'));
+      if (row && row.id) return { id: row.id, created: row.created === true };
+      // an empty answer (a race): the request exists, read it back once
+      const acct = await account.get();
+      return { id: acct.pendingRequest, created: false };
     },
   };
 

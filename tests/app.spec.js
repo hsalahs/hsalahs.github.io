@@ -1027,3 +1027,149 @@ test('the page has no Firebase left: it loads the Supabase scripts and nothing f
   expect(srcs.some((x) => /vendor\/supabase\.min\.js/.test(x))).toBe(true);
   expect(await page.evaluate(() => typeof window._auth + typeof window._fsFns)).toBe('undefinedundefined');
 });
+
+// ---- a shared phone: another account's state never survives a recovery link ---------------
+
+const OTHER = { id: 'u5', email: 'known@example.com' };
+const OTHER_EVENTS = [{ id: 'k1', name: 'مناسبة الحساب الثاني', owner_uid: 'u5' }];
+async function openAsAdminWithLink(page, hash) {
+  await stubSupabase(page);
+  await seedAppStore(page, {
+    user: ADM, admin: true, recoveryUser: OTHER,
+    accounts: { 'known@example.com': { id: 'u5', password: 'old-secret', confirmed: true } },
+    events: [{ id: 'a1', name: 'سر الأدمن', owner_uid: 'u9', owner_email: 'x@y.com' }, ...OTHER_EVENTS],
+    users: [{ uid: 'u9', email: 'x@y.com', created_at: '2026-01-01T00:00:00.000000+00:00' }],
+    limits: { u5: { event_limit: 1, event_count: 1 } },
+    eventRequests: [{ id: 'r1', uid: 'u9', email: 'req@y.com', status: 'pending', requested_at: '2026-01-01T00:00:00.000000+00:00' }],
+  });
+  await page.addInitScript(() => {
+    try { if (!localStorage.getItem('seeded')) { localStorage.setItem('seeded', '1'); localStorage.setItem('app_cache_v1', JSON.stringify({ uid: 'admin-uid', admin: true, events: [{ id: 'a1', ownerUid: 'u9', name: 'سر الأدمن', guestCount: 0, createdAt: '2026-01-01T00:00:00.000Z' }], acct: null })); } } catch (e) {}
+  });
+  await page.goto('/app.html' + hash);
+}
+
+test('a recovery link opened while the admin is shown leaves nothing of the admin visible, in memory or in storage', async ({ page }) => {
+  await openAsAdminWithLink(page, '#access_token=good-access&refresh_token=r&type=recovery');
+  await expect(page.locator('#recovery-card')).toBeVisible();
+  await expect(page.locator('#app-view')).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem('app_cache_v1'))).toBeNull();
+  const st = await page.evaluate(() => ({ uid: shownUid, admin: shownAdmin, ev: allEvents.length, json: lastEventsJson, acc: allAccounts, pend: myPendingRequestId, list: document.getElementById('events-list').innerHTML, req: document.getElementById('admin-requests-list').innerHTML, secs: ['admin-unpaid-section', 'admin-requests-section', 'admin-accounts-section'].map((i) => document.getElementById(i).style.display) }));
+  expect(st).toEqual({ uid: null, admin: false, ev: 0, json: '', acc: null, pend: null, list: '', req: '', secs: ['none', 'none', 'none'] });
+  // no poll of the admin's data keeps running behind the screen
+  const before = await page.evaluate(() => window.__fakeSupabase.calls.length);
+  await page.waitForTimeout(400);
+  expect(await page.evaluate(() => window.__fakeSupabase.calls.length)).toBe(before);
+});
+
+test('changing the password then shows the RIGHT account\'s list, never the admin\'s', async ({ page }) => {
+  await openAsAdminWithLink(page, '#access_token=good-access&refresh_token=r&type=recovery');
+  await page.locator('#new-pass').fill('brand-new-1');
+  await page.locator('#new-pass2').fill('brand-new-1');
+  await page.locator('#recovery-submit-btn').click();
+  await expect(page.locator('#app-view')).toBeVisible();
+  await expect(page.locator('#current-email')).toHaveText('known@example.com');
+  await expect(page.locator('#events-heading')).toHaveText('مناسباتي');
+  await expect(page.locator('#events-list')).toContainText('مناسبة الحساب الثاني');
+  await expect(page.locator('#events-list')).not.toContainText('سر الأدمن');
+  await expect(page.locator('#admin-requests-section')).toBeHidden();
+  await expect(page.locator('#admin-accounts-section')).toBeHidden();
+  await expect(page.locator('#limit-box')).toBeVisible();
+});
+
+test('a failure after the password was saved is never shown as a password-change failure', async ({ page }) => {
+  await openAsAdminWithLink(page, '#access_token=good-access&refresh_token=r&type=recovery');
+  await page.evaluate(() => { window.__fakeSupabase.fail = { is_admin_me: { error: 'network' } }; });
+  await page.locator('#new-pass').fill('brand-new-1');
+  await page.locator('#new-pass2').fill('brand-new-1');
+  await page.locator('#recovery-submit-btn').click();
+  await expect(page.locator('#recovery-err')).toBeHidden();
+  await expect(page.locator('#toast')).toContainText('تم تغيير كلمة المرور');
+  expect(await page.evaluate(() => window.__fakeSupabase.auth.passwordUpdates)).toBe(1);
+  await expect(page.locator('#recovery-card')).toBeHidden();
+});
+
+test('cancelling the new-password screen clears the cached list too', async ({ page }) => {
+  await openAsAdminWithLink(page, '#access_token=good-access&refresh_token=r&type=recovery');
+  await page.evaluate(() => localStorage.setItem('app_cache_v1', '{"uid":"x","admin":false,"events":[],"acct":null}'));
+  await page.locator('#recovery-card').getByText('إلغاء').click();
+  await expect(page.locator('#auth-card')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('app_cache_v1'))).toBeNull();
+});
+
+test('signing out clears the cache even when no account was recorded on the page', async ({ page }) => {
+  await open(page, { user: CUST, events: [{ id: 'e1', name: 'E1' }] });
+  await expect(page.locator('#events-list .event-card')).toHaveCount(1);
+  await page.evaluate(() => { shownUid = null; localStorage.setItem('app_cache_v1', '{"uid":"u1","admin":false,"events":[],"acct":null}'); });
+  await page.evaluate(() => handleAuthUser(null));
+  expect(await page.evaluate(() => localStorage.getItem('app_cache_v1'))).toBeNull();
+});
+
+test('a signup link carrying a recovery-looking token opens the app, not the new-password screen', async ({ page }) => {
+  await stubSupabase(page);
+  await seedAppStore(page, { user: null, accounts: ACCTS, recoveryUser: RECOVERY });
+  await page.goto('/app.html#access_token=good-access&refresh_token=r&type=signup');
+  await expect(page.locator('#app-view')).toBeVisible();
+  await expect(page.locator('#recovery-card')).toBeHidden();
+  expect(await page.evaluate(() => window.__fakeSupabase.auth.passwordUpdates || 0)).toBe(0);
+});
+
+test('leaving mid-recovery without saving: the next visit has no tokens in the address and no pending state', async ({ page }) => {
+  await openRecovery(page, '#access_token=good-access&refresh_token=r&type=recovery');
+  await expect(page.locator('#recovery-card')).toBeVisible();
+  expect(await page.evaluate(() => location.href)).not.toMatch(/token/);
+  // the tab is closed and the browser still holds the opened session: a plain visit later
+  await page.close();
+  const page2 = await page.context().newPage();
+  await stubSupabase(page2);
+  await seedAppStore(page2, { user: { id: 'u5', email: 'known@example.com' }, events: [] });
+  await page2.goto('/app.html');
+  await expect(page2.locator('#recovery-card')).toBeHidden();
+  expect(page2.url()).not.toMatch(/token|recovery/);
+});
+
+test('a lost answer from request_extra_event is read back once instead of failing', async ({ page }) => {
+  await open(page, { user: CUST, events: [{ id: 'e1', name: 'E1' }, { id: 'e2', name: 'E2' }, { id: 'e3', name: 'E3' }], limits: { u1: { event_limit: 3, event_count: 3 } },
+    eventRequests: [{ id: 'r1', uid: 'u1', email: CUST.email, status: 'pending', requested_at: '2026-01-01T00:00:00.000000+00:00' }] });
+  const r = await page.evaluate(async () => {
+    const client = Data.client();
+    const realRpc = client.rpc;
+    client.rpc = (name, args) => (name === 'request_extra_event' ? Promise.resolve({ data: [], error: null }) : realRpc(name, args));
+    return Data.account.requestExtraEvent();
+  });
+  expect(r).toEqual({ id: 'r1', created: false });
+});
+
+test('a timeout while creating an event: if it was saved the page goes to it, with no «request another event» wording', async ({ page }) => {
+  await stubSupabase(page);
+  await seedAppStore(page, { user: CUST, events: [], limits: { u1: { event_limit: 1, event_count: 0 } } });
+  const alerts = [];
+  page.on('dialog', (d) => { alerts.push(d.message()); d.accept(); });
+  await page.goto('/app.html');
+  await page.locator('#create-toggle-btn').click();
+  await page.getByRole('radio', { name: 'زفاف' }).click();
+  await page.locator('#ev-name').fill('عرس الشبكة');
+  // the server saves the event but the answer is lost
+  await page.evaluate(() => { window.__fakeSupabase.dropReply = { create_event: 1 }; });
+  await page.getByRole('button', { name: 'إنشاء', exact: true }).click();
+  await expect(page).toHaveURL(/event\.html\?id=/);
+  expect(alerts).toEqual([]);
+});
+
+test('retrying after a lost answer: the limit error finds the event that was already saved', async ({ page }) => {
+  await stubSupabase(page);
+  await seedAppStore(page, { user: CUST, events: [], limits: { u1: { event_limit: 1, event_count: 0 } } });
+  const alerts = [];
+  page.on('dialog', (d) => { alerts.push(d.message()); d.accept(); });
+  await page.goto('/app.html');
+  await page.locator('#create-toggle-btn').click();
+  await page.getByRole('radio', { name: 'زفاف' }).click();
+  await page.locator('#ev-name').fill('عرس ثاني');
+  // the event exists on the server (a first try whose answer never came back)
+  await page.evaluate(() => {
+    window.__fakeSupabase.events.old1 = { name: 'عرس ثاني', owner_uid: 'u1', created_at: new Date().toISOString().replace('Z', '000+00:00') };
+    window.__fakeSupabase.limits.u1.event_count = 1;
+  });
+  await page.getByRole('button', { name: 'إنشاء', exact: true }).click();
+  await expect(page).toHaveURL(/event\.html\?id=old1/);
+  expect(alerts).toEqual([]);
+});
