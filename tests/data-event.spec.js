@@ -319,7 +319,7 @@ test('watch: a change elsewhere is read as a delta and merged by id (a check-in,
   expect(l2.guests[l2.guests.length - 1].rows.length).toBe(3);
 });
 
-test('watch: a guest deleted elsewhere (a delta cannot show it) triggers ONE full read, and at most one per 15 s', async ({ page }) => {
+test('watch: a guest deleted on another device disappears through the delta, with NO full read', async ({ page }) => {
   await open(page, { user: OWNER, event: { paid: true }, guests: [G('WD-1', 'a'), G('WD-2', 'b'), G('WD-3', 'c')] }, { fake: true });
   await watch(page);
   await advance(page, 500);
@@ -327,28 +327,46 @@ test('watch: a guest deleted elsewhere (a delta cannot show it) triggers ONE ful
   expect(await fullCalls()).toBe(1);
   await page.evaluate(() => __srv.removeGuest('e1', 'WD-2'));
   await advance(page, 6000);
-  expect(await fullCalls()).toBe(2);
-  const l = await log(page);
-  expect(l.guests[l.guests.length - 1].rows.map((r) => r.id)).toEqual(['WD-1', 'WD-3']);
-  // a second delete 5 s later: the ghost read is throttled, so it waits for the 15 s gap
   await page.evaluate(() => __srv.removeGuest('e1', 'WD-3'));
   await advance(page, 6000);
-  expect(await fullCalls()).toBe(2);
-  await page.evaluate(() => __srv.rename('e1', 'WD-1', 'a2'));
-  await advance(page, 12000);
-  expect(await fullCalls()).toBe(3);
-  const l2 = await log(page);
-  expect(l2.guests[l2.guests.length - 1].rows.map((r) => r.id)).toEqual(['WD-1']);
+  expect(await fullCalls()).toBe(1);
+  const l = await log(page);
+  expect(l.guests[l.guests.length - 1].rows.map((r) => r.id)).toEqual(['WD-1']);
+  expect(l.live[l.live.length - 1].guestCount).toBe(1);
 });
 
-test('watch: a full read every 5 minutes even when nothing moved', async ({ page }) => {
+test('watch: a guest count that never matches costs at most one full read per 10 minutes, and only after two polls in a row', async ({ page }) => {
+  await open(page, { user: OWNER, guests: [G('WD-1', 'a')] }, { fake: true });
+  await page.evaluate(() => { window.__fakeSupabase.liveOverride = { guest_count: 99 }; });
+  await watch(page);
+  const fulls = () => page.evaluate(() => window.__fakeSupabase.calls.filter((c) => c.name === 'owner_guests' && c.args.p_since == null).length);
+  await advance(page, 500);
+  expect(await fulls()).toBe(1);
+  await advance(page, 60000);
+  expect(await fulls()).toBe(2);
+  await advance(page, 440000);
+  expect(await fulls()).toBe(2);
+  await advance(page, 200000);
+  expect(await fulls()).toBe(3);
+});
+
+test('watch: no full read on a timer, however long it idles; refresh({ full: true }) reads once; a 6-day silence reads once', async ({ page }) => {
   await open(page, { user: OWNER, guests: [G('WD-1', 'a')] }, { fake: true });
   await watch(page);
   await advance(page, 500);
-  await advance(page, 4 * 60000);
-  expect(await page.evaluate(() => window.__fakeSupabase.calls.filter((c) => c.name === 'owner_guests').length)).toBe(1);
-  await advance(page, 70000);
-  expect(await page.evaluate(() => window.__fakeSupabase.calls.filter((c) => c.name === 'owner_guests').length)).toBe(2);
+  const reads = () => calls(page, 'owner_guests');
+  await advance(page, 900000);
+  expect(await reads()).toBe(1);
+  await page.evaluate(() => window.__w.refresh({ full: true }));
+  await advance(page, 500);
+  expect(await reads()).toBe(2);
+  await page.evaluate(() => window.__w.stop());
+  await watch(page);
+  await advance(page, 500);
+  const n = await reads();
+  await page.clock.fastForward(7 * 24 * 3600 * 1000);
+  await advance(page, 6000);
+  expect(await reads()).toBe(n + 1);
 });
 
 test('watch: the requests are read again only when the pending count or the newest time changed', async ({ page }) => {

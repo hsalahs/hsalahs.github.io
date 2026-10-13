@@ -101,6 +101,7 @@
   function touch(d) { d.lastChange = stamp(); }
   function counts(d) { return { guest_count: d.guests.length, scanned_count: d.guests.filter((g) => g.scanned).length }; }
 
+  // delta mode also returns the tombstones of deleted guests (migration 0016): { id, changed_at = deleted_at, deleted: true }
   function guestPage(d, a) {
     const lim = Math.min(Math.max(a.p_limit == null ? 1000 : a.p_limit, 1), 1000);
     const cmp = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
@@ -108,15 +109,18 @@
     if (a.p_since == null) {
       rows = d.guests.slice().sort((x, y) => cmp(x.name, y.name) || cmp(x.id, y.id));
       if (a.p_after_id != null) rows = rows.filter((g) => cmp(g.name, a.p_after_name || '') > 0 || (g.name === (a.p_after_name || '') && cmp(g.id, a.p_after_id) > 0));
-    } else {
-      const since = tsKey(a.p_since);
-      rows = d.guests.slice().sort((x, y) => (tsKey(x.changed_at) - tsKey(y.changed_at)) || cmp(x.id, y.id));
-      rows = a.p_after_id == null
-        ? rows.filter((g) => tsKey(g.changed_at) > since)
-        : rows.filter((g) => tsKey(g.changed_at) > since || (tsKey(g.changed_at) === since && cmp(g.id, a.p_after_id) > 0));
+      return rows.slice(0, lim).map((g) => Object.assign({ registered_at: g.changed_at }, g, { deleted: false }));
     }
-    return rows.slice(0, lim).map((g) => Object.assign({ registered_at: g.changed_at }, g));
+    const since = tsKey(a.p_since);
+    rows = d.guests.map((g) => Object.assign({ registered_at: g.changed_at }, g, { deleted: false }))
+      .concat((d.tombs || []).map((t) => ({ id: t.id, name: null, scanned: null, scanned_at: null, vip: null, changed_at: t.deleted_at, registered_at: null, deleted: true })));
+    rows.sort((x, y) => (tsKey(x.changed_at) - tsKey(y.changed_at)) || cmp(x.id, y.id));
+    rows = a.p_after_id == null
+      ? rows.filter((g) => tsKey(g.changed_at) > since)
+      : rows.filter((g) => tsKey(g.changed_at) > since || (tsKey(g.changed_at) === since && cmp(g.id, a.p_after_id) > 0));
+    return rows.slice(0, lim);
   }
+  function tomb(d, ids) { d.tombs = d.tombs || []; ids.forEach((id) => d.tombs.push({ id, deleted_at: stamp() })); }
 
   Object.assign(FUNCS, {
     start_scan_session(a) {
@@ -345,11 +349,12 @@
       needOwn(a.p_event_id);
       const d = dpOf(a.p_event_id);
       const pend = pendingOf(a.p_event_id);
-      return [{
+      const o = S().liveOverride || {};
+      return [Object.assign({
         guest_count: d.guests.length, scanned_count: d.guests.filter((g) => g.scanned).length, last_change: d.lastChange || null,
         pending_count: pend.length, newest_pending: pend.length ? pend[pend.length - 1].created_at : null,
         paid: !!e.paid, guest_limit: e.guest_limit == null ? null : e.guest_limit,
-      }];
+      }, o)];
     },
     owner_guests(a) {
       needOwn(a.p_event_id);
@@ -444,7 +449,7 @@
       needOwn(a.p_event_id);
       const d = dpOf(a.p_event_id); const i = d.guests.findIndex((x) => x.id === a.p_guest_id);
       if (i < 0) return false;
-      d.guests.splice(i, 1); touch(d);
+      d.guests.splice(i, 1); tomb(d, [a.p_guest_id]); touch(d);
       return true;
     },
     remove_guests(a) {
@@ -452,6 +457,7 @@
       if (!Array.isArray(a.p_ids)) throw pgError('BAD_INPUT', '22023');
       if (a.p_ids.length > 200) throw pgError('BATCH_TOO_LARGE', '22023');
       const d = dpOf(a.p_event_id); const before = d.guests.length;
+      tomb(d, d.guests.filter((g) => a.p_ids.includes(g.id)).map((g) => g.id));
       d.guests = d.guests.filter((g) => !a.p_ids.includes(g.id));
       if (d.guests.length !== before) touch(d);
       return before - d.guests.length;
@@ -556,7 +562,7 @@
     },
     removeGuest(eid, id) {
       const d = doorOf(eid); const i = d.guests.findIndex((x) => x.id === id);
-      if (i >= 0) { d.guests.splice(i, 1); touch(d); }
+      if (i >= 0) { tomb(d, [id]); d.guests.splice(i, 1); touch(d); }
     },
     // the organizer generates a new door code: every device's session stops matching
     setPin(eid, pin) { doorOf(eid).pin = pin; },
@@ -583,6 +589,9 @@
     if (!fn) return { data: null, error: pgError('function ' + name + ' not found', '42883') };
     try {
       const data = fn(args || {});
+      const size = new TextEncoder().encode(JSON.stringify(data === undefined ? null : data)).length;
+      S().bytes = (S().bytes || 0) + size;
+      (S().bytesBy = S().bytesBy || {})[name] = (S().bytesBy[name] || 0) + size;
       const drop = S().dropReply && S().dropReply[name];
       if (drop && drop > 0) { S().dropReply[name] = drop - 1; return { data: null, error: pgError('TypeError: Failed to fetch', '') }; }
       return { data, error: null };

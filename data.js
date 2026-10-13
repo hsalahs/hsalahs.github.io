@@ -539,7 +539,8 @@
 
   const SCAN_COUNTER_MS = 4000;
   const SCAN_NAMES_MS = 10000;
-  const SCAN_FULL_MS = 60000;
+  const GHOST_GAP_MS = 10 * 60000;   // a counter that never adds up costs at most 6 full reads an hour
+  const SYNC_MAX_GAP_MS = 6 * 24 * 3600000;   // the server keeps deletions for 7 days: after a longer silence read everything
   const GUEST_PAGE = 1000;       // the server caps a response at 1000 rows
   const CURSOR_MARGIN_MS = 60000;  // commit order vs changed_at, see supabase/README.md
 
@@ -605,6 +606,7 @@
   function firstRow(d) { return Array.isArray(d) ? d[0] : d; }
 
   function guestRow(r) {
+    if (r.deleted) return { id: r.id, deleted: true, changedAt: r.changed_at || '' };
     const g = { id: r.id, name: r.name, scanned: !!r.scanned, scannedAt: iso(r.scanned_at), vip: !!r.vip, changedAt: r.changed_at || '' };
     if (r.registered_at !== undefined) g.registeredAt = iso(r.registered_at);
     return g;
@@ -684,9 +686,9 @@
     guests: scanGuests,
     // Live numbers and names. onCounter(event) every 4 s; the names are read
     // every 10 s but only when lastChange moved (as a delta from the cursor),
-    // plus a full read every 60 s (that is what notices deleted guests).
+    // (deleted guests come as rows with deleted: true; there is no timed full read).
     // Both pause while the page is hidden and run at once when it returns.
-    // opts.since = cursor of the list the page already shows (null = none),
+    // opts.count() = how many guests the page holds (for the ghost check), opts.since = cursor of the list the page already shows (null = none),
     // opts.lastChange = the lastChange that list matches (null = unknown, so
     // the first change check reads a delta). onGuests({ rows, cursor, full,
     // lastChange }); onError(err, 'counter' | 'names') for a failed poll (the poller backs off).
@@ -695,26 +697,35 @@
       let cursor = o.since || null;
       let seen = o.lastChange === undefined ? null : o.lastChange;
       let latest;
-      let lastFullAt = Date.now();
-      let stopped = false;
+      let lastOkAt = Date.now(), lastGhostAt = 0, mismatch = 0, latestCount;
+      let stopped = false, forceFull = false;
       const fail = (e, kind) => { if (!stopped && o.onError) o.onError(e, kind); throw e; };
       const counter = makePoller(async () => {
         let ev;
         try { ev = await scan.event(eventId); } catch (e) { fail(e, 'counter'); }
         if (stopped || !ev) return;
         latest = ev.lastChange;
+        latestCount = ev.guestCount;
         if (o.onCounter) o.onCounter(ev);
       }, SCAN_COUNTER_MS);
+      // Deleted guests arrive in the delta as tombstones, so the list is never re-downloaded on a timer. A full
+      // read happens only when forced (manual refresh), after a very long silence, or when the page's list size
+      // still differs from the server's guest count on two polls in a row (at most once per GHOST_GAP_MS).
       const names = makePoller(async () => {
-        const due = Date.now() - lastFullAt >= SCAN_FULL_MS;
-        if (!due && (latest === undefined || latest === seen)) return;
-        const full = due || !cursor;
+        const off = typeof o.count === 'function' && latestCount !== undefined && o.count() !== latestCount;
+        mismatch = off ? mismatch + 1 : 0;
+        const ghostDue = mismatch >= 2 && Date.now() - lastGhostAt >= GHOST_GAP_MS;
+        const stale = Date.now() - lastOkAt > SYNC_MAX_GAP_MS;
+        if (!forceFull && !stale && !ghostDue && (latest === undefined || latest === seen)) { lastOkAt = Date.now(); return; }
+        const full = forceFull || stale || ghostDue || !cursor;
         const at = latest;
         let res;
         try { res = await scanGuests(eventId, full ? null : cursor); } catch (e) { fail(e, 'names'); }
         if (stopped) return;
         cursor = res.cursor;
-        if (full) lastFullAt = Date.now();
+        if (ghostDue) { lastGhostAt = Date.now(); mismatch = 0; }
+        forceFull = false;
+        lastOkAt = Date.now();
         seen = at;
         if (o.onGuests) o.onGuests({ rows: res.rows, cursor: res.cursor, full: res.full, lastChange: at });
       }, SCAN_NAMES_MS);
@@ -722,7 +733,8 @@
       names.start();
       return {
         stop() { stopped = true; counter.stop(); names.stop(); },
-        refresh() { counter.refresh(); },
+        // { full: true } also reads the whole list again on the next names poll
+        refresh(r) { if (r && r.full) { forceFull = true; names.refresh(); } counter.refresh(); },
       };
     },
   };
@@ -768,8 +780,6 @@
   }
 
   const LIVE_POLL_MS = 5000;
-  const LIVE_FULL_MS = 5 * 60000;     // a full read now and then notices guests deleted elsewhere
-  const GHOST_GAP_MS = 15000;         // at most one ghost-triggered full read per 15 s
   const REQ_CHUNK = 25;
   const REMOVE_CHUNK = 200;
   const ADD_CHUNK = 2000;
@@ -811,8 +821,9 @@
     },
     // Live view of one event. ONE poll every 5 s asks event_live (one small row); the guest list is read
     // again only when last_change moved (a delta from the cursor), the pending requests only when their
-    // count or newest time changed, and the whole list every 5 minutes (and once after a delta whose
-    // result does not add up to guestCount: deleted guests do not show in a delta).
+    // count or newest time changed. Deleted guests come in the delta as tombstones; the whole list is read only
+    // on the first poll, on refresh({ full: true }), after a 6-day silence, or (at most once per 10 minutes)
+    // when the list size differs from guestCount on two polls in a row.
     // cb.onLive({ guestCount, scannedCount, lastChange, pendingCount, newestPending, paid, guestLimit } | null when gone)
     // cb.onGuests({ rows, full }) rows = the whole current list; cb.onRequests(list); cb.onError(err).
     watch(eventId, cb) {
@@ -820,7 +831,7 @@
       let stopped = false;
       const local = new Map();
       let haveFull = false, cursor = null, seenChange, seenPending, seenNewest;
-      let lastFullAt = 0, lastGhostAt = 0;
+      let lastOkAt = Date.now(), lastGhostAt = 0, mismatch = 0, forceFull = false;
       async function once() {
         const w = writes;
         const live = firstRow(await rpc('event_live', { p_event_id: eventId }));
@@ -833,23 +844,25 @@
           const res = await readGuests((args) => rpc('owner_guests', args), eventId, null);
           nextMap.clear();
           res.rows.forEach((r) => nextMap.set(r.id, r));
-          nextCursor = res.cursor; full = true; changed = true; out.fullAt = Date.now();
+          nextCursor = res.cursor; full = true; changed = true;
         };
-        if (!haveFull || now - lastFullAt >= LIVE_FULL_MS) {
+        const stale = now - lastOkAt > SYNC_MAX_GAP_MS;
+        if (!haveFull || forceFull || stale) {
           await readFull();
         } else if (live.last_change !== seenChange && !cursor) {
           await readFull();
         } else if (live.last_change !== seenChange) {
           const res = await readGuests((args) => rpc('owner_guests', args), eventId, cursor);
-          res.rows.forEach((r) => nextMap.set(r.id, r));
+          res.rows.forEach((r) => { if (r.deleted) nextMap.delete(r.id); else nextMap.set(r.id, r); });
           nextCursor = res.cursor; changed = true;
         }
-        // a guest deleted elsewhere is invisible to a delta: when the list does not add up, read it all (retried
-        // on later polls while it still does not add up, at most once per 15 s)
-        if (!full && nextMap.size !== (live.guest_count || 0) && Date.now() - lastGhostAt >= GHOST_GAP_MS) {
+        // deletions arrive as tombstones in the delta; a full read happens only when the list size still differs
+        // from guestCount on two polls in a row, at most once per GHOST_GAP_MS
+        if (!full && mismatch >= 1 && nextMap.size !== (live.guest_count || 0) && Date.now() - lastGhostAt >= GHOST_GAP_MS) {
           out.ghostAt = Date.now();
           await readFull();
         }
+        out.off = nextMap.size !== (live.guest_count || 0);
         out.map = nextMap; out.cursor = nextCursor; out.full = full; out.changed = changed;
         const newest = live.newest_pending ? iso(live.newest_pending) : '';
         if (seenPending === undefined || live.pending_count !== seenPending || newest !== seenNewest) {
@@ -877,8 +890,9 @@
         seenChange = l.last_change; seenPending = l.pending_count; seenNewest = res.newest;
         local.clear(); res.map.forEach((v, k) => local.set(k, v));
         cursor = res.cursor; haveFull = true;
-        if (res.fullAt) lastFullAt = res.fullAt;
         if (res.ghostAt) lastGhostAt = res.ghostAt;
+        mismatch = res.off ? mismatch + 1 : 0;
+        forceFull = false; lastOkAt = Date.now();
         if (o.onLive) {
           o.onLive({ guestCount: l.guest_count || 0, scannedCount: l.scanned_count || 0, lastChange: l.last_change || '', pendingCount: l.pending_count || 0,
             newestPending: res.newest, paid: !!l.paid, guestLimit: l.guest_limit == null ? null : l.guest_limit });
@@ -886,10 +900,10 @@
         if (res.changed && o.onGuests) o.onGuests({ rows: sortGuests(Array.from(local.values())), full: res.full });
         if (res.requests && o.onRequests) o.onRequests(res.requests);
       }, LIVE_POLL_MS, { hiddenIntervalMs: o.hiddenIntervalMs });
-      const handle = { eventId, forget(ids) { ids.forEach((id) => local.delete(id)); lastGhostAt = Date.now(); } };
+      const handle = { eventId, forget(ids) { ids.forEach((id) => local.delete(id)); } };
       watchers.add(handle);
       poller.start();
-      return { stop() { stopped = true; watchers.delete(handle); poller.stop(); }, refresh() { poller.refresh(); } };
+      return { stop() { stopped = true; watchers.delete(handle); poller.stop(); }, refresh(r) { if (r && r.full) forceFull = true; poller.refresh(); } };
     },
   };
 

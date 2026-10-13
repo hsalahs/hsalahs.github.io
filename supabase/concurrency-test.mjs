@@ -18,7 +18,7 @@ const sql = async (query) => {
 };
 // an open transaction is rolled back when the request ends, so commit explicitly
 const asOwner = (q) => `begin; select set_config('request.jwt.claims', '{"sub":"${OWNER}","role":"authenticated","is_anonymous":false}', true); set local role authenticated; ${q}; commit;`;
-const cleanup = () => sql(`delete from public.events where id like 'zzconc%' or owner_uid = '${OWNER}'; delete from public.account_limits where uid = '${OWNER}'; delete from public.users where uid = '${OWNER}'; delete from auth.users where id = '${OWNER}'`);
+const cleanup = () => sql(`delete from public.guest_tombstones where event_id like 'zzconc%'; delete from public.events where id like 'zzconc%' or owner_uid = '${OWNER}'; delete from public.account_limits where uid = '${OWNER}'; delete from public.users where uid = '${OWNER}'; delete from auth.users where id = '${OWNER}'`);
 const ONLY = process.env.ONLY || '';   // ONLY=12 runs just the last section
 let bad = 0;
 try {
@@ -126,6 +126,7 @@ try {
   }
   // 12) reject racing approve on the SAME request: exactly one wins, and a rejected request never gets a guest
   let rejWins = 0, appWins = 0, ghosts = 0;
+  await sql(`insert into public.events (id, owner_uid, name, paid) values ('zzconc1', '${OWNER}', 'concurrency', true) on conflict (id) do nothing`);
   for (let round = 0; round < 3; round++) {
     await sql(`delete from public.guests where event_id = 'zzconc1'; delete from public.requests where event_id = 'zzconc1';
       insert into public.requests (event_id, id, name) select 'zzconc1', 'zzconc-rr-${round}-' || lpad(g::text, 10, '0'), 'r' || g from generate_series(1, ${N}) g`);

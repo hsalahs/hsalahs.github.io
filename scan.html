@@ -1015,6 +1015,14 @@ function mergeGuests(rows, full) {
   guests.forEach(g => { byId.set(g.id, g); });
   const seen = new Set();
   rows.forEach(r => {
+    if (r.deleted) {
+      // a guest deleted on the dashboard (delta rows carry deletions)
+      byId.delete(r.id);
+      guests = guests.filter(x => x.id !== r.id);
+      delete localCheckinTimes[r.id];
+      if (pendingListId === r.id) pendingListId = null;
+      return;
+    }
     seen.add(r.id);
     let g = byId.get(r.id);
     if (!g) {
@@ -1039,7 +1047,7 @@ function mergeGuests(rows, full) {
   if (full) guests = guests.filter(g => seen.has(g.id));
 }
 
-// Rows from Data.scan.watch (a delta, or the full list every minute).
+// Rows from Data.scan.watch (a delta with its deletions, or the full list).
 function onScanGuests(res) {
   mergeGuests(res.rows, res.full);
   syncCursor = res.cursor;
@@ -1061,9 +1069,8 @@ function refreshConnectionBanner(ok) {
 }
 
 // A copy this device downloaded less than OFFLINE_LIST_MAX_AGE ago is shown
-// at once (the watch then catches it up from its cursor, and the minute-by-
-// minute full read corrects anything the cursor cannot see, such as deleted
-// guests). "🔄 تحديث القائمة" forces a fresh full download.
+// at once (the watch then catches it up from its cursor, deletions included).
+// "🔄 تحديث القائمة" forces a fresh full download.
 const OFFLINE_LIST_MAX_AGE = 3 * 60 * 60 * 1000;
 let guestsLoadedAt = null;
 async function loadGuestsOnce(force) {
@@ -1116,6 +1123,7 @@ async function startScanData() {
     lastChange: listLastChange,
     onCounter: onScanCounter,
     onGuests: onScanGuests,
+    count: () => guests.length,
     onError: onScanError,
   });
 }

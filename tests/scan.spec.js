@@ -1694,18 +1694,15 @@ test('names list view: after 10 minutes without a sync the meta line turns amber
 
 // ---- polling: counter every 4 s, names only when something changed ----
 
-test('polling: while nothing changes the names are not asked for again (only the small counter row is), until the full read after a minute', async ({ page }) => {
+test('polling: while nothing changes the names are not asked for again (only the small counter row is), and there is no timed full read', async ({ page }) => {
   await page.clock.install();
   await openUnlocked(page, G(5));
   expect((await calls(page, 'door_guests')).length).toBe(1);
   for (let i = 0; i < 5; i++) await page.clock.fastForward(10500);
   expect((await calls(page, 'door_guests')).length).toBe(1);
   expect((await calls(page, 'door_event')).length).toBeGreaterThanOrEqual(4);
-  await page.clock.fastForward(11000);
-  await page.clock.fastForward(11000);
-  const gs = await calls(page, 'door_guests');
-  expect(gs.length).toBe(2);
-  expect(gs[1].args.p_since).toBeNull();
+  for (let i = 0; i < 30; i++) await page.clock.fastForward(10500);
+  expect((await calls(page, 'door_guests')).length).toBe(1);
 });
 
 test('polling: a change makes the next names poll ask for a delta from the cursor with a one-minute safety margin', async ({ page }) => {
@@ -1751,16 +1748,32 @@ test('polling: an undo, a rename and a VIP change made on the dashboard reach th
   expect(await page.evaluate(() => guests.find((g) => g.id === 'WD-B').vip)).toBe(true);
 });
 
-test('polling: a guest the organizer deleted leaves the list at the next full read', async ({ page }) => {
+test('polling: a guest the organizer deleted leaves the list through the delta, with no full read', async ({ page }) => {
   await page.clock.install();
   await openUnlocked(page, [{ id: 'WD-A', name: 'أ' }, { id: 'WD-B', name: 'ب' }]);
   await srv(page, 'removeGuest', 'e1', 'WD-A');
   await page.clock.fastForward(4500);
   await page.clock.fastForward(10500);
-  expect(await page.evaluate(() => guests.length)).toBe(2);
-  await page.clock.fastForward(60000);
   await expect.poll(() => page.evaluate(() => guests.length)).toBe(1);
   await expect(page.locator('#scan-counter')).toHaveText('تم الدخول: 0 من 1');
+  const gs = await calls(page, 'door_guests');
+  expect(gs.length).toBe(2);
+  expect(gs[1].args.p_since).not.toBeNull();
+  expect((await calls(page, 'door_guests')).filter((c) => c.args.p_since == null).length).toBe(1);
+});
+
+test('polling: a guest count that never matches the list costs at most one full read per 10 minutes', async ({ page }) => {
+  await page.clock.install();
+  await openUnlocked(page, G(3));
+  await fake(page, () => { window.__fakeSupabase.counterOverride = { row: { guest_count: 99 } }; });
+  const fulls = async () => (await calls(page, 'door_guests')).filter((c) => c.args.p_since == null).length;
+  expect(await fulls()).toBe(1);
+  for (let i = 0; i < 12; i++) await page.clock.fastForward(5000);
+  expect(await fulls()).toBe(2);
+  for (let i = 0; i < 100; i++) await page.clock.fastForward(5000);
+  expect(await fulls()).toBe(2);
+  for (let i = 0; i < 30; i++) await page.clock.fastForward(5000);
+  expect(await fulls()).toBe(3);
 });
 
 test('polling: applying the same changed-names answer twice changes nothing (idempotent merge)', async ({ page }) => {

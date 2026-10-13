@@ -31,7 +31,8 @@ end $$;
 
 -- The owner's guest list: same keyset rules as door_guests (full read by (name, id); delta by (changed_at, id);
 -- cap 1000) plus registered_at.
-create or replace function public.owner_guests(p_event_id text, p_since timestamptz default null,
+drop function if exists public.owner_guests(text, timestamptz, text, text, integer);
+create function public.owner_guests(p_event_id text, p_since timestamptz default null,
   p_after_name text default null, p_after_id text default null, p_limit integer default 1000)
 returns table (id text, name text, scanned boolean, scanned_at timestamptz, vip boolean, changed_at timestamptz,
   registered_at timestamptz)
