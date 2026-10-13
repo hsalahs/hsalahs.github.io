@@ -781,6 +781,24 @@ test('the reset link opens the new-password screen (same card as sign-in), never
   expect(await page.evaluate(() => JSON.stringify(Object.assign({}, localStorage, sessionStorage)))).not.toMatch(/good-access|r-tok/);
 });
 
+test('after saving a new password on a slow connection the confirmation toast shows on the events page and stays 7 seconds', async ({ page }) => {
+  await openRecovery(page, '#access_token=good-access&refresh_token=r&type=recovery');
+  await page.locator('#new-pass').fill('brand-new-1');
+  await page.locator('#new-pass2').fill('brand-new-1');
+  await srv(page, () => { window.__fakeSupabase.latency = 1500; });
+  await page.locator('#recovery-submit-btn').click();
+  // while the sign-in is still loading the toast has not been shown yet (it would run out before the page appears)
+  await page.waitForTimeout(400);
+  await expect(page.locator('#toast')).not.toHaveClass(/show/);
+  await expect(page.locator('#app-view')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('#toast')).toHaveClass(/show/);
+  await page.waitForTimeout(5800);   // longer than the normal 5 s
+  await expect(page.locator('#toast')).toHaveClass(/show/);
+  await expect(page.locator('#toast')).toContainText('تم تغيير كلمة المرور');
+  await page.waitForTimeout(1800);
+  await expect(page.locator('#toast')).not.toHaveClass(/show/);
+});
+
 test('saving a new password: checks the two fields, then signs the person into the app', async ({ page }) => {
   await openRecovery(page, '#access_token=good-access&refresh_token=r&type=recovery');
   const err = page.locator('#recovery-err');

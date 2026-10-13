@@ -532,10 +532,12 @@ async function submitNewPassword() {
   restore();
   recovering = false;
   showAuthCard('login');
-  showToast('✅ تم تغيير كلمة المرور');
   let user = null;
   try { user = await Data.auth.current(); } catch (e) {}
-  handleAuthUser(user).catch(showInitFailure);
+  // The toast comes AFTER the events page is on screen: signing in takes a few seconds on a phone, and a toast
+  // shown before that used up its 5 s while the person was still looking at «جاري التحميل...».
+  try { await handleAuthUser(user); } catch (e) { showInitFailure(e); }
+  showToast('✅ تم تغيير كلمة المرور', 7000);
 }
 
 function cancelRecovery() {

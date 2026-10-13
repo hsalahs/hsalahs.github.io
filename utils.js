@@ -215,12 +215,12 @@ function slugFromName(name) {
 
 // Shared bottom toast — the calling page needs its own #toast element and
 // matching CSS (each page's dark theme sets slightly different colors).
-function showToast(msg) {
+function showToast(msg, ms) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => t.classList.remove('show'), 5000);
+  showToast._t = setTimeout(() => t.classList.remove('show'), ms || 5000);
 }
 
 // Asks the owner to type «حذف» before an event is deleted. The old single
