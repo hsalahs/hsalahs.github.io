@@ -496,6 +496,7 @@ async function resendConfirmation() {
 // is already open, see boot()). Same card as the sign-in form.
 function showRecovery() {
   recovering = true;
+  resetAppState();
   document.getElementById('app-view').style.display = 'none';
   document.getElementById('auth-view').style.display = 'block';
   document.getElementById('recovery-err').style.display = 'none';
@@ -518,21 +519,25 @@ async function submitNewPassword() {
   const restore = setButtonBusy(btn, 'جاري الحفظ...');
   try {
     await Data.auth.updatePassword(p1);
-    restore();
-    recovering = false;
-    showAuthCard('login');
-    showToast('✅ تم تغيير كلمة المرور');
-    handleAuthUser(await Data.auth.current());
   } catch (e) {
     restore();
     if (e.code === 'same-password') fail('اختر كلمة مرور مختلفة عن القديمة');
     else if (e.code === 'no-session') fail('انتهت صلاحية الرابط — اطلب رابط جديد من "نسيت كلمة المرور؟"');
     else fail(authErrorText(e));
+    return;
   }
+  restore();
+  recovering = false;
+  showAuthCard('login');
+  showToast('✅ تم تغيير كلمة المرور');
+  let user = null;
+  try { user = await Data.auth.current(); } catch (e) {}
+  handleAuthUser(user).catch(showInitFailure);
 }
 
 function cancelRecovery() {
   recovering = false;
+  clearCache();
   showAuthCard('login');
   Data.auth.signOut().catch(() => {});
   handleAuthUser(null);
@@ -611,6 +616,12 @@ async function createNewEvent() {
     goTo('event.html?id=' + encodeURIComponent(eventId));
     // Left busy on purpose: the page is on its way to the dashboard.
   } catch (e) {
+    // After a timeout the event may exist already: look before saying anything.
+    if (e.code === 'timeout' || e.code === 'offline' || e.code === 'limit-reached') {
+      try { await refreshEvents(); } catch (x) {}
+      const made = allEvents.find(ev => ev.ownerUid === shownUid && ev.name === name && Date.now() - new Date(ev.createdAt).getTime() < 5 * 60 * 1000);
+      if (made) { goTo('event.html?id=' + encodeURIComponent(made.id)); return; }
+    }
     restore();
     if (e.code === 'limit-reached') {
       alert('عندك مناسبة وحدة مفعّلة على حسابك حاليًا. اطلب مناسبة إضافية من لوحتك.');
@@ -746,6 +757,33 @@ function watchAuth() {
   } catch (e) { showInitFailure(e); }
 }
 
+// Forgets everything shown for the previous account (sign-out, or a recovery
+// link opened while another account is on screen).
+function resetAppState() {
+  authSeq++;
+  stopPollers();
+  clearCache();
+  document.getElementById('events-list').innerHTML = '';
+  ['admin-unpaid-section', 'admin-requests-section', 'admin-accounts-section', 'owner-filter-bar', 'limit-box'].forEach(id => { document.getElementById(id).style.display = 'none'; });
+  document.getElementById('admin-requests-list').innerHTML = '';
+  document.getElementById('admin-accounts-list').innerHTML = '';
+  document.getElementById('admin-accounts-body').style.display = 'none';
+  document.getElementById('create-form').style.display = 'none';
+  shownUid = null;
+  shownEmail = '';
+  shownAdmin = false;
+  allAccounts = null;
+  allEvents = [];
+  lastEventsJson = '';
+  lastReqJson = '';
+  ownerFilter = null;
+  knownCappedEventIds = null;
+  myEventsCount = 0;
+  myEventLimit = 1;
+  myPendingRequestId = null;
+  firstListMarked = false;
+}
+
 async function handleAuthUser(user) {
   const seq = ++authSeq;
   tmShow();
@@ -796,17 +834,7 @@ async function handleAuthUser(user) {
     document.getElementById('auth-loading').style.display = 'none';
     document.getElementById('auth-view').style.display = 'block';
     document.getElementById('app-view').style.display = 'none';
-    document.getElementById('events-list').innerHTML = '';
-    stopPollers();
-    if (shownUid) clearCache();
-    shownUid = null;
-    shownAdmin = false;
-    allAccounts = null;
-    allEvents = [];
-    lastEventsJson = '';
-    knownCappedEventIds = null;
-    myEventLimit = 1;
-    myPendingRequestId = null;
+    resetAppState();
   }
 }
 
