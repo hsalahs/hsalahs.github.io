@@ -1173,3 +1173,40 @@ test('retrying after a lost answer: the limit error finds the event that was alr
   await expect(page).toHaveURL(/event\.html\?id=old1/);
   expect(alerts).toEqual([]);
 });
+
+// ---- the account line on the new-password screen ----------------------------------------
+
+test('the new-password screen shows which account it is for, taken from the recovery session', async ({ page }) => {
+  await openRecovery(page, '#access_token=good-access&refresh_token=r&type=recovery');
+  const line = page.locator('#recovery-account');
+  await expect(line).toBeVisible();
+  await expect(line).toContainText('حساب:');
+  await expect(page.locator('#recovery-email')).toHaveText('known@example.com');
+  expect(await page.locator('#recovery-email').evaluate((e) => getComputedStyle(e).direction)).toBe('ltr');
+});
+
+test('the account line is plain text: markup in an e-mail is not interpreted', async ({ page }) => {
+  await stubSupabase(page);
+  const evil = '"><img src=x onerror=window.__x=1>@a.co';
+  await seedAppStore(page, { user: null, accounts: { [evil]: { id: 'u7', password: 'old-secret' } }, recoveryUser: { id: 'u7', email: evil } });
+  await page.goto('/app.html#access_token=good-access&refresh_token=r&type=recovery');
+  await expect(page.locator('#recovery-email')).toHaveText(evil);
+  await expect(page.locator('#recovery-account img')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__x)).toBeUndefined();
+});
+
+test.describe('360px', () => {
+  test.use({ viewport: { width: 360, height: 760 } });
+  test('a very long e-mail wraps inside the card instead of widening the page', async ({ page }) => {
+    const long = 'a.very.long.customer.name.with.many.parts.and.tags+wedding2026@a-rather-long-domain-name.example.com';
+    await stubSupabase(page);
+    await seedAppStore(page, { user: null, accounts: { [long]: { id: 'u8', password: 'old-secret' } }, recoveryUser: { id: 'u8', email: long } });
+    await page.goto('/app.html#access_token=good-access&refresh_token=r&type=recovery');
+    await expect(page.locator('#recovery-email')).toHaveText(long);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+    const card = await page.locator('#recovery-card').boundingBox();
+    const mail = await page.locator('#recovery-email').boundingBox();
+    expect(mail.x).toBeGreaterThanOrEqual(card.x);
+    expect(mail.x + mail.width).toBeLessThanOrEqual(card.x + card.width);
+  });
+});

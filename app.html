@@ -271,6 +271,7 @@ setTimeout(() => {
     </div>
 
     <div class="card" id="recovery-card" style="display:none">
+      <div class="sub" id="recovery-account" style="margin-bottom:16px; line-height:1.8;">حساب: <span id="recovery-email" style="direction:ltr; display:inline-block; overflow-wrap:anywhere; unicode-bidi:isolate;"></span></div>
       <div id="recovery-err" class="err" style="display:none"></div>
       <form id="recovery-form" onsubmit="event.preventDefault(); submitNewPassword();" novalidate>
         <input type="password" id="new-pass" placeholder="كلمة المرور الجديدة" autocomplete="new-password" enterkeyhint="next">
@@ -494,9 +495,11 @@ async function resendConfirmation() {
 
 // The set-new-password screen: opened from the reset e-mail link (the session
 // is already open, see boot()). Same card as the sign-in form.
-function showRecovery() {
+function showRecovery(email) {
   recovering = true;
   resetAppState();
+  document.getElementById('recovery-email').textContent = email || '';
+  document.getElementById('recovery-account').style.display = email ? 'block' : 'none';
   document.getElementById('app-view').style.display = 'none';
   document.getElementById('auth-view').style.display = 'block';
   document.getElementById('recovery-err').style.display = 'none';
@@ -1167,7 +1170,7 @@ async function boot() {
   } else if (rec && rec.kind === 'recovery') {
     document.getElementById('auth-loading').style.display = 'none';
     tmark('recovery');
-    showRecovery();
+    showRecovery(rec.user && rec.user.email);
   } else if (rec && rec.kind === 'signup') {
     showToast('✅ تم تفعيل بريدك');
   }
