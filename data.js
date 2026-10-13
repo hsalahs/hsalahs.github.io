@@ -732,10 +732,20 @@
   // poll remembers the counter it started with and throws its answer away when
   // it moved, so a poll that read the server before the write can never put the
   // old numbers back on screen.
-  let writes = 0;
+  let writes = 0, writing = 0;
+  let idleWaiters = [];
+  const watchers = new Set();
   async function write(fn) {
-    writes++;
-    try { return await fn(); } finally { writes++; }
+    writes++; writing++;
+    try { return await fn(); } finally {
+      writes++; writing--;
+      if (!writing) { const w = idleWaiters; idleWaiters = []; w.forEach((r) => r()); }
+    }
+  }
+  function writesDone() { return writing ? new Promise((r) => idleWaiters.push(r)) : Promise.resolve(); }
+  // a guest this page just deleted leaves the live list at once (a later delta cannot show a deletion)
+  function forgetGuests(eventId, ids) {
+    watchers.forEach((w) => { if (w.eventId === eventId) w.forget(ids); });
   }
 
   const NAME_MAX = 100;
@@ -778,6 +788,7 @@
     async update(eventId, fields) {
       const payload = {};
       Object.keys(fields || {}).forEach((k) => { if (EVENT_FIELDS[k]) payload[EVENT_FIELDS[k]] = fields[k]; });
+      if (!Object.keys(payload).length) throw new DataError('bad-input', 'nothing to update');
       return write(async () => {
         const rows = await tableCall(client().from('events').update(payload).eq('id', eventId).select('id'));
         if (!Array.isArray(rows) || rows.length === 0) throw new DataError('permission', 'event not updated');
@@ -851,8 +862,10 @@
         let res = null;
         try {
           for (let tries = 0; tries < 3 && !stopped; tries++) {
+            await writesDone();
+            if (stopped) return;
             const r = await once();
-            if (r.w === writes) { res = r; break; }
+            if (r.w === writes && !writing) { res = r; break; }
           }
         } catch (e) {
           if (!stopped && o.onError) o.onError(e);
@@ -873,8 +886,10 @@
         if (res.changed && o.onGuests) o.onGuests({ rows: sortGuests(Array.from(local.values())), full: res.full });
         if (res.requests && o.onRequests) o.onRequests(res.requests);
       }, LIVE_POLL_MS, { hiddenIntervalMs: o.hiddenIntervalMs });
+      const handle = { eventId, forget(ids) { ids.forEach((id) => local.delete(id)); lastGhostAt = Date.now(); } };
+      watchers.add(handle);
       poller.start();
-      return { stop() { stopped = true; poller.stop(); }, refresh() { poller.refresh(); } };
+      return { stop() { stopped = true; watchers.delete(handle); poller.stop(); }, refresh() { poller.refresh(); } };
     },
   };
 
@@ -912,7 +927,11 @@
       return write(async () => (await rpc('set_guest', { p_event_id: eventId, p_guest_id: guestId, p_name: cutName(name).name, p_vip: null })) === true);
     },
     async remove(eventId, guestId) {
-      return write(async () => (await rpc('remove_guest', { p_event_id: eventId, p_guest_id: guestId })) === true);
+      return write(async () => {
+        const ok = (await rpc('remove_guest', { p_event_id: eventId, p_guest_id: guestId })) === true;
+        forgetGuests(eventId, [guestId]);
+        return ok;
+      });
     },
     // Returns how many were removed.
     async removeMany(eventId, ids) {
@@ -920,7 +939,9 @@
       return write(async () => {
         let n = 0;
         for (let i = 0; i < all.length; i += REMOVE_CHUNK) {
-          n += (await rpc('remove_guests', { p_event_id: eventId, p_ids: all.slice(i, i + REMOVE_CHUNK) })) || 0;
+          const chunk = all.slice(i, i + REMOVE_CHUNK);
+          n += (await rpc('remove_guests', { p_event_id: eventId, p_ids: chunk })) || 0;
+          forgetGuests(eventId, chunk);
         }
         return n;
       });

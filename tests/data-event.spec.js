@@ -434,3 +434,44 @@ test('makePoller: hiddenIntervalMs keeps a slower poll going while hidden; witho
   expect(after[0] - base[0]).toBeGreaterThanOrEqual(3);
   expect(after[0] - base[0]).toBeLessThanOrEqual(5);
 });
+
+test('watch: a poll never starts or finishes while one of our own writes is in flight (it waits, then reads the new state)', async ({ page }) => {
+  await open(page, { user: OWNER, guests: [G('WD-1', 'a'), G('WD-2', 'b')] }, { fake: true });
+  await watch(page);
+  await advance(page, 500);
+  await page.evaluate(() => { window.__fakeSupabase.holdRpc = { remove_guest: true }; window.__rm = Data.guests.remove('e1', 'WD-1'); });
+  await advance(page, 500);
+  const n0 = await calls(page, 'event_live');
+  await advance(page, 20000);
+  expect(await calls(page, 'event_live')).toBe(n0);
+  await page.evaluate(() => { window.__fakeSupabase.holdRpc = {}; window.__fakeSupabase.held.shift()('ok'); });
+  await advance(page, 6000);
+  expect(await calls(page, 'event_live')).toBeGreaterThan(n0);
+  const l = await log(page);
+  expect(l.live[l.live.length - 1].guestCount).toBe(1);
+  expect(l.guests[l.guests.length - 1].rows.map((r) => r.id)).toEqual(['WD-2']);
+});
+
+test('watch: guests this page deleted never come back on screen, also with two deletes 10 s apart', async ({ page }) => {
+  await open(page, { user: OWNER, event: { paid: true }, guests: [G('WD-1', 'a'), G('WD-2', 'b'), G('WD-3', 'c')] }, { fake: true });
+  await watch(page);
+  await advance(page, 500);
+  await page.evaluate(() => Data.guests.remove('e1', 'WD-2'));
+  await advance(page, 10000);
+  await page.evaluate(() => Data.guests.removeMany('e1', ['WD-3']));
+  await advance(page, 10000);
+  const l = await log(page);
+  expect(l.guests.length).toBeGreaterThanOrEqual(2);
+  l.guests.slice(1).forEach((g) => { expect(g.rows.map((r) => r.id)).not.toContain('WD-2'); });
+  expect(l.guests[l.guests.length - 1].rows.map((r) => r.id)).toEqual(['WD-1']);
+});
+
+test('Data.event.update with nothing to change is bad-input and sends no request', async ({ page }) => {
+  await open(page, { user: OWNER });
+  const out = await page.evaluate(async () => {
+    const a = await Data.event.update('e1', {}).then(() => 'ok', (e) => e.code);
+    const b = await Data.event.update('e1', { paid: true, bogus: 1 }).then(() => 'ok', (e) => e.code);
+    return { a, b, sent: window.__fakeSupabase.calls.filter((c) => c.name === 'from:events' && c.args.op === 'update').length };
+  });
+  expect(out).toEqual({ a: 'bad-input', b: 'bad-input', sent: 0 });
+});
