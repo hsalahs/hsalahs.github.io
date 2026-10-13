@@ -169,7 +169,7 @@ async function seedInviteStore(page, { store = {}, ...rest } = {}) {
 // limits: { uid: { event_limit, event_count } }; eventRequests: [{ id, uid, email, status, requested_at }];
 // users: [{ uid, email, created_at }]. admin: true makes `user` the admin.
 // confirmEmail / recoveryUser (a { id, email }) go to the fake auth: see supabase.stub.js.
-async function seedAppStore(page, { user = null, admin = false, events = [], confirmEmail = false, recoveryUser = null, networkDown = false, accounts = {}, ...rest } = {}) {
+async function seedAppStore(page, { user = null, admin = false, events = [], confirmEmail = false, recoveryUser = null, networkDown = false, hangAuth = false, accounts = {}, ...rest } = {}) {
   const evs = {};
   events.forEach((e, i) => {
     const { id, ...row } = e;
@@ -180,7 +180,7 @@ async function seedAppStore(page, { user = null, admin = false, events = [], con
   if (u && !acc[u.email]) acc[u.email] = { id: u.id, password: 'secret12', confirmed: true };
   return seedFakeSupabase(page, {
     events: evs, user: u, admins: admin && u ? [u.email] : [], accounts: acc,
-    authExtra: { confirmEmail, recoveryUser, networkDown }, ...rest,
+    authExtra: { confirmEmail, recoveryUser, networkDown, hang: hangAuth }, ...rest,
   });
 }
 

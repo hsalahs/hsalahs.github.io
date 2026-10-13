@@ -426,7 +426,7 @@
       async getUser() { await wait(); return A().user ? { data: { user: A().user }, error: null } : { data: { user: null }, error: authErr('session_not_found', 'Auth session missing!') }; },
       onAuthStateChange(fn) {
         A().listeners.push(fn);
-        Promise.resolve().then(() => fn('INITIAL_SESSION', A().user ? { user: A().user } : null));
+        if (!A().hang) Promise.resolve().then(() => fn('INITIAL_SESSION', A().user ? { user: A().user } : null));
         return { data: { subscription: { unsubscribe() { A().listeners = A().listeners.filter((f) => f !== fn); } } } };
       },
       async signInAnonymously() {

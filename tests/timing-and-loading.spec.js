@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubFirebase, seedFakeFirebase, stubSupabase, seedAppStore } = require('./helpers');
 
 const USER = { uid: 'u1', email: 'customer@example.com' };
 const EVENT = { name: 'حفل تجريبي', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض', theme: 'gold', createdAt: { seconds: 1 }, guestCount: 2 };
@@ -23,6 +23,12 @@ async function setup(page, store = STORE()) {
   await seedFakeFirebase(page, { user: USER, store });
 }
 
+// app.html runs on Supabase: a signed-in customer with one event.
+async function setupApp(page, extra = {}) {
+  await stubSupabase(page);
+  await seedAppStore(page, { user: { id: 'u1', email: 'customer@example.com' }, events: [{ id: 'e1', name: EVENT.name, owner_uid: 'u1', date: EVENT.date, venue: EVENT.venue, guest_count: 2 }], limits: { u1: { event_limit: 3, event_count: 1 } }, ...extra });
+}
+
 // utils.js with one of its functions made to throw, to force an exception
 // inside the page's sign-in callback.
 async function breakUtils(page, fn) {
@@ -33,7 +39,7 @@ async function breakUtils(page, fn) {
 
 test.describe('?timing=1 on app.html', () => {
   test('nothing is added without the param', async ({ page }) => {
-    await setup(page);
+    await setupApp(page);
     await page.goto('/app.html');
     await expect(page.locator('.event-card')).toHaveCount(1);
     await expect(page.locator('#timing-line')).toHaveCount(0);
@@ -42,26 +48,27 @@ test.describe('?timing=1 on app.html', () => {
   test('shows the marks line, keeps it after load and logs to the console', async ({ page }) => {
     const logs = [];
     page.on('console', (m) => logs.push(m.text()));
-    await setup(page);
+    await setupApp(page);
     await page.goto('/app.html?timing=1');
     await expect(page.locator('.event-card')).toHaveCount(1);
     const line = page.locator('#timing-line');
     await expect(line).toBeVisible();
     const text = await line.textContent();
     expect(text).toMatch(/script \d+/);
-    expect(text).toMatch(/appDbReady( \(already\))? \d+/);
+    expect(text).toMatch(/supabase \d+/);
     expect(text).toMatch(/auth user \d+/);
-    expect(text).toMatch(/events (cache|server) n=1 \d+/);
+    expect(text).toMatch(/events server n=1 \d+/);
     expect(text).toMatch(/utils\.js:\d+/);
     expect(text).toMatch(/icons\.js:\d+/);
-    expect(text).toMatch(/firebase-init\.js:[\d…]+/);
+    expect(text).toMatch(/data\.js:[\d…]+/);
     expect(text).toContain('sw:no');
+    expect(text).not.toMatch(/tab:|mode:/);
     expect(await line.evaluate((el) => getComputedStyle(el).userSelect)).toBe('text');
     expect(logs.some((l) => l.startsWith('timing:'))).toBe(true);
   });
 
   test('records the first error message', async ({ page }) => {
-    await setup(page);
+    await setupApp(page);
     await page.addInitScript(() => { window.addEventListener('DOMContentLoaded', () => setTimeout(() => { throw new Error('late-failure-xyz'); }, 50)); });
     await page.goto('/app.html?timing=1');
     await expect(page.locator('#timing-line')).toContainText('err: Uncaught Error: late-failure-xyz');
@@ -97,13 +104,12 @@ test.describe('?timing=1 on event.html', () => {
 
 test.describe('an exception inside the sign-in callback', () => {
   test('app.html replaces the loading text with a tap-to-refresh message', async ({ page }) => {
-    await setup(page);
-    await breakUtils(page, 'isAdmin');
+    await setupApp(page, { fail: { is_admin_me: { error: 'network' } } });
     await page.goto('/app.html?timing=1');
     const el = page.locator('#auth-loading');
     await expect(el).toBeVisible();
     await expect(el).toHaveText('تعذّر تشغيل الصفحة — اضغط هنا للتحديث');
-    await expect(page.locator('#timing-line')).toContainText('boom-from-test');
+    await expect(page.locator('#timing-line')).toContainText('Failed to fetch');
     const reloaded = page.waitForEvent('load');
     await el.click();
     await reloaded;
@@ -122,8 +128,7 @@ test.describe('an exception inside the sign-in callback', () => {
 test.describe('staged slow-connection message', () => {
   test('app.html: plain at first, «الاتصال بطيء» at 8 s without a link, tap-to-retry at 25 s', async ({ page }) => {
     await page.clock.install();
-    await setup(page);
-    await page.addInitScript(() => { window.__hangAuth = true; });
+    await setupApp(page, { hangAuth: true });
     await page.goto('/app.html');
     const el = page.locator('#auth-loading');
     await expect(el).toHaveText('جاري التحميل...');
@@ -139,8 +144,7 @@ test.describe('staged slow-connection message', () => {
 
   test('the stage marks show up in the timing line', async ({ page }) => {
     await page.clock.install();
-    await setup(page);
-    await page.addInitScript(() => { window.__hangAuth = true; });
+    await setupApp(page, { hangAuth: true });
     await page.goto('/app.html?timing=1');
     await page.clock.runFor(26000);
     const text = await page.locator('#timing-line').textContent();
@@ -151,8 +155,8 @@ test.describe('staged slow-connection message', () => {
   for (const [pageUrl, host] of [['/app.html', '#auth-loading'], ['/event.html?id=e1', '#loading-msg']]) {
     test(`${pageUrl} without ?timing=1: no line while loading, the line appears once stuck (home-screen app)`, async ({ page }) => {
       await page.clock.install();
-      await setup(page);
-      await page.addInitScript(() => { window.__hangAuth = true; });
+      if (pageUrl.startsWith('/app')) await setupApp(page, { hangAuth: true });
+      else { await setup(page); await page.addInitScript(() => { window.__hangAuth = true; }); }
       await page.goto(pageUrl);
       await expect(page.locator(host)).toHaveText('جاري التحميل...');
       await page.clock.runFor(9000);
@@ -179,14 +183,14 @@ test.describe('staged slow-connection message', () => {
   });
 });
 
-test('both pages preconnect to the sign-in hosts, and to no font host', async () => {
-  for (const f of ['app.html', 'event.html']) {
-    const html = fs.readFileSync(f, 'utf8');
-    expect(html).toContain('<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>');
-    expect(html).toContain('<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>');
-    expect((html.match(/rel="preconnect"/g) || []).length).toBe(3);
-    expect(html).not.toMatch(/preconnect[^>]*fonts\.(googleapis|gstatic)/);
-  }
+test('event.html preconnects to the sign-in hosts and no font host; app.html to the Supabase host only', async () => {
+  const html = fs.readFileSync('event.html', 'utf8');
+  expect(html).toContain('<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>');
+  expect(html).toContain('<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>');
+  expect((html.match(/rel="preconnect"/g) || []).length).toBe(3);
+  expect(html).not.toMatch(/preconnect[^>]*fonts\.(googleapis|gstatic)/);
+  const app = fs.readFileSync('app.html', 'utf8');
+  expect(app.match(/<link rel="preconnect"[^>]*>/g)).toEqual(['<link rel="preconnect" href="https://gunizkapwatixvbfliva.supabase.co" crossorigin>']);
 });
 
 test.describe('event.html loads qrcode.js only when a card is built', () => {
@@ -419,8 +423,8 @@ test.describe('Firestore tab manager', () => {
 
   test('default (browser tab, desktop) uses the multi-tab manager', async ({ page }) => {
     await setup(page);
-    await page.goto('/app.html?timing=1');
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await page.goto('/event.html?id=e1&timing=1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     const t = await tab(page);
     expect(t.mode).toBe('multi');
     expect(t.mgr.kind).toBe('multi-tab');
@@ -432,8 +436,8 @@ test.describe('Firestore tab manager', () => {
     test('navigator.standalone gives single-tab with forceOwnership', async ({ page }) => {
       await page.addInitScript(() => { Object.defineProperty(navigator, 'standalone', { value: true, configurable: true }); });
       await setup(page);
-      await page.goto('/app.html?timing=1');
-      await expect(page.locator('.event-card')).toHaveCount(1);
+      await page.goto('/event.html?id=e1&timing=1');
+      await expect(page.locator('.guest-item')).toHaveCount(2);
       const t = await tab(page);
       expect(t.mode).toBe('single');
       expect(t.mgr).toEqual({ kind: 'single-tab', settings: { forceOwnership: true } });
@@ -449,8 +453,8 @@ test.describe('Firestore tab manager', () => {
     });
     test('iPhone Safari tab (not installed) stays multi-tab', async ({ page }) => {
       await setup(page);
-      await page.goto('/app.html');
-      await expect(page.locator('.event-card')).toHaveCount(1);
+      await page.goto('/event.html?id=e1');
+      await expect(page.locator('.guest-item')).toHaveCount(2);
       expect((await tab(page)).mode).toBe('multi');
     });
   });
@@ -463,8 +467,8 @@ test.describe('Firestore tab manager', () => {
         window.matchMedia = (q) => /display-mode:\s*standalone/.test(q) ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} } : mm(q);
       });
       await setup(page);
-      await page.goto('/app.html');
-      await expect(page.locator('.event-card')).toHaveCount(1);
+      await page.goto('/event.html?id=e1');
+      await expect(page.locator('.guest-item')).toHaveCount(2);
       expect((await tab(page)).mode).toBe('multi');
     });
   });
@@ -475,8 +479,8 @@ test.describe('Firestore mode override and stuck-page probes', () => {
 
   test('default: unchanged settings, mode:default, no buttons, no line on a fast load', async ({ page }) => {
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     const t = await settings(page);
     expect(t.mode).toBe('default');
     expect(t.s.localCache.kind).toBe('persistent');
@@ -488,13 +492,13 @@ test.describe('Firestore mode override and stuck-page probes', () => {
   test('an unknown fsmode value behaves like default', async ({ page }) => {
     await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'bogus'); });
     await setup(page);
-    await page.goto('/app.html?timing=1');
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await page.goto('/event.html?id=e1&timing=1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     expect((await settings(page)).mode).toBe('default');
     await expect(page.locator('#timing-btns')).toHaveCount(0);
   });
 
-  for (const url of ['/app.html?timing=1', '/event.html?id=e1&timing=1']) {
+  for (const url of ['/event.html?id=e1&timing=1']) {
     test(`${url}: fsmode=memory uses memoryLocalCache, shows mode:memory and the two buttons`, async ({ page }) => {
       await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'memory'); });
       await setup(page);
@@ -509,7 +513,7 @@ test.describe('Firestore mode override and stuck-page probes', () => {
   test('fsmode=long keeps the persistent cache and forces long polling', async ({ page }) => {
     await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'long'); });
     await setup(page);
-    await page.goto('/app.html?timing=1');
+    await page.goto('/event.html?id=e1&timing=1');
     await expect(page.locator('#timing-line')).toContainText('mode:long');
     const t = await settings(page);
     expect(t.s.localCache.kind).toBe('persistent');
@@ -519,16 +523,16 @@ test.describe('Firestore mode override and stuck-page probes', () => {
   test('fsmode is removed as soon as it is read: memory applies to one load only', async ({ page }) => {
     await page.addInitScript(() => { if (!localStorage.getItem('seen')) { localStorage.setItem('seen', '1'); sessionStorage.setItem('fsmode', 'memory'); } });
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     expect((await settings(page)).mode).toBe('memory');
     expect(await page.evaluate(() => sessionStorage.getItem('fsmode'))).toBeNull();
     await page.reload();
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     expect((await settings(page)).mode).toBe('default');
   });
 
-  for (const [pageUrl, host] of [['/app.html', '#auth-loading'], ['/event.html?id=e1', '#loading-msg']]) {
+  for (const [pageUrl, host] of [['/event.html?id=e1', '#loading-msg']]) {
     test(`${pageUrl}: a stuck page shows probes and the two buttons; the first sets fsmode=memory and reloads`, async ({ page }) => {
       await page.clock.install();
       await setup(page);
@@ -555,11 +559,39 @@ test.describe('Firestore mode override and stuck-page probes', () => {
     });
   }
 
+  test('app.html: a stuck page shows the probe line but no Firestore mode buttons, and tapping the message retries', async ({ page }) => {
+    await page.clock.install();
+    await setupApp(page, { hangAuth: true });
+    await page.goto('/app.html');
+    await page.clock.runFor(9000);
+    await expect(page.locator('#auth-loading')).toHaveText('الاتصال بطيء، لحظات…');
+    await page.waitForTimeout(500);
+    await page.clock.runFor(18000);
+    const text = await page.locator('#timing-line').textContent();
+    expect(text).toMatch(/idb ok \d+ms/);
+    expect(text).toMatch(/net (ok|err) \d+ms/);
+    expect(text).not.toMatch(/mode:|tab:/);
+    await expect(page.locator('#timing-btns')).toHaveCount(0);
+    const reloaded = page.waitForEvent('load');
+    await page.locator('#auth-loading').click();
+    await reloaded;
+  });
+
+  test('app.html: stuck then recovered removes the line', async ({ page }) => {
+    await page.clock.install();
+    await setupApp(page, { hangAuth: true });
+    await page.goto('/app.html');
+    await page.clock.runFor(27000);
+    await expect(page.locator('#timing-line')).toHaveCount(1);
+    await page.evaluate(() => { document.querySelector('#auth-loading').style.display = 'none'; tmark('recovered'); });
+    await expect(page.locator('#timing-line')).toHaveCount(0);
+  });
+
   test('the second button sets fsmode=long', async ({ page }) => {
     await page.clock.install();
     await setup(page);
     await page.addInitScript(() => { window.__hangAuth = true; });
-    await page.goto('/app.html');
+    await page.goto('/event.html?id=e1');
     await page.clock.runFor(27000);
     const reloaded = page.waitForEvent('load');
     await page.locator('#timing-btns button').nth(1).click();
@@ -582,10 +614,10 @@ test.describe('Firestore mode override and stuck-page probes', () => {
     await page.clock.install();
     await setup(page);
     await page.addInitScript(() => { window.__hangAuth = true; });
-    await page.goto('/app.html');
+    await page.goto('/event.html?id=e1');
     await page.clock.runFor(27000);
     const reloaded = page.waitForEvent('load');
-    await page.locator('#auth-loading').click();
+    await page.locator('#loading-msg').click();
     await reloaded;
   });
 
@@ -593,7 +625,7 @@ test.describe('Firestore mode override and stuck-page probes', () => {
     await page.clock.install();
     await setup(page);
     await page.addInitScript(() => { window.__hangAuth = true; });
-    await page.goto('/app.html');
+    await page.goto('/event.html?id=e1');
     await page.clock.runFor(27000);
     const reloaded = page.waitForEvent('load');
     await page.locator('#timing-btns button').nth(0).click();
@@ -605,12 +637,12 @@ test.describe('Firestore mode override and stuck-page probes', () => {
   test('a localStorage fsmode (old key) is ignored', async ({ page }) => {
     await page.addInitScript(() => { localStorage.setItem('fsmode', 'memory'); });
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     expect((await settings(page)).mode).toBe('default');
   });
 
-  for (const [pageUrl, host] of [['/app.html', '#auth-loading'], ['/event.html?id=e1', '#loading-msg']]) {
+  for (const [pageUrl, host] of [['/event.html?id=e1', '#loading-msg']]) {
     test(`${pageUrl}: stuck then recovered removes the line and the buttons`, async ({ page }) => {
       await page.clock.install();
       await setup(page);
@@ -635,22 +667,23 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
   test('a same-origin link tap terminates Firestore, then navigates', async ({ page }) => {
     await standalone(page);
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
-    await page.locator('.event-card a', { hasText: 'فتح' }).click();
-    await page.waitForURL('**/event.html?id=e1');
-    expect(await calls(page)).toBeGreaterThanOrEqual(1);
-    expect(await page.evaluate(() => sessionStorage.getItem('fsleave'))).toBeNull();
+    await page.goto('/event.html?id=e1');
     await expect(page.locator('.guest-item')).toHaveCount(2);
+    await page.evaluate(() => { document.body.insertAdjacentHTML('beforeend', '<a id="t" href="guide.html" style="display:block;padding:20px">go</a>'); });
+    await page.locator('#t').click();
+    await page.waitForURL('**/guide.html');
+    expect(await calls(page)).toBeGreaterThanOrEqual(1);
   });
 
   test('the next page shows how long leaving took', async ({ page }) => {
     await standalone(page);
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
-    await page.locator('.event-card a', { hasText: 'فتح' }).click();
-    await page.waitForURL('**/event.html?id=e1');
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
+    await page.evaluate(() => { document.body.insertAdjacentHTML('beforeend', '<a id="t" href="event.html?id=e1&again=1" style="display:block;padding:20px">go</a>'); });
+    await page.locator('#t').click();
+    await page.waitForURL('**/event.html?id=e1&again=1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     await page.evaluate(() => { TM.param = true; TM.show = true; tmark('x'); });
     await expect(page.locator('#timing-line')).toContainText(/leave \d+ms/);
   });
@@ -659,11 +692,11 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
     await standalone(page);
     await page.addInitScript(() => { window.__terminateHang = true; });
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     const t0 = Date.now();
-    await page.evaluate(() => { window._leave('event.html?id=e1'); });
-    await page.waitForURL('**/event.html?id=e1', { waitUntil: 'commit' });
+    await page.evaluate(() => { window._leave('guide.html'); });
+    await page.waitForURL('**/guide.html', { waitUntil: 'commit' });
     const ms = Date.now() - t0;
     expect(ms).toBeGreaterThanOrEqual(350);
     expect(ms).toBeLessThan(1500);
@@ -682,8 +715,8 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
   test('an unrelated window.goTo with no _leave still navigates (non-Firestore pages)', async ({ page }) => {
     await standalone(page);
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     await page.evaluate(() => { delete window._leave; goTo('guide.html'); });
     await page.waitForURL('**/guide.html');
   });
@@ -693,8 +726,8 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
   test('a slow navigation is not cancelled by a reload', async ({ page }) => {
     await standalone(page);
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     const seen = [];
     page.on('load', () => seen.push('load'));
     page.on('framenavigated', (f) => seen.push(f.url()));
@@ -708,8 +741,8 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
   test('coming back (visible again) to a page that was left reloads it; a normal page does not', async ({ page }) => {
     await standalone(page);
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     const fire = () => {
       window.__mark = 1;
       Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
@@ -728,8 +761,8 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
   test('a later tap works again after 10 s if the first navigation never happened', async ({ page }) => {
     await standalone(page);
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     let requests = 0;
     await page.route('**/guide.html', async (r) => { requests++; await new Promise((x) => setTimeout(x, 30000)); await r.abort().catch(() => {}); });
     await page.evaluate(() => {
@@ -784,14 +817,14 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
     ['mailto', 'href="mailto:a@b.co"', ''],
     ['tel', 'href="tel:+966500000000"', ''],
     ['pure #', 'href="#top"', ''],
-    ['the same document', 'href="app.html"', ''],
-    ['same document with hash', 'href="app.html#x"', ''],
+    ['the same document', 'href="event.html?id=e1"', ''],
+    ['same document with hash', 'href="event.html?id=e1#x"', ''],
   ]) {
     test(`not intercepted: ${name}`, async ({ page }) => {
       await standalone(page);
       await setup(page);
-      await page.goto('/app.html');
-      await expect(page.locator('.event-card')).toHaveCount(1);
+      await page.goto('/event.html?id=e1');
+      await expect(page.locator('.guest-item')).toHaveCount(2);
       const prevented = await page.evaluate((a) => {
         const el = document.createElement('div');
         el.innerHTML = '<a id="t" ' + a + ' style="display:block;padding:20px">go</a>';
@@ -809,10 +842,11 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
   test('modifier-key click is not intercepted', async ({ page }) => {
     await standalone(page);
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
     const prevented = await page.evaluate(() => {
-      const a = document.querySelector('.event-card a');
+      document.body.insertAdjacentHTML('beforeend', '<a id="t" href="guide.html">go</a>');
+      const a = document.getElementById('t');
       let p = null;
       document.addEventListener('click', (e) => { p = e.defaultPrevented; e.preventDefault(); }, { once: true });
       a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ctrlKey: true }));
@@ -824,10 +858,11 @@ test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
 
   test('a plain link tap in Safari (not installed) is not intercepted', async ({ page }) => {
     await setup(page);
-    await page.goto('/app.html');
-    await expect(page.locator('.event-card')).toHaveCount(1);
-    await page.locator('.event-card a', { hasText: 'فتح' }).click();
-    await page.waitForURL('**/event.html?id=e1');
+    await page.goto('/event.html?id=e1');
+    await expect(page.locator('.guest-item')).toHaveCount(2);
+    await page.evaluate(() => { document.body.insertAdjacentHTML('beforeend', '<a id="t" href="guide.html" style="display:block;padding:20px">go</a>'); });
+    await page.locator('#t').click();
+    await page.waitForURL('**/guide.html');
     expect(await calls(page)).toBe(0);
   });
 
@@ -839,7 +874,7 @@ test.describe('Stalled cache watchdog (iOS home-screen app)', () => {
   const hangUnlessMemory = (page) => page.addInitScript(() => { window.__cacheProbe = sessionStorage.getItem('fsmode') === 'memory' ? 'miss' : 'hang'; });
   const flags = (page) => page.evaluate(() => [sessionStorage.getItem('fsmode'), sessionStorage.getItem('fsauto')]);
 
-  for (const url of ['/app.html', '/event.html?id=e1']) {
+  for (const url of ['/event.html?id=e1']) {
     test(`${url}: a healthy probe (even a miss) never reloads and shows probe ok`, async ({ page }) => {
       await standalone(page);
       await page.addInitScript(() => { window.__cacheProbe = 'miss'; window.__loads = 1; });
@@ -877,7 +912,7 @@ test.describe('Stalled cache watchdog (iOS home-screen app)', () => {
     await hangUnlessMemory(page);
     await page.addInitScript(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); });
     await setup(page);
-    await page.goto('/app.html');
+    await page.goto('/event.html?id=e1');
     await page.waitForTimeout(6800);
     expect(await flags(page)).toEqual([null, null]);
     const reloaded = page.waitForEvent('load');
@@ -895,7 +930,7 @@ test.describe('Stalled cache watchdog (iOS home-screen app)', () => {
     await setup(page);
     let loads = 0;
     page.on('load', () => { loads++; });
-    await page.goto('/app.html');
+    await page.goto('/event.html?id=e1');
     await page.waitForTimeout(6800);
     expect(loads).toBe(1);
     expect(await page.evaluate(() => sessionStorage.getItem('fsmode'))).toBeNull();
@@ -930,7 +965,7 @@ test.describe('Stalled cache watchdog (iOS home-screen app)', () => {
     await setup(page);
     let loads = 0;
     page.on('load', () => { loads++; });
-    await page.goto('/app.html');
+    await page.goto('/event.html?id=e1');
     await page.waitForTimeout(6800);
     expect(loads).toBe(1);
     expect(await flags(page)).toEqual([null, null]);
