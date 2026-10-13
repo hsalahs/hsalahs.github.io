@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubFirebase, seedFakeFirebase, stubSupabase, seedAppStore } = require('./helpers');
 
 const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 
@@ -62,11 +62,8 @@ test('the landing page links to the guide', async ({ page }) => {
 });
 
 test('the events list links to the guide', async ({ page }) => {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, {
-    user: { uid: 'u1', email: 'customer@example.com' },
-    store: { events: {} },
-  });
+  await stubSupabase(page);
+  await seedAppStore(page, { user: { id: 'u1', email: 'customer@example.com' }, events: [] });
   await page.goto('/app.html');
   await expect(page.locator('#app-view')).toBeVisible();
   await expect(page.locator('#app-view a[href="guide.html"]')).toBeVisible();

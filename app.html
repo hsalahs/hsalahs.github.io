@@ -1014,7 +1014,7 @@ function setAccountsBadge(n) {
 }
 
 // What each account has done, from the events this page already reads (no
-// extra Firestore reads): how many events, and whether any is activated.
+// extra reads): how many events, and whether any is activated.
 let accountsFilter = 'all';
 function accountStatus(uid) {
   const evs = allEvents.filter(ev => ev.ownerUid === uid);
