@@ -1929,3 +1929,49 @@ test('code screen: the error line wraps evenly (text-wrap: balance)', async ({ p
   const tw = await page.evaluate(() => getComputedStyle(document.getElementById('pin-err')).textWrap);
   expect(tw).toBe('balance');
 });
+
+// ---- both barcode formats: old Firebase-era 'WD-' + 13 base36, new 'WD-' + 12 hex ----
+const OLD_ID = 'WD-K3J9ZQ0X8M2PA';
+const NEW_ID = 'WD-9F3A0C7D1E5B';
+const FORMATS = [{ id: OLD_ID, name: 'ضيف قديم' }, { id: NEW_ID, name: 'ضيف جديد' }];
+
+for (const [label, id, name] of [['old (13 base36)', OLD_ID, 'ضيف قديم'], ['new (12 hex)', NEW_ID, 'ضيف جديد']]) {
+  test(`${label} barcode: typed by hand, in lower case, checks the guest in; a second try is a duplicate`, async ({ page }) => {
+    await openUnlocked(page, FORMATS);
+    await page.locator('#manual-code').fill(id.toLowerCase());
+    await page.getByRole('button', { name: 'تحقق ✓' }).click();
+    await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+    await expect(page.locator('#result-name')).toHaveText(name);
+    expect((await calls(page, 'check_in')).map((c) => c.args.p_guest_id)).toEqual([id]);
+    await page.waitForTimeout(700);
+    await page.locator('#result-overlay').click();
+    await page.waitForTimeout(700);
+    await page.locator('#manual-code').fill(id);
+    await page.getByRole('button', { name: 'تحقق ✓' }).click();
+    await expect(page.locator('#result-overlay.rs-duplicate')).toBeVisible();
+  });
+
+  test(`${label} barcode: the text the camera decodes (also in lower case, or inside a longer text) checks in`, async ({ page }) => {
+    await openUnlocked(page, FORMATS);
+    await page.evaluate((v) => handleScan(v), 'invite:' + id.toLowerCase() + '\n');
+    await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+    await expect(page.locator('#result-name')).toHaveText(name);
+    expect(await serverScanned(page)).toBe(1);
+  });
+}
+
+test('both barcode formats show their first 4 characters after WD- as the tag in the names list', async ({ page }) => {
+  await openUnlocked(page, FORMATS);
+  await page.getByRole('button', { name: /عرض الأسماء/ }).click();
+  await expect(page.locator('#offline-list-results .ol-row')).toHaveCount(2);
+  await expect(page.locator(`#offline-list-results .ol-row[data-id="${OLD_ID}"] .ol-tag`)).toHaveText('K3J9');
+  await expect(page.locator(`#offline-list-results .ol-row[data-id="${NEW_ID}"] .ol-tag`)).toHaveText('9F3A');
+});
+
+test('a code that is not a barcode at all is still refused on manual entry', async ({ page }) => {
+  await openUnlocked(page, FORMATS);
+  await page.locator('#manual-code').fill('K3J9ZQ0X8M2PA');
+  await page.getByRole('button', { name: 'تحقق ✓' }).click();
+  await expect(page.locator('#camera-status')).toContainText('صيغة الكود غير صحيحة');
+  expect((await calls(page, 'check_in')).length).toBe(0);
+});
