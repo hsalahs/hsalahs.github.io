@@ -387,7 +387,7 @@ async function poller(page) {
   });
 }
 const times = (page) => page.evaluate(() => window.__t);
-const advance = async (page, ms) => { for (let i = 0; i < ms / 500; i++) { await page.clock.runFor(500); await page.evaluate(() => 0); } };
+const advance = async (page, ms) => { for (let i = 0; i < ms / 500; i++) { await page.clock.runFor(500); await page.evaluate(async () => { for (let k = 0; k < 20; k++) await Promise.resolve(); }); } };
 
 test('poller: first run at once, then every interval with up to 10% jitter either way', async ({ page }) => {
   await poller(page);
@@ -422,7 +422,7 @@ test('poller: failures double the wait up to 60 s, and the first success returns
   expect(near(gaps[2], 60000)).toBe(true);
   expect(near(gaps[3], 60000)).toBe(true);
   await page.evaluate(() => { window.__mode = 'ok'; });
-  await advance(page, 70000);
+  await advance(page, 140000);
   const t2 = await times(page);
   const g2 = t2.slice(1).map((v, i) => v - t2[i]);
   expect(near(g2[g2.length - 1], 10000)).toBe(true);
