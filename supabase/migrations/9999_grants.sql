@@ -31,3 +31,8 @@ grant execute on function public.resolve_slug(text), public.event_public(text) t
 -- guest writes with a fixed lock order (0010)
 grant execute on function public.set_guest(text, text, text, boolean), public.set_guest_scanned(text, text, boolean),
   public.remove_guest(text, text) to authenticated;
+
+-- app.html client API (0014): every function checks its caller inside
+grant execute on function public.list_events(timestamptz, text, integer), public.my_account(), public.request_extra_event(),
+  public.admin_pending_requests(), public.admin_reject_event_request(uuid), public.admin_activate_event(text, integer),
+  public.admin_list_users(timestamptz, uuid, integer), public.admin_user_count(), public.admin_remove_user_record(uuid) to authenticated;

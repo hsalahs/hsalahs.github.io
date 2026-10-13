@@ -28,6 +28,8 @@ Nothing here touches the live Firebase site.
 | `create_event(...)`, `delete_event(event)`, `bump_event_limit()` | signed-in customer (not anonymous) | `LIMIT_REACHED`, `CEILING_REACHED`, `NO_LIMIT_ROW`, `NOT_ALLOWED` |
 | `claim_slug(event, slug)`, `auto_claim_slug(event, base)` | owner (claim: admin too) | `SLUG_TAKEN`, `BAD_SLUG`, `NOT_ALLOWED` |
 | `admin_set_event_limit`, `admin_approve_event_request`, `admin_delete_user` | admin | `NOT_PENDING`, `REQUEST_NOT_FOUND`, `USER_NOT_FOUND`, `CANNOT_DELETE_ADMIN`, `BAD_INPUT` |
+| `list_events(after_created, after_id, limit)`, `my_account()`, `request_extra_event()` | signed-in customer (not anonymous); admin sees every event | keyset rows (created_at desc, id desc, max 1000); `(event_limit, event_count, pending_request)`; `(id, created)` idempotent while a request is pending; errors `NOT_ALLOWED`, `BAD_INPUT` |
+| `admin_pending_requests()`, `admin_reject_event_request(id)`, `admin_activate_event(event, limit 1-2000)`, `admin_list_users(after_created, after_uid, limit)`, `admin_user_count()`, `admin_remove_user_record(uid)` | admin | `NOT_PENDING`, `REQUEST_NOT_FOUND`, `EVENT_NOT_FOUND`, `BAD_INPUT`; remove = list row only (true/false) |
 
 `GUEST_LIMIT_REACHED` and `REQUESTS_FULL`/`LIMIT_REACHED` are all `P0001`: the client matches on the exception message.
 Timestamps come back as `timestamptz` with an offset: `data.js` must normalise with `new Date(x).toISOString()` and the door's delta-sync cursor must subtract a safety margin (~1 minute).
