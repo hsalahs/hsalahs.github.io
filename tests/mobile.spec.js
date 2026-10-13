@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase, stubSupabase, seedInviteStore, seedScan } = require('./helpers');
+const { stubFirebase, seedFakeFirebase, stubSupabase, seedInviteStore, seedScan, seedAppStore } = require('./helpers');
 
 // Narrow phones (320 = the smallest still in use, 375 = the most common): no
 // page may scroll sideways, even with long names, emails and links — the
@@ -42,7 +42,17 @@ for (const width of [320, 375]) {
       await stubFirebase(page);
       await seedFakeFirebase(page, { user, store });
       await stubSupabase(page);
-      await seedInviteStore(page, { store });
+      if (url.startsWith('/app.html')) {
+        const e = store.events.e1;
+        await seedAppStore(page, {
+          user: { id: user.uid, email: user.email }, admin: user === ADMIN,
+          events: [{ id: 'e1', name: e.name, owner_uid: 'u1', owner_email: LONG_EMAIL, date: e.date, venue: e.venue, theme: e.theme, slug: e.slug, guest_count: 3, scanned_count: 1, paid: true, guest_limit: 100 }],
+          users: [{ uid: 'u1', email: LONG_EMAIL, created_at: '2026-09-21T10:00:00.000000+00:00' }],
+          limits: { u1: { event_limit: 1, event_count: 1 } },
+        });
+      } else {
+        await seedInviteStore(page, { store });
+      }
       await page.goto(url);
       await ready(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);

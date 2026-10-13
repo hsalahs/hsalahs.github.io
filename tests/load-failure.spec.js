@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase, stubSupabase, seedScan } = require('./helpers');
+const { stubFirebase, seedFakeFirebase, stubSupabase, seedScan, seedAppStore } = require('./helpers');
 
 // A weak phone signal can drop one of the page's own script files. The page
 // used to open half-working with no message (a dashboard with no invite link,
@@ -19,6 +19,7 @@ for (const [url, dropped] of PAGES) {
       store: { events: { e1: { name: 'حفل', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } } },
     });
     if (url.startsWith('scan.html')) { await stubSupabase(page); await seedScan(page); }
+    if (url.startsWith('app.html')) { await stubSupabase(page); await seedAppStore(page, { user: { id: 'u1', email: 'customer@example.com' }, events: [] }); }
     let drop = true;
     await page.route('**/' + dropped, (route) => (drop ? route.abort() : route.continue()));
     await page.goto('/' + url);
@@ -32,8 +33,8 @@ for (const [url, dropped] of PAGES) {
 }
 
 test('a page whose files all load shows no reload bar', async ({ page }) => {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: {} } });
+  await stubSupabase(page);
+  await seedAppStore(page, { user: { id: 'u1', email: 'customer@example.com' }, events: [] });
   await page.goto('/app.html');
   await expect(page.locator('#app-view')).toBeVisible();
   await expect(page.locator('#load-fail')).toHaveCount(0);
