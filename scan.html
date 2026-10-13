@@ -108,7 +108,7 @@
   .manual-divider::before, .manual-divider::after { content:''; flex:1; height:1px; background:rgba(var(--accent-rgb),0.2); }
   .manual-row { display:flex; gap:8px; align-items:stretch; }
   .manual-row input { flex:1; }
-  .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; display:none; }
+  .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; display:none; text-wrap:balance; }
   .camera-status { font-size:13px; color:#B8B4AC; margin-bottom:14px; text-align:center; }
   #camera-wrapper { position:relative; width:100%; max-width:320px; margin:0 auto; border-radius:16px; overflow:hidden; border:2px solid var(--gold); background:#000; }
   #camera-wrapper::before { content:''; display:block; padding-top:100%; }
@@ -131,6 +131,7 @@
   .vip-flag { display:inline-block; margin:0 auto 12px; padding:5px 18px; border-radius:99px; font-weight:700; font-size:18px; letter-spacing:1px; color:#1a1400; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); }
   #result-name { max-width:100%; font-size:var(--res-name); font-weight:700; line-height:1.3; margin-bottom:12px; overflow-wrap:anywhere; }
   #result-status { font-size:var(--res-status); font-weight:500; line-height:1.5; overflow-wrap:anywhere; }
+  #result-since { font-size:16px; font-weight:400; line-height:1.5; margin-top:6px; color:rgba(255,255,255,0.9); }
   #result-hint { font-size:var(--res-hint); margin-top:28px; color:rgba(255,255,255,0.9); }
   @media (prefers-reduced-motion:no-preference) {
     #result-overlay.rs-show { animation:resultPop 0.18s ease-out; }
@@ -274,6 +275,7 @@
   <div class="vip-flag" id="result-vip" style="display:none;">★ VIP</div>
   <div id="result-name"></div>
   <div id="result-status"></div>
+  <div id="result-since" style="display:none"></div>
   <div id="result-hint">المس الشاشة لإغلاقها</div>
 </div>
 
@@ -373,7 +375,19 @@ let resultTimer = null, lastClearTimer = null, resultShownAt = 0, resultUp = fal
 
 let scanEpoch = 0;
 
-function showResult(kind, name, vip, message) {
+function sinceText(iso) {
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return '';
+  const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (sec < 3) return 'دخل قبل لحظات';
+  if (sec < 60) return 'دخل قبل ' + (sec === 1 ? 'ثانية' : sec === 2 ? 'ثانيتين' : sec + (sec <= 10 ? ' ثوانٍ' : ' ثانية'));
+  const min = Math.floor(sec / 60);
+  if (min < 60) return 'دخل قبل ' + (min === 1 ? 'دقيقة' : min === 2 ? 'دقيقتين' : min + (min <= 10 ? ' دقائق' : ' دقيقة'));
+  const d = new Date(t), h = d.getHours();
+  return 'دخل الساعة ' + (h % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + (h < 12 ? 'ص' : 'م');
+}
+
+function showResult(kind, name, vip, message, since) {
   const def = RESULT_UI[kind];
   const ov = document.getElementById('result-overlay');
   if (document.getElementById('scanner-view').style.display === 'none') return;
@@ -384,6 +398,9 @@ function showResult(kind, name, vip, message) {
   document.getElementById('result-vip').style.display = vip ? 'inline-block' : 'none';
   document.getElementById('result-name').textContent = name || '';
   document.getElementById('result-status').textContent = message || def.status;
+  const sn = document.getElementById('result-since');
+  sn.textContent = since ? sinceText(since) : '';
+  sn.style.display = sn.textContent ? 'block' : 'none';
   ov.style.display = 'flex';
   void ov.offsetWidth;
   ov.classList.add('rs-show');
@@ -1395,7 +1412,7 @@ async function handleScan(raw) {
       showResult('allowed', res.guestName, res.vip);
       status.textContent = RESULT_UI.allowed.camera;
     } else if (outcome === 'duplicate') {
-      showResult('duplicate', res.guestName, res.vip);
+      showResult('duplicate', res.guestName, res.vip, undefined, res.scannedAt);
       status.textContent = RESULT_UI.duplicate.camera;
     } else {
       showResult('denied', 'غير مسجّل', false);

@@ -1877,3 +1877,55 @@ test('the fake server caps a door_guests page at 1000 even when asked for more',
   const n = await page.evaluate(() => window.supabase.createClient('x', 'y').rpc('door_guests', { p_event_id: 'e1', p_limit: 5000 }).then((r) => r.data.length));
   expect(n).toBe(1000);
 });
+
+// ---- duplicate overlay: when the guest entered ----
+
+test('duplicate overlay: relative times and plurals', async ({ page }) => {
+  await openUnlocked(page, []);
+  const out = await page.evaluate(() => {
+    const ago = (s) => sinceText(new Date(Date.now() - s * 1000).toISOString());
+    return [0, 2, 10, 11, 59, 60, 120, 180, 600, 660, 3000].map(ago);
+  });
+  expect(out).toEqual([
+    'دخل قبل لحظات', 'دخل قبل لحظات', 'دخل قبل 10 ثوانٍ', 'دخل قبل 11 ثانية', 'دخل قبل 59 ثانية',
+    'دخل قبل دقيقة', 'دخل قبل دقيقتين', 'دخل قبل 3 دقائق', 'دخل قبل 10 دقائق', 'دخل قبل 11 دقيقة', 'دخل قبل 50 دقيقة',
+  ]);
+});
+
+test('duplicate overlay: an hour or more shows a 12-hour clock with ص/م and Western digits', async ({ page }) => {
+  await openUnlocked(page, []);
+  const out = await page.evaluate(() => {
+    const at = (h, m) => { const d = new Date(); d.setDate(d.getDate() - 1); d.setHours(h, m, 0, 0); return sinceText(d.toISOString()); };
+    return [at(0, 5), at(12, 30), at(17, 32), at(9, 7)];
+  });
+  expect(out).toEqual(['دخل الساعة 12:05 ص', 'دخل الساعة 12:30 م', 'دخل الساعة 5:32 م', 'دخل الساعة 9:07 ص']);
+  for (const s of out) expect(s).not.toMatch(/[٠-٩]/);
+});
+
+test('duplicate overlay: shows the line for a duplicate, hidden when scannedAt is missing or for allowed', async ({ page }) => {
+  await openUnlocked(page, []);
+  const since = page.locator('#result-since');
+  await page.evaluate(() => showResult('duplicate', 'x', false, undefined, new Date(Date.now() - 5000).toISOString()));
+  await expect(since).toBeVisible();
+  await expect(since).toHaveText('دخل قبل 5 ثوانٍ');
+  await page.evaluate(() => showResult('duplicate', 'x', false));
+  await expect(since).toBeHidden();
+  await page.evaluate(() => showResult('allowed', 'x', false));
+  await expect(since).toBeHidden();
+});
+
+test('duplicate overlay: a real repeat scan shows when the guest entered', async ({ page }) => {
+  await openUnlocked(page, [{ id: 'WD-G1', name: 'سارة', scanned: false }]);
+  await page.evaluate(() => handleScan('WD-G1'));
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  await page.evaluate(() => hideResult(true));
+  await page.evaluate(() => { lastScanned = null; return handleScan('WD-G1'); });
+  await expect(page.locator('#result-overlay.rs-duplicate')).toBeVisible();
+  await expect(page.locator('#result-since')).toHaveText('دخل قبل لحظات');
+});
+
+test('code screen: the error line wraps evenly (text-wrap: balance)', async ({ page }) => {
+  await open(page, { user: DEVICE, session: false, guests: [] });
+  const tw = await page.evaluate(() => getComputedStyle(document.getElementById('pin-err')).textWrap);
+  expect(tw).toBe('balance');
+});
