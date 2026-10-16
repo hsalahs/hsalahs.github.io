@@ -1471,7 +1471,7 @@ test('a failed delete keeps the owner on the page with an error', async ({ page 
   await page.locator('#del-ev-input').fill('حذف');
   await page.locator('#delete-event-modal .del-ev-confirm').click();
   await expect.poll(() => alerts.length).toBe(1);
-  expect(alerts[0]).toContain('صار خطأ أثناء الحذف');
+  expect(alerts[0]).toBe('تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية');
   await expect(page.locator('#dashboard')).toBeVisible();
   expect((await serverCounts(page)).event).toBe(true);
 });
