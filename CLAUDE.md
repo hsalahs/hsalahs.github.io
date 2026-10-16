@@ -71,7 +71,7 @@ These are standing instructions the user gave in chat for how to respond, not pr
 
 ## Tests
 
-- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 21 minutes, 822 tests on the migration branch; 690 on main). Run a single file while developing, the full suite once before pushing.
+- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 21 minutes, 836 tests). Run a single file while developing, the full suite once before pushing.
 - SQL tests (staging DB): `NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node --no-warnings supabase/run-staging.mjs all`; concurrency: `supabase/concurrency-test.mjs 8` (alone). Old Firestore rules tests (`npm run test:rules`) only guard the rollback files.
 - Playwright uses an in-memory Supabase stub (`tests/mocks/supabase.stub.js`, `tests/helpers.js`: `stubSupabase`, `seedFakeSupabase`). The store resets on navigation. JSZip is served from `node_modules` via `page.route`. See `tests/README.md`.
 - Tool quirks: heredocs expand `\uXXXX` (use the Write tool for escapes); avoid `pkill -f`; foreground `sleep` is blocked (use until-loops).

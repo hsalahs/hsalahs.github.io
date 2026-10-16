@@ -6,7 +6,7 @@ _Moved out of CLAUDE.md (nothing was removed). Read this when: at the start of a
 
 **State:** the site (index, app, event, invite, scan) now talks ONLY to Supabase (project `gunizkapwatixvbfliva`, Free plan; it is both staging and live). No page loads Firebase. Firebase files (`firebase-init*.js`, `firebase.json`, `firestore.rules`, `rules-tests/`) are kept on purpose as the rollback path; delete them only after the founder accepts the cutover. No customers existed at cutover, so no data was migrated.
 
-**Live verification result:** see the line "LIVE CHECK" at the end of this section (filled after the merge).
+**Live verification result:** see the line "LIVE CHECK" below.
 
 **Three phone test steps for the founder:**
 1. Open https://da3wt.com in a private tab, press sign up, create an account with a real email, confirm it from the email, sign in.
@@ -16,6 +16,8 @@ _Moved out of CLAUDE.md (nothing was removed). Read this when: at the start of a
 **Rollback to Firebase (Firebase was not touched):** branch `backup-before-supabase` = main exactly as it was before the merge. Either (a) open a PR that reverts the squash-merge commit on `main` (revert the one commit; Firebase pages return), or (b) point `main` back to the `backup-before-supabase` commit through a PR. Then wait about 10 minutes (Pages cache) and check https://da3wt.com/. Data created in Supabase after the cutover is not copied back to Firebase.
 
 **WARNING — the Free Supabase project pauses after about 7 days without activity.** While paused every page fails to reach the database. Fix: Supabase dashboard -> project `da3wt-staging` -> «Restore project» (data is kept; takes a few minutes). Before the first real event: use the site that week, or decide with the founder between a harmless weekly keep-alive job or upgrading (founder's decision only).
+
+**LIVE CHECK (Oct 16 2026, after the merge, PR #159, squash f4fd10d):** da3wt.com serves the new pages (app/event/invite/scan reference `supabase-config.js`, none references Firebase; sw cache `dawaat-scan-v20`; data.js, supabase-config.js, vendor/supabase.min.js answer 200). A headless phone-size load of index, app (login screen), invite (bad-link screen), scan and guide: no script errors, zero requests to Firebase/Google hosts. Anon grants for `event_public`, `get_request`, `resolve_slug`, `submit_request` confirmed in the database. NOT tested from the sandbox (the proxy replaces the apikey): the real anonymous path, sign-up with the confirmation email, and a real scan: that is what the three phone steps are for. CI on the merged head: both checks green (836 page tests); reviewer «جاهز»; `backup-before-supabase` = previous main (286405a).
 
 **Still to do before the FIRST CUSTOMER:**
 1. D4: door lockout alert on the dashboard + «إعادة فتح الباب» + «رمز جديد» confirmation + "names shortened" notice — built on the REAL pages, real screenshot next to main, founder approval first.
