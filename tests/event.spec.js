@@ -1658,3 +1658,113 @@ test('an import whose reply is lost half way: the error is shown and the list is
   expect((await server(page)).guests).toHaveLength(50);
   expect((await calls(page, 'add_guests'))).toHaveLength(1);
 });
+
+// ---- review round: imports after a lost reply, notifications, event gone ----
+
+const namesOnServer = async (page) => (await server(page)).guests.map((g) => g.name);
+const hideTab = (page) => page.evaluate(() => {
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+  document.dispatchEvent(new Event('visibilitychange'));
+});
+
+test('an import whose reply was lost, uploaded again at once, creates no duplicates', async ({ page }) => {
+  await go(page, { event: { paid: true } });
+  await expect(page.locator('#dashboard')).toBeVisible();
+  await page.evaluate(() => { window.__fakeSupabase.dropReply = { add_guests: 1 }; });
+  const alerts = [];
+  page.on('dialog', d => { alerts.push(d.message()); d.accept(); });
+  const file = { name: 'guests.csv', mimeType: 'text/csv', buffer: Buffer.from(Array.from({ length: 100 }, (_, i) => 'اسم ' + (i + 1)).join('\n')) };
+  await page.locator('#csv-import').setInputFiles(file);
+  await expect.poll(() => alerts.length).toBe(1);
+  expect(alerts[0]).toContain('صار خطأ');
+  // the list already shows what landed (the refresh was awaited before the alert)
+  await expect(page.locator('.guest-item')).toHaveCount(50);
+  await page.locator('#csv-import').setInputFiles(file);
+  await expect.poll(() => alerts.length).toBe(2);
+  await expect(page.locator('.guest-item')).toHaveCount(100);
+  const names = await namesOnServer(page);
+  expect(names).toHaveLength(100);
+  expect(new Set(names).size).toBe(100);
+  expect(alerts[1]).toContain('تجاهلنا 50');
+});
+
+test('a failed import batch shows the error, keeps the earlier batches and reads the list again from the server', async ({ page }) => {
+  await go(page, { event: { paid: true }, fail: { add_guests: { error: 'network', skip: 1 } } });
+  await expect(page.locator('#dashboard')).toBeVisible();
+  const alerts = [];
+  page.on('dialog', d => { alerts.push(d.message()); d.accept(); });
+  await page.locator('#csv-import').setInputFiles({ name: 'g.csv', mimeType: 'text/csv', buffer: Buffer.from(Array.from({ length: 80 }, (_, i) => 'ض' + (i + 1)).join('\n')) });
+  await expect.poll(() => alerts.length).toBe(1);
+  expect(alerts[0]).toContain('صار خطأ');
+  await expect(page.locator('.guest-item')).toHaveCount(50);
+  expect((await calls(page, 'owner_guests')).length).toBeGreaterThanOrEqual(2);
+});
+
+test('only one import runs at a time', async ({ page }) => {
+  await go(page, { event: { paid: true } });
+  await expect(page.locator('#dashboard')).toBeVisible();
+  page.on('dialog', d => d.accept());
+  await page.evaluate(() => { window.__fakeSupabase.rpcDelay = { add_guests: 300 }; });
+  await page.evaluate(() => { importGuestNames(['أ', 'ب']); importGuestNames(['أ', 'ب']); });
+  await expect(page.locator('.guest-item')).toHaveCount(2);
+  expect(await calls(page, 'add_guests')).toHaveLength(1);
+});
+
+test('turning notifications on later starts the background check without restarting the watch', async ({ page }) => {
+  await stubNotificationApi(page, { initialPermission: 'default' });
+  await page.clock.install();
+  await go(page, { guests: [G('WD-1', 'أحمد')], requests: [{ id: 'r1', name: 'طلب' }] });
+  await advance(page, 1000);
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+  await hideTab(page);
+  let n = (await calls(page, 'event_live')).length;
+  await advance(page, 65000);
+  expect((await calls(page, 'event_live')).length).toBe(n);   // permission not granted: paused
+  await menu(page);
+  await page.getByRole('button', { name: 'تفعيل إشعارات الطلبات' }).click();
+  await advance(page, 65000);
+  expect((await calls(page, 'event_live')).length).toBeGreaterThan(n);
+  expect((await calls(page, 'owner_guests')).length).toBe(1);
+  expect((await calls(page, 'owner_requests')).length).toBe(1);
+});
+
+test('the 30 s background check stops when the user signs out elsewhere', async ({ page }) => {
+  await stubNotificationApi(page, { initialPermission: 'granted' });
+  await page.clock.install();
+  await go(page);
+  await advance(page, 1000);
+  await hideTab(page);
+  await page.evaluate(() => window.__srv.signOutElsewhere());
+  await advance(page, 500);
+  const n = (await calls(page, 'event_live')).length;
+  await advance(page, 65000);
+  expect((await calls(page, 'event_live')).length).toBe(n);
+});
+
+test('an event deleted on another device shows the same screen as an event that is gone, and the watch stops', async ({ page }) => {
+  await stubNotificationApi(page, { initialPermission: 'granted' });
+  await page.clock.install();
+  await go(page, { guests: [G('WD-1', 'أحمد')] });
+  await advance(page, 1000);
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+  await page.evaluate(() => { delete window.__fakeSupabase.events.e1; });
+  await advance(page, 6000);
+  await expect(page.locator('#denied-msg')).toBeVisible();
+  await expect(page.locator('#denied-msg')).toContainText('غير مصرح لك بالوصول لهذه المناسبة');
+  await expect(page.locator('#dashboard')).toBeHidden();
+  const n = (await calls(page, 'event_live')).length;
+  await hideTab(page);
+  await advance(page, 65000);
+  expect((await calls(page, 'event_live')).length).toBe(n);
+});
+
+test('leaving the page ends the background check', async ({ page }) => {
+  await stubNotificationApi(page, { initialPermission: 'granted' });
+  await go(page);
+  await expect(page.locator('#dashboard')).toBeVisible();
+  expect(await page.evaluate(() => { liveWatch.stop(); const before = window.__fakeSupabase.calls.length; return before; })).toBeGreaterThan(0);
+  await page.waitForTimeout(300);
+  const after = (await calls(page, 'event_live')).length;
+  await page.waitForTimeout(700);
+  expect((await calls(page, 'event_live')).length).toBe(after);
+});

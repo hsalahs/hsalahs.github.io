@@ -264,7 +264,7 @@
   // jittered by +-10% so many phones do not hit the server together.
   // opts.hiddenIntervalMs (off by default): keep polling at that slower rate while the page is hidden.
   function makePoller(fn, intervalMs, opts) {
-    const hid = opts && opts.hiddenIntervalMs > 0 ? opts.hiddenIntervalMs : 0;
+    let hid = opts && opts.hiddenIntervalMs > 0 ? opts.hiddenIntervalMs : 0;
     let timer = null, delay = intervalMs, inflight = false, stopped = true, suspended = false, listening = false;
     const active = () => !stopped && !suspended && (!document.hidden || !!hid);
     const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
@@ -303,6 +303,8 @@
     return {
       start() { stopped = false; suspended = false; delay = intervalMs; listen(true); if (active()) tick(); },
       stop() { stopped = true; clear(); listen(false); },
+      // Change the slower rate used while the page is hidden (0 = pause); takes effect at once.
+      setHidden(ms) { hid = ms > 0 ? ms : 0; if (!stopped && document.hidden) { if (hid) schedule(); else clear(); } },
       // Run now (a manual retry); no-op while a request is in flight.
       refresh() { if (!stopped && !inflight) { clear(); tick(); } },
     };
@@ -904,7 +906,7 @@
       const handle = { eventId, forget(ids) { ids.forEach((id) => local.delete(id)); } };
       watchers.add(handle);
       poller.start();
-      return { stop() { stopped = true; watchers.delete(handle); poller.stop(); }, refresh(r) { if (r && r.full) forceFull = true; poller.refresh(); } };
+      return { stop() { stopped = true; watchers.delete(handle); poller.stop(); }, setHiddenInterval(ms) { poller.setHidden(ms); }, refresh(r) { if (r && r.full) forceFull = true; poller.refresh(); } };
     },
   };
 

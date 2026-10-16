@@ -1144,7 +1144,15 @@ async function handleAuthUserNow(user) {
 function onLiveEvent(l) {
   watchOK = true;
   refreshConnectionBanner();
-  if (!l || !eventData) return;
+  if (!l) {
+    // deleted elsewhere: the same screen as an event that is gone or not yours
+    if (liveWatch) { liveWatch.stop(); liveWatch = null; }
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('loading-msg').style.display = 'none';
+    document.getElementById('denied-msg').style.display = 'block';
+    return;
+  }
+  if (!eventData) return;
   const wasPaid = eventData.paid;
   const wasCap = guestCapOf(eventData);
   const wasCount = eventData.guestCount;
@@ -1267,8 +1275,8 @@ function startWatch() {
 
 // After an own write: ask for the newest numbers and list at once instead of
 // waiting for the next 5-second poll.
-function liveRefresh() {
-  if (liveWatch) liveWatch.refresh();
+function liveRefresh(opts) {
+  if (liveWatch) liveWatch.refresh(opts);
 }
 
 // After an own write the guest count moves on screen at once (the limit banner
@@ -2101,7 +2109,7 @@ async function toggleRequestNotifications() {
   updateNotifButtonLabel();
   if (perm === 'granted') {
     showToast('✅ تم تفعيل إشعارات الطلبات');
-    startWatch();
+    if (liveWatch) liveWatch.setHiddenInterval(30000);
     try { new Notification('🎉 تم التفعيل', { body: 'بتوصلك إشعارات لما يوصل طلب جديد، بس لازم الصفحة تكون مفتوحة بالخلفية' }); } catch (e) {}
   } else {
     showToast('⚠️ ما وافقت على الإشعارات');
@@ -2269,7 +2277,33 @@ async function addGuest() {
 // writes them in gate-aware batches. Used for both a real
 // name list and a plain range like "1".."200" for events that hand out
 // numbered rather than named entries — the guest doc doesn't care which.
+// One import at a time. After a failed batch (a lost reply may still have written
+// it) the list is read again from the server and awaited before anything else
+// can be imported, so uploading the same file twice cannot double the guests.
+let importBusy = false;
+let importStale = false;
+async function refreshGuestsNow() {
+  guests = await Data.guests.list(eventId);
+  updateStats();
+  renderGuests();
+  liveRefresh({ full: true });
+}
 async function importGuestNames(names) {
+  if (importBusy) return;
+  importBusy = true;
+  try {
+    if (importStale) { await refreshGuestsNow(); importStale = false; }
+    await importGuestNamesNow(names);
+  } catch (e) {
+    importStale = true;
+    try { await refreshGuestsNow(); importStale = false; } catch (e2) {}
+    throw e;
+  } finally {
+    importBusy = false;
+  }
+}
+
+async function importGuestNamesNow(names) {
   // Dedupe against existing guests AND against repeats within this same
   // list, synchronously, before any writes start — otherwise duplicate
   // names in the same list all pass the check in parallel and all get
