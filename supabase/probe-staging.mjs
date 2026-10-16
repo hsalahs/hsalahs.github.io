@@ -1,9 +1,8 @@
 // Environment probes the SQL tests cannot cover (reviewer's list). Read-only.
 // Usage: NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node --no-warnings supabase/probe-staging.mjs
-const ref = process.env.SUPABASE_REF || 'gunizkapwatixvbfliva';
-const api = `https://api.supabase.com/v1/projects/${ref}`;
-const get = async (path) => (await fetch(api + path)).json();
-const sql = async (query) => (await fetch(api + '/database/query', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query }) })).json();
+import { mgmt } from './mgmt.mjs';
+const get = async (path) => (await mgmt('GET', path)).json();
+const sql = async (query) => (await mgmt('POST', '/database/query', { query })).json();
 let bad = 0;
 const check = (name, ok, detail = '') => { console.log(ok ? 'ok  ' : 'FAIL', name, detail); if (!ok) bad++; };
 

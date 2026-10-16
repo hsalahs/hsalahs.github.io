@@ -8,20 +8,14 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ref = process.env.SUPABASE_REF || 'gunizkapwatixvbfliva';
-const url = `https://api.supabase.com/v1/projects/${ref}/database/query`;
+import { mgmt } from './mgmt.mjs';
 const root = dirname(fileURLToPath(import.meta.url));
 const mode = process.argv[2] || 'all';
 
 async function sql(query) {
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ query }),
-  });
-  const body = await r.text();
-  if (!r.ok) throw new Error(`${r.status} ${body.slice(0, 600)}`);
-  return JSON.parse(body);
+  const r = await mgmt('POST', '/database/query', { query });
+  if (!r.ok) throw new Error(`${r.status} ${r.text.slice(0, 600)}`);
+  return r.json();
 }
 
 const files = (dir) =>

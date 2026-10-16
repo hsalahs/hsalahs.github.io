@@ -2,14 +2,13 @@
 // connections scan the SAME barcode at the same moment; exactly one must be 'allowed'.
 // Creates committed rows with the prefix zzconc and always deletes them at the end.
 // Usage: NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node --no-warnings supabase/concurrency-test.mjs [N=12]
-const ref = process.env.SUPABASE_REF || 'gunizkapwatixvbfliva';
-const url = `https://api.supabase.com/v1/projects/${ref}/database/query`;
+import { mgmt } from './mgmt.mjs';
 const N = Number(process.argv[2] || 8);
 const OWNER = '00000000-0000-0000-0000-00000000c0c0';
 const sql = async (query) => {
   for (let attempt = 0; attempt < 10; attempt++) {
-    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query }) });
-    const t = await r.text();
+    const r = await mgmt('POST', '/database/query', { query });
+    const t = r.text;
     if (r.status === 429) { await new Promise((ok) => setTimeout(ok, 4000)); continue; }   // management API throttle
     if (!r.ok) throw new Error(`${r.status} ${t.slice(0, 400)}`);
     return JSON.parse(t);
