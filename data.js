@@ -859,7 +859,8 @@
         // deletions arrive as tombstones in the delta; a full read happens only when the list size still differs
         // from guestCount on two polls in a row, at most once per GHOST_GAP_MS
         if (!full && mismatch >= 1 && nextMap.size !== (live.guest_count || 0) && Date.now() - lastGhostAt >= GHOST_GAP_MS) {
-          out.ghostAt = Date.now();
+          lastGhostAt = Date.now();   // set at once: a poll thrown away by a write must not repeat the full read
+          out.ghostAt = lastGhostAt;
           await readFull();
         }
         out.off = nextMap.size !== (live.guest_count || 0);

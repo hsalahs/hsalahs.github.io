@@ -2,6 +2,8 @@ const { test, expect } = require('@playwright/test');
 const path = require('path');
 const { stubSupabase, seedEvent } = require('./helpers');
 
+// NOTE: counts response BODY bytes only; request/response headers add roughly 1 MB per hour per open page
+// (5 s / 4 s polls), which the founder's monthly estimate includes separately.
 // EGRESS BUDGET (free Supabase plan: 5 GB a month). Response-body bytes of the simulated server over ONE simulated
 // hour with 2000 guests, on a fake clock: the dashboard idle with a few changes, one scanner phone in a busy
 // check-in rush, and the guest's invite page polling its request. Body bytes only (JSON of the rows), no headers.
