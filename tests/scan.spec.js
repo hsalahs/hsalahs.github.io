@@ -1438,6 +1438,27 @@ test('names list: every unscanned row has a register button and a code tag; scan
   await expect(listRow(page, 'WD-EF56Z').locator('button')).toHaveCount(0);
 });
 
+test('names list and check-in by name work with NO roster: the names come from the server list, the dashboard never has to be opened', async ({ page }) => {
+  await openList(page, LIST);
+  // the names list is fed by door_guests (and door_event for the numbers); nothing named roster is read or written
+  const names = await page.evaluate(() => window.__fakeSupabase.calls.map((c) => c.name));
+  expect(names).toContain('door_guests');
+  expect(names.filter((n) => /roster/i.test(n))).toEqual([]);
+  expect(await page.evaluate(() => JSON.stringify(window.__fakeSupabase.calls).toLowerCase().includes('roster'))).toBe(false);
+  await expect(page.locator('#offline-list-meta')).toContainText('لم يدخل: 2 من 3');
+  // a guest the organizer added a moment ago (never in any published roster) is found by name and checked in
+  await page.evaluate(() => { window.__srv.door('e1').guests.push({ id: 'WD-NEW1A2B3C4D', name: 'ضيف مضاف حديثًا', scanned: false, vip: false }); });
+  await page.locator('#offline-refresh-btn').click().catch(() => {});
+  await page.locator('#offline-search').fill('مضاف');
+  await expect(listRow(page, 'WD-NEW1A2B3C4D')).toBeVisible({ timeout: 15000 });
+  await listRow(page, 'WD-NEW1A2B3C4D').getByRole('button', { name: 'تسجيل' }).click();
+  await page.waitForTimeout(450);
+  await listRow(page, 'WD-NEW1A2B3C4D').getByRole('button', { name: 'تأكيد الدخول' }).click();
+  await expect(page.locator('#result-overlay.rs-allowed')).toBeVisible();
+  await expect(page.locator('#result-name')).toHaveText('ضيف مضاف حديثًا');
+  expect(await serverScanned(page)).toBe(2);
+});
+
 test('names list: search by name and by code (code needs 3+ chars or a WD prefix)', async ({ page }) => {
   await openList(page, LIST);
   const rows = page.locator('#offline-list-results .ol-name');
