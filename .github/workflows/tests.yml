@@ -12,7 +12,8 @@ jobs:
   pages:
     name: Page tests (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # the migration branch has ~820 page tests (about 20 min on two workers): 15 min was too tight
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
