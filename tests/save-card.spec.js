@@ -1,11 +1,10 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedInviteStore, seedEvent } = require('./helpers');
 
 const ANDROID = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-const EVENT = { name: 'حفل تجريبي', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض', theme: 'gold', createdAt: { seconds: 1 } };
 const QR_STAND_IN = `window.QRCode = function (el) {
   var c = document.createElement('canvas'); c.width = 10; c.height = 10;
   c.getContext('2d').fillRect(0, 0, 10, 10); el.appendChild(c);
@@ -22,32 +21,24 @@ async function stubShare(page) {
 }
 
 async function openEvent(page) {
-  await stubFirebase(page);
+  await stubSupabase(page);
   await page.route(/qrcodejs.*qrcode\.min\.js/, (route) => route.fulfill({ contentType: 'text/javascript', body: QR_STAND_IN }));
-  await seedFakeFirebase(page, {
-    user: { uid: 'u1', email: 'customer@example.com' },
-    store: {
-      events: { e1: EVENT },
-      'events/e1/guests': { g0: { id: 'WD-1', name: 'أحمد', scanned: false } },
-      'events/e1/requests': {},
-      'events/e1/private': { scan: { scanPin: '1234' } },
-    },
-  });
+  await seedEvent(page, { user: { id: 'u1', email: 'customer@example.com' }, guests: [{ id: 'WD-1', name: 'أحمد' }] });
   await stubShare(page);
   await page.goto('/event.html?id=e1');
   await expect(page.locator('.guest-item .dl-btn')).toBeVisible();
 }
 
 async function openInvite(page) {
-  await stubFirebase(page);
+  await stubSupabase(page);
   await page.route(/qrcodejs.*qrcode\.min\.js/, (route) => route.fulfill({ contentType: 'text/javascript', body: QR_STAND_IN }));
-  await seedFakeFirebase(page, {
+  await seedInviteStore(page, {
     store: {
       events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } },
-      'events/e1/requests': { 'REQ-1': { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABC', createdAt: 'x' } },
+      'events/e1/requests': { 'REQ-TEST-0000000000000000001': { name: 'سارة', reqId: 'REQ-TEST-0000000000000000001', status: 'approved', guestId: 'WD-ABC', createdAt: 'x' } },
     },
   });
-  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-1'); });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-TEST-0000000000000000001'); });
   await stubShare(page);
   await page.goto('/invite.html?event=e1');
   await expect(page.locator('#save-btn')).toBeVisible({ timeout: 10000 });

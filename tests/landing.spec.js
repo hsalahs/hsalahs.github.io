@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedFakeSupabase } = require('./helpers');
 
 const WHATSAPP = '966546664459';
 const repoFile = (f) => path.join(__dirname, '..', f);
@@ -257,7 +257,7 @@ for (const [file, msg] of [['index.html', 'السلام عليكم، عندي س
 }
 
 test('the splash leaves the page after it hides, so its endless animations stop', async ({ page }) => {
-  await stubFirebase(page);
+  await stubSupabase(page);
   await page.goto('/index.html');
   await expect(page.locator('#splash')).toHaveCount(1);
   await expect(page.locator('#splash')).toHaveCount(0, { timeout: 6000 });
@@ -278,7 +278,7 @@ async function watchSplash(page) {
 }
 
 test('the landing splash hides no earlier than 1.6 s and not before the page loaded, and is gone before 3.2 s', async ({ page }) => {
-  await stubFirebase(page);
+  await stubSupabase(page);
   await watchSplash(page);
   await page.goto('/index.html');
   await expect(page.locator('#splash')).toHaveCount(0, { timeout: 4000 });
@@ -432,8 +432,8 @@ test.describe('privacy.html', () => {
     const sitemap = fs.readFileSync(repoFile('sitemap.xml'), 'utf8');
     expect(sitemap).toMatch(/<loc>https:\/\/da3wt\.com\/privacy\.html<\/loc>\s*<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
     expect(fs.readFileSync(repoFile('robots.txt'), 'utf8')).not.toMatch(/Disallow:\s*\/privacy/);
-    await stubFirebase(page);
-    await seedFakeFirebase(page, { user: null, store: {} });
+    await stubSupabase(page);
+    await seedFakeSupabase(page, {});
     await page.goto('/app.html');
     await expect(page.locator('#auth-view a[href="privacy.html"]')).toBeVisible();
   });
@@ -477,8 +477,8 @@ test('the privacy links are comfortable tap targets, and the privacy page pills 
     for (const h of await page.locator(sel).evaluateAll(els => els.map(e => e.getBoundingClientRect().height))) expect(h, sel).toBeGreaterThanOrEqual(43.5);
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
-  await stubFirebase(page);
-  await seedFakeFirebase(page, { user: null, store: {} });
+  await stubSupabase(page);
+  await seedFakeSupabase(page, {});
   await page.goto('/app.html');
   expect(await page.locator('#auth-view a[href="privacy.html"]').evaluate(e => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(43.5);
 });

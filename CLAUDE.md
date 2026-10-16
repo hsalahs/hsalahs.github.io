@@ -7,15 +7,19 @@ Read this first. It replaces the memory of earlier sessions.
 An Arabic, multi-tenant digital-invitation service (weddings and other occasions). Organizers create an event, add guests (by hand, Excel/CSV import, or self-registration requests), send each guest an invitation card with a QR code, and door supervisors scan the QR at the entrance.
 
 - Static site on **GitHub Pages** (no build step, no backend, no server). Live at `https://da3wt.com/` (custom domain, done — DNS/SSL/GitHub Pages/Firebase Auth authorized domains all set up; the old `https://hsalahs.github.io/` still works too, GitHub doesn't disable it, and that's intentional — any already-sent invite links keep working).
-- **Firebase** (Firestore + Auth, v10.12.0 from the CDN), project `wedding-qr-16d01`, **Spark (free) plan**. No Cloud Functions.
+- **Supabase** (Postgres + RLS + RPC + Auth, vendored client `vendor/supabase.min.js`), project `gunizkapwatixvbfliva`, **Free plan** (pauses after ~7 days idle: see docs/status-and-lessons.md). Cutover done Oct 16 2026. Firebase (`wedding-qr-16d01`, files `firebase-init*.js`, `firebase.json`, `firestore.rules`, `rules-tests/`) is kept ONLY as the rollback path (branch `backup-before-supabase` = main before the cutover); no page loads it.
 - Installable as a PWA (`manifest.webmanifest`, `sw.js`); there is no app-store app.
 - Pages: `index.html` (landing), `app.html` (organizer's events list, admin activation), `event.html` (one event's dashboard), `invite.html` (what a guest opens), `scan.html` (door scanner), `guide.html` (user guide), `privacy.html` (privacy and terms, plain language, WhatsApp contact only).
-- Shared scripts: `firebase-init.js`, `utils.js` (guest limit helpers), `format.js`, `guest-names.js` + `xlsx-names.js` (import), `xlsx-export.js` (Excel export), `attendance-report.js` (print / PDF report).
-- Security lives in `firestore.rules` (guest cap, scan sessions, door code). The client is never trusted.
+- Shared scripts: `supabase-config.js` (public key), `data.js` (the only data layer), `utils.js` (guest limit helpers), `format.js`, `guest-names.js` + `xlsx-names.js` (import), `xlsx-export.js` (Excel export), `attendance-report.js` (print / PDF report).
+- Security lives in `supabase/migrations/` (RLS, RPC functions, `9999_grants.sql` whitelist, door code lock). The client is never trusted. SQL tests: `supabase/tests`, run with `supabase/run-staging.mjs`; Management API only through `supabase/mgmt.mjs`. Details: `supabase/README.md`.
 
 ## The person you work with
 
 A non-technical founder on a tight budget who **writes Arabic** (answer in Arabic, simple words, short). Standing preferences:
+- **Standing rule for every decision I need from them (Oct 12 2026, in their words: «أنا مو تقني»):** (1) explain it in simple Arabic with an example from the customer's or guest's experience; (2) give MY recommendation first, and why; (3) say «وش أسوأ شي ممكن يصير» if they agree; (4) if the decision involves money, changes something the customer sees, deletes data, or touches the live site: do NOT proceed without their explicit approval; (5) any other small technical decision: decide myself and tell them in one line. If they say «ما فهمت», explain again in simpler words.
+- **Standing rules for all migration work (founder, Oct 12 2026):** (1) the current design stays EXACTLY as it is: colors, fonts, spacing, buttons, themes; (2) anything new we did not have (message, button, dialog) must be in the same style as our current design or better, NEVER simpler or weaker; (3) before adopting anything new in the look, send a screenshot of the REAL page at phone size, next to the same page from main, and WAIT for approval; (4) never send simplified illustrative drawings instead of the real page (the earlier door-lockout images in docs/mockups were drawings: redo them from the real event.html / scan.html before building).
+- **Supabase logs rule (founder, Oct 12 2026): NEVER read Supabase logs/analytics (logs explorer, analytics endpoints, get_logs, postgres/api/auth logs) unless truly needed, and then only a very short window with a small row limit; tell the founder first.** From Oct 16: every script/agent calls the Management API ONLY through `supabase/mgmt.mjs` (whitelist, refuses logs/analytics/advisors/usage/billing; tests/mgmt-guard.spec.js), and the founder's target is Log Query growth of at most 1 GB/day while we work. (The project hit 89.9 of 100 GB «Log Query» in one day; nothing in our code or agents reads logs.)
+- **Quality over usage (founder, Oct 17 2026): do NOT trim testing or review to save agent usage.** Run the FULL Playwright suite (and the SQL suite + concurrency test when SQL/data layer changed) before every push that matters and after every chunk; run reviewers as needed. Professional, correct work comes first. Still never read Supabase logs and keep Management API calls through `supabase/mgmt.mjs` (its call counter shows the volume).
 - **Answer style: direct and concise.** Lead with the answer or recommendation, no preamble, no long menus of options; numbered lists; explain more only when asked. The user asked again (Oct 2026) for much shorter replies: one or two lines per update, no long recaps; go into detail ONLY when they say "اشرح".
 - **Zero bugs.** Verify everything; report failures honestly.
 - **Discuss before implementing**, and give an honest recommendation, not a menu.
@@ -67,9 +71,9 @@ These are standing instructions the user gave in chat for how to respond, not pr
 
 ## Tests
 
-- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 21 minutes, 690 tests). Run a single file while developing, the full suite once before pushing.
-- Rules tests (real emulator): `npm run test:rules` (182 checks; `RULES_PATH` overrides the rules file).
-- Playwright uses in-memory Firebase stubs (`tests/mocks/*.stub.js`, `tests/helpers.js`: `stubFirebase`, `seedFakeFirebase`). The store resets on navigation. JSZip is served from `node_modules` via `page.route`. See `tests/README.md`.
+- Page tests: `PW_CHROMIUM_PATH=/opt/pw-browsers/chromium npx playwright test --workers=1 --reporter=dot` (about 21 minutes, 822 tests on the migration branch; 690 on main). Run a single file while developing, the full suite once before pushing.
+- SQL tests (staging DB): `NODE_USE_ENV_PROXY=1 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node --no-warnings supabase/run-staging.mjs all`; concurrency: `supabase/concurrency-test.mjs 8` (alone). Old Firestore rules tests (`npm run test:rules`) only guard the rollback files.
+- Playwright uses an in-memory Supabase stub (`tests/mocks/supabase.stub.js`, `tests/helpers.js`: `stubSupabase`, `seedFakeSupabase`). The store resets on navigation. JSZip is served from `node_modules` via `page.route`. See `tests/README.md`.
 - Tool quirks: heredocs expand `\uXXXX` (use the Write tool for escapes); avoid `pkill -f`; foreground `sleep` is blocked (use until-loops).
 
 ## Conventions

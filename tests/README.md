@@ -1,9 +1,11 @@
 # Tests
 
-Playwright UI tests that run fully offline against fake, in-memory Firebase
-stubs (`tests/mocks/`) — no real Firestore project, no network access
-needed. They cover the logic that has actually broken before: guest sort
-order, search filtering, event-limit gating, and who can open which event.
+Playwright UI tests that run fully offline against a fake, in-memory
+Supabase stub (`tests/mocks/supabase.stub.js`) — no real Supabase project,
+no network access needed. They cover the logic that has actually broken
+before: guest sort order, search filtering, event-limit gating, door
+check-in, and who can open which event. The real database rules are tested
+separately by the SQL suite in `supabase/tests` (see `supabase/README.md`).
 
 ## Running
 
@@ -15,18 +17,17 @@ npm test
 
 ## How the stubs work
 
-`tests/helpers.js` intercepts the three Firebase SDK URLs the app imports
-(`firebase-app.js`, `firebase-auth.js`, `firebase-firestore.js`) and serves
-the files in `tests/mocks/` instead — small in-memory re-implementations of
-just the Firestore/Auth calls this project actually uses. Every other
-external host (fonts, qrcodejs, jszip, qr-scanner) is blocked outright,
-since none of these specs exercise QR-card rendering, ZIP export, or camera
-scanning.
+`tests/helpers.js` serves `tests/mocks/supabase.stub.js` in place of the
+vendored Supabase client: a small in-memory re-implementation of the RPC,
+table and Auth calls `data.js` actually makes. Every other external host
+(fonts, qrcodejs, jszip, qr-scanner) is blocked outright unless a spec
+routes it.
 
-Each test calls `seedFakeFirebase(page, { user, store })` before
-`page.goto()` to set the starting auth user and Firestore contents. `store`
-keys are collection paths exactly as the app builds them, e.g.
-`store.events = { e1: {...} }` or `store['events/e1/guests'] = { g1: {...} }`.
+Each test calls `seedFakeSupabase(page, { user, events, ... })` (or one of
+the wrappers `seedInviteStore`, `seedScan`, `seedAppStore`, `seedEvent`)
+before `page.goto()` to set the starting auth user and table contents.
+The `stubFirebase` / `seedFakeFirebase` helpers and `tests/mocks/firebase-*.stub.js`
+are kept only for the rollback files; no spec uses them.
 
 ## What's not covered
 

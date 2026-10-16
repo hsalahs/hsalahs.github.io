@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedFakeSupabase } = require('./helpers');
 
 // "Add to Home Screen" saves whatever start address the page's web app
 // manifest names — or, with no manifest, the page's own address. Each page
@@ -18,8 +18,8 @@ test('the landing page installs as itself: no manifest, and the home-screen name
 });
 
 test('the organizer panel still installs as the panel: its manifest starts at app.html', async ({ page }) => {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, { user: null });
+  await stubSupabase(page);
+  await seedFakeSupabase(page, {});
   await page.goto('/app.html');
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', 'manifest.webmanifest');
   const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.webmanifest'), 'utf8'));
@@ -29,10 +29,21 @@ test('the organizer panel still installs as the panel: its manifest starts at ap
 });
 
 test('the invite page and the guide have no manifest either, so they install as themselves', async ({ page }) => {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, { store: { events: {} } });
+  await stubSupabase(page);
+  await seedFakeSupabase(page, {});
   await page.goto('/invite.html?event=nothing');
   await expect(page.locator('link[rel="manifest"]')).toHaveCount(0);
   await page.goto('/guide.html');
   await expect(page.locator('link[rel="manifest"]')).toHaveCount(0);
+});
+
+test('no page or script of the site loads Firebase', () => {
+  const root = path.join(__dirname, '..');
+  const offenders = [];
+  for (const f of fs.readdirSync(root).filter((n) => /\.(html|webmanifest)$/.test(n) || n === 'sw.js')) {
+    if (/^firebase-init/.test(f)) continue;
+    const src = fs.readFileSync(path.join(root, f), 'utf8');
+    if (/firebase-init|gstatic\.com\/firebasejs|firebaseapp\.com|firestore\.googleapis/i.test(src)) offenders.push(f);
+  }
+  expect(offenders).toEqual([]);
 });

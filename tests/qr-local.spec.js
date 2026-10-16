@@ -1,20 +1,13 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase, routeQr } = require('./helpers');
+const { routeQr, stubSupabase, seedInviteStore, seedEvent } = require('./helpers');
 
-const USER = { uid: 'u1', email: 'customer@example.com' };
-const STORE = () => ({
-  events: { e1: { name: 'حفل تجريبي', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض', theme: 'gold', createdAt: { seconds: 1 }, guestCount: 1 } },
-  'events/e1/guests': { g0: { id: 'WD-ABCDEFGHIJKLM', name: 'أحمد', scanned: false } },
-  'events/e1/requests': {},
-  'events/e1/private': { scan: { scanPin: '1234' } },
-});
 const STAND_IN = {
   body: `window.QRCode = function (el) { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); x.fillRect(0, 0, 256, 256); x.fillStyle = '#fff'; x.fillRect(64, 64, 128, 128); el.appendChild(c); }; window.QRCode.CorrectLevel = { H: 2 };`,
 };
 
 async function open(page) {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, { user: USER, store: STORE() });
+  await stubSupabase(page);
+  await seedEvent(page, { user: { id: 'u1', email: 'customer@example.com' }, guests: [{ id: 'WD-ABCDEFGHIJKLM', name: 'أحمد' }] });
 }
 const build = (page) => page.evaluate(async () => !!(await buildGuestCard(guests[0])));
 const qrScripts = (page) => page.evaluate(() => [...document.scripts].filter((s) => /qrcode/.test(s.src)).length);
@@ -95,15 +88,15 @@ test('a hanging local copy: the CDN answer after 8 s still builds the card', asy
 });
 
 test('invite.html draws the card from our own copy without touching the CDN', async ({ page }) => {
-  await stubFirebase(page);
+  await stubSupabase(page);
   const q = await routeQr(page, { local: 'ok', cdn: 'abort' });
-  await seedFakeFirebase(page, {
+  await seedInviteStore(page, {
     store: {
       events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } },
-      'events/e1/requests': { 'REQ-1': { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABCDEFGHIJKLM', createdAt: 'x' } },
+      'events/e1/requests': { 'REQ-TEST-0000000000000000001': { name: 'سارة', reqId: 'REQ-TEST-0000000000000000001', status: 'approved', guestId: 'WD-ABCDEFGHIJKLM', createdAt: 'x' } },
     },
   });
-  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-1'); });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-TEST-0000000000000000001'); });
   await page.goto('/invite.html?event=e1');
   await expect(page.locator('#card-wrap img')).toBeVisible({ timeout: 10000 });
   expect(q.hits).toEqual({ local: 1, cdn: 0 });
@@ -118,7 +111,7 @@ test('event.html: a junk local file plus a failing CDN counts as failure, with t
   await expect(page.locator('.guest-item')).toHaveCount(1);
   const msgs = [];
   page.on('dialog', (d) => { msgs.push(d.message()); d.accept(); });
-  await page.evaluate(() => downloadGuestCard(guests[0].docId));
+  await page.evaluate(() => downloadGuestCard(guests[0].id));
   await expect.poll(() => msgs.length).toBe(1);
   expect(msgs[0]).toContain('تأكد من الاتصال وجرّب مرة ثانية');
   expect(await page.evaluate(() => typeof window.QRCode === 'function')).toBe(false);
@@ -129,15 +122,15 @@ test('event.html: a junk local file plus a failing CDN counts as failure, with t
 
 test('invite.html: both sources hanging give up after 8 s + 15 s with the retry message', async ({ page }) => {
   await page.clock.install();
-  await stubFirebase(page);
+  await stubSupabase(page);
   const q = await routeQr(page, { local: 'hang', cdn: 'hang' });
-  await seedFakeFirebase(page, {
+  await seedInviteStore(page, {
     store: {
       events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } },
-      'events/e1/requests': { 'REQ-1': { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABCDEFGHIJKLM', createdAt: 'x' } },
+      'events/e1/requests': { 'REQ-TEST-0000000000000000001': { name: 'سارة', reqId: 'REQ-TEST-0000000000000000001', status: 'approved', guestId: 'WD-ABCDEFGHIJKLM', createdAt: 'x' } },
     },
   });
-  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-1'); });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-TEST-0000000000000000001'); });
   await page.goto('/invite.html?event=e1', { waitUntil: 'domcontentloaded' });
   await expect.poll(() => q.hits.local).toBe(1);
   await page.clock.runFor(8500);
@@ -149,17 +142,17 @@ test('invite.html: both sources hanging give up after 8 s + 15 s with the retry 
 });
 
 test('invite.html: a junk local file plus a failing CDN shows the retry message and no page error', async ({ page }) => {
-  await stubFirebase(page);
+  await stubSupabase(page);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const q = await routeQr(page, { local: 'junk', cdn: 'abort' });
-  await seedFakeFirebase(page, {
+  await seedInviteStore(page, {
     store: {
       events: { e1: { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' } },
-      'events/e1/requests': { 'REQ-1': { name: 'سارة', reqId: 'REQ-1', status: 'approved', guestId: 'WD-ABCDEFGHIJKLM', createdAt: 'x' } },
+      'events/e1/requests': { 'REQ-TEST-0000000000000000001': { name: 'سارة', reqId: 'REQ-TEST-0000000000000000001', status: 'approved', guestId: 'WD-ABCDEFGHIJKLM', createdAt: 'x' } },
     },
   });
-  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-1'); });
+  await page.addInitScript(() => { localStorage.setItem('inv_reqid_e1', 'REQ-TEST-0000000000000000001'); });
   await page.goto('/invite.html?event=e1');
   await expect(page.locator('#qr-retry')).toContainText('تعذّر تجهيز البطاقة', { timeout: 10000 });
   await expect(page.locator('#card-wrap img')).toHaveCount(0);

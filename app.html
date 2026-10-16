@@ -31,7 +31,7 @@
      when loading gets stuck (25 s), so a stall on the home-screen app, where
      no ?timing=1 can be typed, can still be photographed. -->
 <script>var TM = { m: [], err: '', stuck: false, param: /[?&]timing=1(&|$)/.test(location.search) }; TM.show = TM.param;
-var TM_HOST = 'auth-loading', TM_RES = ['firebase-init.js', 'firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'utils.js', 'icons.js', 'format.js'];
+var TM_HOST = 'auth-loading', TM_RES = ['supabase.min.js', 'data.js', 'utils.js', 'icons.js', 'format.js'];
 function tmShow() {
   var host = document.getElementById(TM_HOST);
   if (!TM.show || !host) return;
@@ -40,8 +40,6 @@ function tmShow() {
   // with the loading message instead of staying on top of the page.
   if (host.style.display === 'none' && !TM.param) {
     if (line) line.remove();
-    var bx = document.getElementById('timing-btns');
-    if (bx) bx.remove();
     return;
   }
   if (!line) {
@@ -62,28 +60,7 @@ function tmShow() {
     }
   } catch (e) {}
   var sw = 'sw:' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes' : 'no');
-  if (TM.stuck || (TM.param && window._fsMode && window._fsMode !== 'default')) tmButtons(line);
-  line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + ' tab:' + (window._fsTab || '?') + ' mode:' + (window._fsMode || '?') + (TM.err ? ' || err: ' + TM.err : '');
-}
-function tmSetMode(v) {
-  try { if (v) sessionStorage.setItem('fsmode', v); else sessionStorage.removeItem('fsmode'); } catch (e) {}
-  location.reload();
-}
-function tmButtons(line) {
-  if (document.getElementById('timing-btns')) return;
-  var box = document.createElement('div');
-  box.id = 'timing-btns';
-  box.style.cssText = 'direction:rtl;text-align:center;padding:0 18px 16px;';
-  var defs = [['جرّب بدون ذاكرة', 'memory'], ['جرّب اتصال بديل', 'long']];
-  defs.forEach(function (d) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = d[0];
-    b.style.cssText = 'background:none;border:1px solid #8d8a84;color:#8d8a84;border-radius:8px;font-size:12px;font-family:inherit;padding:12px 14px;min-height:44px;margin:4px;cursor:pointer;';
-    b.onclick = function () { tmSetMode(d[1]); };
-    box.appendChild(b);
-  });
-  line.parentNode.insertBefore(box, line.nextSibling);
+  line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + (TM.err ? ' || err: ' + TM.err : '');
 }
 function tmProbe(label, fn) {
   var t0 = performance.now(), done = false;
@@ -107,7 +84,7 @@ function tmProbes(cacheFn) {
   });
   if (cacheFn) tmProbe('cache', cacheFn);
   tmProbe('net', function (fin) {
-    fetch('https://firestore.googleapis.com/', { mode: 'no-cors', cache: 'no-store' }).then(function () { fin('ok'); }, function () { fin('err'); });
+    fetch((window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url) || 'https://gunizkapwatixvbfliva.supabase.co/', { mode: 'no-cors', cache: 'no-store' }).then(function () { fin('ok'); }, function () { fin('err'); });
   });
 }
 function tmark(k) {
@@ -130,10 +107,7 @@ tmark('script');</script>
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<script type="module" src="firebase-init.js"></script>
-<link rel="preconnect" href="https://firestore.googleapis.com">
-<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
-<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://gunizkapwatixvbfliva.supabase.co" crossorigin>
 <style>
 @font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/ibm-plex-sans-arabic-400-arabic.woff2) format('woff2');unicode-range:U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1}
 @font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/ibm-plex-sans-arabic-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
@@ -185,6 +159,11 @@ tmark('script');</script>
   .toggle-row { text-align:center; font-size:13px; color:#B8B4AC; margin-top:4px; }
   .toggle-row a { color:#E0BC7A; cursor:pointer; text-decoration:underline; }
   .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; text-align:center; }
+  .ok { color:#7fd48a; font-size:13px; margin-bottom:10px; text-align:center; line-height:1.8; }
+  .notice-card { text-align:center; }
+  .notice-card .chip { width:44px; height:44px; border-radius:12px; margin:0 auto 12px; }
+  .notice-card .event-name { font-size:17px; margin-bottom:8px; }
+  .notice-card .sub { margin-bottom:18px; line-height:1.8; }
   .event-card { display:flex; flex-direction:column; gap:12px; }
   .event-card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
   /* min-width:0 + anywhere-wrapping: a long email or event name breaks onto
@@ -266,18 +245,40 @@ setTimeout(() => {
 
   <div id="auth-view" style="display:none">
     <h1><a href="index.html" style="color:inherit; text-decoration:none;">دعوات</a></h1>
-    <div class="sub">لوحة تحكم المنظّم — أنشئ دعوة رقمية لمناسبتك</div>
-    <div class="card">
+    <div class="sub" id="auth-sub">لوحة تحكم المنظّم — أنشئ دعوة رقمية لمناسبتك</div>
+    <div class="card" id="auth-card">
       <div id="auth-err" class="err" style="display:none"></div>
+      <div id="auth-ok" class="ok" style="display:none"></div>
       <!-- A real form, so the phone keyboard's "Go" key submits it. -->
       <form id="auth-form" onsubmit="event.preventDefault(); submitAuth();" novalidate>
         <input type="email" id="auth-email" placeholder="البريد الإلكتروني" autocomplete="email" inputmode="email" autocapitalize="off" enterkeyhint="next">
         <input type="password" id="auth-pass" placeholder="كلمة المرور" autocomplete="current-password" enterkeyhint="go">
         <button type="submit" class="btn" id="auth-submit-btn">دخول</button>
       </form>
+      <div class="toggle-row" id="resend-row" style="display:none">لم يصلك الرابط؟ <a onclick="resendConfirmation()">أعد إرسال رابط التفعيل</a></div>
       <div class="toggle-row" id="auth-toggle">ليس لديك حساب؟ <a onclick="toggleAuthMode()">أنشئ حساب</a></div>
       <div class="toggle-row" id="forgot-pass-row"><a onclick="sendResetEmail()">نسيت كلمة المرور؟</a></div>
       <div class="toggle-row"><a href="privacy.html" style="display:inline-block; padding:14px 10px;">الخصوصية والشروط</a></div>
+    </div>
+
+    <div class="card notice-card" id="check-email-card" style="display:none">
+      <div class="chip"><i data-ic="inbox" data-size="22"></i></div>
+      <div class="event-name">تفقّد بريدك</div>
+      <div class="sub">أرسلنا رابط التفعيل إلى <b id="check-email-addr" style="color:#E0BC7A; direction:ltr; display:inline-block; overflow-wrap:anywhere;"></b><br>افتحه عشان تكمل. لو ما وصلك، شوف السبام.</div>
+      <div id="check-email-err" class="err" style="display:none"></div>
+      <button type="button" class="btn" id="check-resend-btn" onclick="resendConfirmation()">أعد إرسال الرابط</button>
+      <div class="toggle-row"><a onclick="backToLogin()">رجوع لتسجيل الدخول</a></div>
+    </div>
+
+    <div class="card" id="recovery-card" style="display:none">
+      <div class="sub" id="recovery-account" style="margin-bottom:16px; line-height:1.8;">حساب: <span id="recovery-email" style="direction:ltr; display:inline-block; overflow-wrap:anywhere; unicode-bidi:isolate;"></span></div>
+      <div id="recovery-err" class="err" style="display:none"></div>
+      <form id="recovery-form" onsubmit="event.preventDefault(); submitNewPassword();" novalidate>
+        <input type="password" id="new-pass" placeholder="كلمة المرور الجديدة" autocomplete="new-password" enterkeyhint="next">
+        <input type="password" id="new-pass2" placeholder="أعد كتابة كلمة المرور" autocomplete="new-password" enterkeyhint="go">
+        <button type="submit" class="btn" id="recovery-submit-btn">حفظ كلمة المرور</button>
+      </form>
+      <div class="toggle-row"><a onclick="cancelRecovery()">إلغاء</a></div>
     </div>
   </div>
 
@@ -361,6 +362,9 @@ setTimeout(() => {
      first use). As a plain script it held up everything after it, sign-in
      included, for as long as the CDN took to answer. -->
 <script async src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="supabase-config.js"></script>
+<script src="vendor/supabase.min.js"></script>
+<script src="data.js"></script>
 <script src="icons.js"></script>
 <script src="utils.js"></script>
 <script src="format.js"></script>
@@ -369,6 +373,16 @@ setTimeout(() => {
 // showToast now live in utils.js (shared with event.html and scan.html) —
 // they used to be copy-pasted separately into each page.
 let authMode = 'login'; // or 'signup'
+let recovering = false; // the set-new-password screen is up: auth changes must not open the app
+let pendingConfirmEmail = '';
+
+const AUTH_SUB = 'لوحة تحكم المنظّم — أنشئ دعوة رقمية لمناسبتك';
+function showAuthCard(which) {
+  document.getElementById('auth-card').style.display = which === 'login' ? 'block' : 'none';
+  document.getElementById('check-email-card').style.display = which === 'check' ? 'block' : 'none';
+  document.getElementById('recovery-card').style.display = which === 'recovery' ? 'block' : 'none';
+  document.getElementById('auth-sub').textContent = which === 'recovery' ? 'اختر كلمة مرور جديدة لحسابك' : AUTH_SUB;
+}
 
 function toggleAuthMode() {
   authMode = authMode === 'login' ? 'signup' : 'login';
@@ -378,22 +392,40 @@ function toggleAuthMode() {
     ? 'ليس لديك حساب؟ <a onclick="toggleAuthMode()">أنشئ حساب</a>'
     : 'لديك حساب؟ <a onclick="toggleAuthMode()">سجّل دخول</a>';
   document.getElementById('forgot-pass-row').style.display = authMode === 'login' ? 'block' : 'none';
+  clearAuthMessages();
 }
+
+function clearAuthMessages() {
+  document.getElementById('auth-err').style.display = 'none';
+  document.getElementById('auth-ok').style.display = 'none';
+  document.getElementById('resend-row').style.display = 'none';
+}
+
+// Where the e-mail links (reset, confirmation) bring the person back to.
+function authRedirect() { return location.origin + location.pathname; }
+
+const AUTH_MSG = {
+  'invalid-credential': 'البريد أو كلمة المرور غلط',
+  'email-in-use': 'البريد مسجّل مسبقًا — جرب تسجّل دخول',
+  'weak-password': 'كلمة المرور لازم تكون 6 أحرف على الأقل',
+  'invalid-email': 'صيغة البريد غير صحيحة',
+  'email-not-confirmed': 'فعّل بريدك أولًا — افتح الرابط اللي وصلك على بريدك',
+  'rate-limited': 'محاولات كثيرة — انتظر شوي وجرّب مرة ثانية',
+  'offline': 'تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية',
+  'timeout': 'الاتصال بطيء — جرّب مرة ثانية'
+};
+function authErrorText(e) { return AUTH_MSG[e && e.code] || ('خطأ: ' + (e && e.message)); }
 
 async function sendResetEmail() {
   const email = document.getElementById('auth-email').value.trim();
-  document.getElementById('auth-err').style.display = 'none';
+  clearAuthMessages();
   if (!email) { showAuthError('اكتب بريدك الإلكتروني فوق الأول، وبعدين اضغط "نسيت كلمة المرور"'); return; }
-  const { sendPasswordResetEmail } = window._authFns;
   try {
-    await sendPasswordResetEmail(window._auth, email);
-    alert('تم إرسال رابط تغيير كلمة المرور إلى بريدك — تفقّد صندوق الوارد (والسبام لو ما وصلك).');
+    await Data.auth.resetPassword(email, authRedirect());
+    // The same answer whether or not the address has an account.
+    showAuthOk(['إذا كان البريد مسجّلًا وصلك رابط تغيير كلمة المرور.', 'تأكد من كتابة البريد صح، وتفقّد السبام.']);
   } catch (e) {
-    const map = {
-      'auth/invalid-email': 'صيغة البريد غير صحيحة',
-      'auth/user-not-found': 'ما فيه حساب مسجّل بهذا البريد'
-    };
-    showAuthError(map[e.code] || ('خطأ: ' + e.message));
+    showAuthError(authErrorText(e));
   }
 }
 
@@ -403,45 +435,121 @@ function showAuthError(msg) {
   el.style.display = 'block';
 }
 
+function showAuthOk(lines) {
+  const el = document.getElementById('auth-ok');
+  el.innerHTML = lines.map(escapeHtml).join('<br>');
+  el.style.display = 'block';
+}
+
 async function submitAuth() {
   const email = document.getElementById('auth-email').value.trim();
   const pass = document.getElementById('auth-pass').value;
-  document.getElementById('auth-err').style.display = 'none';
+  clearAuthMessages();
   if (!email || !pass) { showAuthError('عبّي البريد وكلمة المرور'); return; }
 
-  const { createUserWithEmailAndPassword, signInWithEmailAndPassword } = window._authFns;
   const btn = document.getElementById('auth-submit-btn');
   if (btn.disabled) return;
   const restore = setButtonBusy(btn, authMode === 'signup' ? 'جاري إنشاء الحساب...' : 'جاري الدخول...');
   try {
     if (authMode === 'signup') {
-      const cred = await createUserWithEmailAndPassword(window._auth, email, pass);
-      // Firebase Auth itself keeps no record the admin's own client code
-      // can list (that needs a service account, which this no-backend site
-      // doesn't have) — mirror the signup into Firestore so the admin's
-      // "كل الحسابات المسجّلة" panel can show every account that ever
-      // registered, even one that never created an event or deleted it.
-      const { doc, setDoc, serverTimestamp } = window._fsFns;
-      await setDoc(doc(window._db, 'users', cred.user.uid), { email, createdAt: serverTimestamp() });
+      const res = await Data.auth.signUp(email, pass, authRedirect());
+      // Confirmation is on: no session yet, the person must open the e-mailed link first.
+      if (!res.confirmed) showCheckEmail(email);
     } else {
-      await signInWithEmailAndPassword(window._auth, email, pass);
+      await Data.auth.signInWithPassword(email, pass);
     }
   } catch (e) {
-    const map = {
-      'auth/email-already-in-use': 'البريد مسجّل مسبقًا — جرب تسجّل دخول',
-      'auth/invalid-credential': 'البريد أو كلمة المرور غلط',
-      'auth/weak-password': 'كلمة المرور لازم تكون 6 أحرف على الأقل',
-      'auth/invalid-email': 'صيغة البريد غير صحيحة'
-    };
-    showAuthError(map[e.code] || ('خطأ: ' + e.message));
+    showAuthError(authErrorText(e));
+    if (e.code === 'email-not-confirmed') { pendingConfirmEmail = email; document.getElementById('resend-row').style.display = 'block'; }
   } finally {
     restore();
   }
 }
 
+function showCheckEmail(email) {
+  pendingConfirmEmail = email;
+  document.getElementById('check-email-addr').textContent = email;
+  document.getElementById('check-email-err').style.display = 'none';
+  showAuthCard('check');
+}
+
+function backToLogin() {
+  authMode = 'signup';
+  toggleAuthMode();
+  showAuthCard('login');
+}
+
+async function resendConfirmation() {
+  const email = pendingConfirmEmail || document.getElementById('auth-email').value.trim();
+  if (!email) return;
+  const checking = document.getElementById('check-email-card').style.display !== 'none';
+  const errEl = document.getElementById('check-email-err');
+  errEl.style.display = 'none';
+  try {
+    await Data.auth.resend(email, authRedirect());
+    showToast('✅ أرسلنا الرابط مرة ثانية');
+  } catch (e) {
+    if (checking) { errEl.textContent = authErrorText(e); errEl.style.display = 'block'; } else showAuthError(authErrorText(e));
+  }
+}
+
+// The set-new-password screen: opened from the reset e-mail link (the session
+// is already open, see boot()). Same card as the sign-in form.
+function showRecovery(email) {
+  recovering = true;
+  resetAppState();
+  document.getElementById('recovery-email').textContent = email || '';
+  document.getElementById('recovery-account').style.display = email ? 'block' : 'none';
+  document.getElementById('app-view').style.display = 'none';
+  document.getElementById('auth-view').style.display = 'block';
+  document.getElementById('recovery-err').style.display = 'none';
+  document.getElementById('new-pass').value = '';
+  document.getElementById('new-pass2').value = '';
+  showAuthCard('recovery');
+}
+
+async function submitNewPassword() {
+  const p1 = document.getElementById('new-pass').value;
+  const p2 = document.getElementById('new-pass2').value;
+  const err = document.getElementById('recovery-err');
+  const fail = (m) => { err.textContent = m; err.style.display = 'block'; };
+  err.style.display = 'none';
+  if (!p1 || !p2) { fail('اكتب كلمة المرور مرتين'); return; }
+  if (p1.length < 6) { fail('كلمة المرور لازم تكون 6 أحرف على الأقل'); return; }
+  if (p1 !== p2) { fail('كلمتا المرور غير متطابقتين'); return; }
+  const btn = document.getElementById('recovery-submit-btn');
+  if (btn.disabled) return;
+  const restore = setButtonBusy(btn, 'جاري الحفظ...');
+  try {
+    await Data.auth.updatePassword(p1);
+  } catch (e) {
+    restore();
+    if (e.code === 'same-password') fail('اختر كلمة مرور مختلفة عن القديمة');
+    else if (e.code === 'no-session') fail('انتهت صلاحية الرابط — اطلب رابط جديد من "نسيت كلمة المرور؟"');
+    else fail(authErrorText(e));
+    return;
+  }
+  restore();
+  recovering = false;
+  showAuthCard('login');
+  let user = null;
+  try { user = await Data.auth.current(); } catch (e) {}
+  // The toast comes AFTER the events page is on screen: signing in takes a few seconds on a phone, and a toast
+  // shown before that used up its 5 s while the person was still looking at «جاري التحميل...».
+  try { await handleAuthUser(user); } catch (e) { showInitFailure(e); }
+  showToast('✅ تم تغيير كلمة المرور', 7000);
+}
+
+function cancelRecovery() {
+  recovering = false;
+  clearCache();
+  showAuthCard('login');
+  Data.auth.signOut().catch(() => {});
+  handleAuthUser(null);
+}
+
 function doLogout() {
-  const { signOut } = window._authFns;
-  signOut(window._auth);
+  Data.auth.signOut().catch((e) => { showToast('تعذّر تسجيل الخروج — جرّب مرة ثانية'); });
 }
 
 // The kind of event picked in the create form (required — no default, so a
@@ -489,10 +597,6 @@ function cancelCreateForm() {
   document.getElementById('create-form').style.display = 'none';
 }
 
-function newEventId() {
-  return Math.random().toString(36).substr(2, 6) + Date.now().toString(36).substr(-4);
-}
-
 async function createNewEvent() {
   const name = document.getElementById('ev-name').value.trim();
   const date = document.getElementById('ev-date').value;
@@ -503,53 +607,30 @@ async function createNewEvent() {
   if (mapsLink && !/^https?:\/\//i.test(mapsLink)) { alert('رابط الموقع لازم يبدأ بـ http:// أو https://'); return; }
   const type = newEventType;
 
-  const { serverTimestamp, doc, runTransaction } = window._fsFns;
-  const eventId = newEventId();
-  // The door code is no longer written here: it lives in an owner-only
-  // sub-document (see loadScanPin in event.html), which the dashboard
-  // creates the first time the owner opens the event.
-  const user = window._auth.currentUser;
-  const admin = isAdmin(user);
-  const eventRef = doc(window._db, 'events', eventId);
-  const limitRef = doc(window._db, 'accountLimits', user.uid);
   const btn = document.getElementById('create-submit-btn');
   if (btn.disabled) return;
   const restore = setButtonBusy(btn, 'جاري الإنشاء...');
 
   try {
-    await runTransaction(window._db, async (tx) => {
-      const eventData = {
-        name, type, date, venue, mapsLink, theme: EVENT_TYPES[type].theme,
-        paid: false, guestCount: 0,
-        ownerUid: user.uid,
-        ownerEmail: user.email || '',
-        createdAt: serverTimestamp()
-      };
-
-      // The one-event-per-customer cap is enforced by Firestore's security
-      // rules (see accountLimits/{uid}), not just this client-side check —
-      // this transaction is what makes that enforcement atomic and race-safe.
-      if (!admin) {
-        const limitSnap = await tx.get(limitRef);
-        if (!limitSnap.exists()) {
-          tx.set(limitRef, { eventLimit: 1, eventCount: 1 });
-        } else {
-          const { eventCount = 0, eventLimit = 1 } = limitSnap.data();
-          if (eventCount >= eventLimit) throw new Error('LIMIT_REACHED');
-          tx.update(limitRef, { eventCount: eventCount + 1 });
-        }
-      }
-      tx.set(eventRef, eventData);
-    });
-    if (!admin) {
-      notifyAdmin('مناسبة جديدة 🎉', 'عميل جديد سوى مناسبة: "' + name + '" — الإيميل: ' + (user.email || user.uid));
+    // The server picks the id, enforces the one-event-per-customer limit
+    // atomically and creates the door code with the event.
+    const eventId = await Data.events.create({ name, type, date, venue, mapsLink, theme: EVENT_TYPES[type].theme });
+    if (!shownAdmin) {
+      notifyAdmin('مناسبة جديدة 🎉', 'عميل جديد سوى مناسبة: "' + name + '" — الإيميل: ' + (shownEmail || shownUid));
     }
-    goTo('event.html?id=' + eventId);
+    goTo('event.html?id=' + encodeURIComponent(eventId));
     // Left busy on purpose: the page is on its way to the dashboard.
   } catch (e) {
+    // After a timeout the event may exist already: look before saying anything.
+    if (e.code === 'timeout' || e.code === 'offline' || e.code === 'limit-reached') {
+      try { await refreshEvents(); } catch (x) {}
+      const made = allEvents.find(ev => ev.ownerUid === shownUid && ev.name === name && Date.now() - new Date(ev.createdAt).getTime() < 5 * 60 * 1000);
+      if (made) { goTo('event.html?id=' + encodeURIComponent(made.id)); return; }
+    }
     restore();
-    if (e.message === 'LIMIT_REACHED') {
+    if (e.code === 'limit-reached') {
       alert('عندك مناسبة وحدة مفعّلة على حسابك حاليًا. اطلب مناسبة إضافية من لوحتك.');
+      refreshEvents().catch(() => {});
     } else {
       alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
       console.error(e);
@@ -608,53 +689,24 @@ async function deleteEvent(eventId, name, ownerUid, slug) {
   const ev = allEvents.find(e => e.id === eventId);
   const guestCount = ev ? ev.guestCount : undefined;
   if (!(await confirmEventDelete({ name, guestCount }))) return;
-  const { collection, getDocs, deleteDoc, doc, runTransaction } = window._fsFns;
   try {
-    const guestsSnap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
-    const requestsSnap = await getDocs(collection(window._db, 'events', eventId, 'requests'));
-    await Promise.all([
-      ...guestsSnap.docs.map(d => deleteDoc(d.ref)),
-      ...requestsSnap.docs.map(d => deleteDoc(d.ref)),
-      // Before the event doc itself: the rules check ownership through it.
-      deleteDoc(doc(window._db, 'events', eventId, 'roster', 'list')),
-      // Frees the readable link so it can be used again.
-      ...(slug ? [deleteDoc(doc(window._db, 'slugs', slug))] : [])
-    ]);
-    await deleteDoc(doc(window._db, 'events', eventId));
-
-    // Frees up the deleted event's slot. Best-effort and separate from the
-    // deletion above, so a corrupt/missing accountLimits doc never blocks
-    // the deletion itself. Reads the current count first instead of a bare
-    // increment(-1): incrementing a MISSING eventCount field is rejected by
-    // Firestore Rules (unlike the client's destructured default, rules deny
-    // on a comparison against a field that isn't there), which used to leave
-    // the delete silently unable to free the slot — see event.html's
-    // deleteThisEvent() for the same fix.
-    if (ownerUid) {
-      try {
-        const limitRef = doc(window._db, 'accountLimits', ownerUid);
-        await runTransaction(window._db, async (tx) => {
-          const limitSnap = await tx.get(limitRef);
-          if (!limitSnap.exists()) return;
-          const count = limitSnap.data().eventCount || 0;
-          if (count > 0) tx.update(limitRef, { eventCount: count - 1 });
-        });
-      } catch (e) { console.error('accountLimits decrement failed:', e); }
-    }
+    // One call deletes the event with its guests, requests and link, and gives the slot back.
+    await Data.events.remove(eventId);
+    await refreshEvents().catch(() => {});
   } catch (e) {
     alert('صار خطأ أثناء الحذف: ' + (e.code || '') + ' — ' + e.message);
     console.error(e);
   }
 }
 
-let eventsUnsub = null;
-let limitUnsub = null;
-let requestUnsub = null;
-let adminRequestsUnsub = null;
+let pollers = [];
 let allAccounts = null; // loaded the first time the admin opens the section
 let myEventsCount = 0;
 let myEventLimit = 1;
 let myPendingRequestId = null;
+let shownUid = null;    // the account the page is showing
+let shownEmail = '';
+let shownAdmin = false;
 
 function showInitFailure(e) {
   console.error(e);
@@ -667,47 +719,127 @@ function showInitFailure(e) {
   el.onclick = () => location.reload();
 }
 
-let firstAuthMarked = false;
-function initAuthWatcher() {
+// The last list this browser saw, painted at once while the first answer is on
+// its way. Only for the same account; removed on sign-out.
+const CACHE_KEY = 'app_cache_v1';
+function readCache(uid) {
   try {
-    const { onAuthStateChanged } = window._authFns;
-    onAuthStateChanged(window._auth, (user) => {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    return c && c.uid === uid && Array.isArray(c.events) ? c : null;
+  } catch (e) { return null; }
+}
+function writeCache(uid, admin, events, acct) {
+  try { if (events.length <= 200) localStorage.setItem(CACHE_KEY, JSON.stringify({ uid, admin, events, acct })); } catch (e) {}
+}
+function clearCache() { try { localStorage.removeItem(CACHE_KEY); } catch (e) {} }
+
+function stopPollers() {
+  pollers.forEach(p => p.stop());
+  pollers = [];
+}
+
+function startPollers() {
+  stopPollers();
+  // Own actions refresh at once (refreshEvents / refreshAdmin); these keep it current.
+  pollers.push(Data.makePoller(refreshEvents, shownAdmin ? 30000 : 15000));
+  if (shownAdmin) pollers.push(Data.makePoller(refreshAdmin, 30000));
+  pollers.forEach(p => p.start());
+}
+
+let firstAuthMarked = false;
+let authSeq = 0;
+function watchAuth() {
+  try {
+    Data.auth.onChange((user) => {
       try {
         if (!firstAuthMarked) { firstAuthMarked = true; tmark('auth ' + (user ? 'user' : 'none')); }
+        if (recovering) return;
+        // Token refreshes and repeated events for the same account change nothing on screen.
+        if (user && !user.isAnonymous && user.uid === shownUid) return;
         handleAuthUser(user);
       } catch (e) { showInitFailure(e); }
     });
   } catch (e) { showInitFailure(e); }
 }
 
-function handleAuthUser(user) {
-  document.getElementById('auth-loading').style.display = 'none';
+// Forgets everything shown for the previous account (sign-out, or a recovery
+// link opened while another account is on screen).
+function resetAppState() {
+  authSeq++;
+  stopPollers();
+  clearCache();
+  document.getElementById('events-list').innerHTML = '';
+  ['admin-unpaid-section', 'admin-requests-section', 'admin-accounts-section', 'owner-filter-bar', 'limit-box'].forEach(id => { document.getElementById(id).style.display = 'none'; });
+  document.getElementById('admin-requests-list').innerHTML = '';
+  document.getElementById('admin-accounts-list').innerHTML = '';
+  document.getElementById('admin-accounts-body').style.display = 'none';
+  document.getElementById('create-form').style.display = 'none';
+  shownUid = null;
+  shownEmail = '';
+  shownAdmin = false;
+  allAccounts = null;
+  allEvents = [];
+  lastEventsJson = '';
+  lastReqJson = '';
+  ownerFilter = null;
+  knownCappedEventIds = null;
+  myEventsCount = 0;
+  myEventLimit = 1;
+  myPendingRequestId = null;
+  firstListMarked = false;
+}
+
+async function handleAuthUser(user) {
+  const seq = ++authSeq;
   tmShow();
   // An anonymous identity is what scan.html signs a door device in with;
   // on the same browser it must not pass for "logged in" here — the
   // login form stays up, and a real sign-in replaces it.
   if (user && !user.isAnonymous) {
+    // The last list this browser saw for this account is shown at once (with the
+    // admin flag it had); the server's answer about the account follows.
+    const cached = readCache(user.uid);
+    let painted = false;
+    if (cached) {
+      painted = true;
+      document.getElementById('auth-loading').style.display = 'none';
+      document.getElementById('auth-view').style.display = 'none';
+      document.getElementById('app-view').style.display = 'block';
+      document.getElementById('current-email').textContent = user.email || '';
+      shownUid = user.uid;
+      shownEmail = user.email || '';
+      shownAdmin = cached.admin;
+      document.getElementById('events-heading').textContent = cached.admin ? 'كل المناسبات (أدمن)' : 'مناسباتي';
+      applyEvents(cached.events, cached.acct);
+    }
+    let admin;
+    try { admin = await Data.auth.isAdmin(); } catch (e) {
+      if (seq !== authSeq) return;
+      if (painted) setTimeout(() => { if (seq === authSeq) handleAuthUser(user); }, 5000);
+      else showInitFailure(e);
+      return;
+    }
+    if (seq !== authSeq) return;
+    if (painted && admin !== cached.admin) {
+      shownAdmin = admin;
+      lastEventsJson = '';
+      allEvents = [];
+      document.getElementById('events-list').innerHTML = '';
+    }
+    document.getElementById('auth-loading').style.display = 'none';
     document.getElementById('auth-view').style.display = 'none';
     document.getElementById('app-view').style.display = 'block';
     document.getElementById('current-email').textContent = user.email || '';
-    const admin = isAdmin(user);
+    shownUid = user.uid;
+    shownEmail = user.email || '';
+    shownAdmin = admin;
     document.getElementById('events-heading').textContent = admin ? 'كل المناسبات (أدمن)' : 'مناسباتي';
-    watchEvents(user);
-    if (admin) {
-      watchAdminRequests();
-      loadAccountsCount();
-    } else {
-      watchMyLimitAndRequest(user);
-    }
+    startPollers();
   } else {
+    document.getElementById('auth-loading').style.display = 'none';
     document.getElementById('auth-view').style.display = 'block';
     document.getElementById('app-view').style.display = 'none';
-    if (eventsUnsub) { eventsUnsub(); eventsUnsub = null; }
-    if (limitUnsub) { limitUnsub(); limitUnsub = null; }
-    if (requestUnsub) { requestUnsub(); requestUnsub = null; }
-    if (adminRequestsUnsub) { adminRequestsUnsub(); adminRequestsUnsub = null; }
-    myEventLimit = 1;
-    myPendingRequestId = null;
+    resetAppState();
   }
 }
 
@@ -744,52 +876,66 @@ function updateCreateGate(admin) {
 }
 
 async function selfIncreaseLimit() {
-  const { doc, runTransaction } = window._fsFns;
-  const user = window._auth.currentUser;
-  const limitRef = doc(window._db, 'accountLimits', user.uid);
   try {
-    await runTransaction(window._db, async (tx) => {
-      const snap = await tx.get(limitRef);
-      const eventLimit = snap.exists() ? (snap.data().eventLimit || 1) : 1;
-      if (eventLimit >= AUTO_APPROVE_CEILING) throw new Error('CEILING_REACHED');
-      tx.update(limitRef, { eventLimit: eventLimit + 1 });
-    });
+    await Data.account.bumpLimit();
+    await refreshEvents().catch(() => {});
   } catch (e) {
-    if (e.message === 'CEILING_REACHED') { requestExtraEvent(); return; }
+    if (e.code === 'ceiling-reached') { requestExtraEvent(); return; }
     alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
     console.error(e);
   }
 }
 
-// null until the first snapshot settles — lets checkNewlyCappedEvents skip
+// null until the first list settles — lets checkNewlyCappedEvents skip
 // alerting for events that were ALREADY capped before the admin opened the
 // dashboard, and only toast for ones that cross the line while they're
 // actually watching.
 let knownCappedEventIds = null;
 let allEvents = [];
+let lastEventsJson = '';
+let evSeq = 0;
+let firstListMarked = false;
 
-function watchEvents(user) {
-  const { query, where, onSnapshot } = window._fsFns;
-  if (eventsUnsub) eventsUnsub();
-  const admin = isAdmin(user);
-  const q = admin ? window._eventsCol : query(window._eventsCol, where('ownerUid', '==', user.uid));
-  let firstSnapMarked = false, serverSnapMarked = false;
-  eventsUnsub = onSnapshot(q, (snap) => {
-    const fromCache = !!(snap.metadata && snap.metadata.fromCache);
-    if (!firstSnapMarked) { firstSnapMarked = true; serverSnapMarked = !fromCache; tmark('events ' + (fromCache ? 'cache' : 'server') + ' n=' + snap.size); }
-    else if (!fromCache && !serverSnapMarked) { serverSnapMarked = true; tmark('events server n=' + snap.size); }
-    const events = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    allEvents = events;
-    events.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-    myEventsCount = admin ? events.filter(ev => ev.ownerUid === user.uid).length : events.length;
-    updateCreateGate(admin);
-    renderEvents(ownerFilter ? events.filter(ev => ev.ownerUid === ownerFilter.uid) : events, admin);
-    if (admin) {
-      renderAllAccounts();
-      renderUnpaidEvents(events);
-      checkNewlyCappedEvents(events);
+// Paints a list (from the cache or the server). Skips the redraw when nothing changed.
+function applyEvents(events, acct) {
+  const json = JSON.stringify([events, acct]);
+  if (json === lastEventsJson) return;
+  lastEventsJson = json;
+  allEvents = events;
+  if (acct) { myEventLimit = acct.eventLimit; myPendingRequestId = acct.pendingRequest; }
+  myEventsCount = shownAdmin ? events.filter(ev => ev.ownerUid === shownUid).length : (acct ? acct.eventCount : events.length);
+  updateCreateGate(shownAdmin);
+  renderEvents(ownerFilter ? events.filter(ev => ev.ownerUid === ownerFilter.uid) : events, shownAdmin);
+  if (shownAdmin) {
+    renderAllAccounts();
+    renderUnpaidEvents(events);
+  }
+}
+
+// One read of the list (and, for a customer, the limit and the pending request).
+// Called by the poller and right after the person's own actions; an older answer
+// never overwrites a newer one.
+async function refreshEvents() {
+  const my = ++evSeq;
+  const uid = shownUid, admin = shownAdmin;
+  if (!uid) return;
+  let events, acct = null;
+  try {
+    [events, acct] = await Promise.all([Data.events.list(), admin ? null : Data.account.get()]);
+  } catch (e) {
+    if (!firstListMarked && uid === shownUid && !allEvents.length) {
+      const list = document.getElementById('events-list');
+      if (!list.children.length) list.innerHTML = '<div class="empty">⚠️ تعذّر تحميل المناسبات — جرّب التحديث</div>';
     }
-  });
+    throw e;
+  }
+  if (my !== evSeq || uid !== shownUid) return;
+  if (!firstListMarked) { firstListMarked = true; tmark('events server n=' + events.length); }
+  const wasEmptyError = !allEvents.length && document.querySelector('#events-list .empty');
+  if (wasEmptyError) lastEventsJson = '';
+  applyEvents(events, acct);
+  writeCache(uid, admin, events, acct);
+  if (admin) checkNewlyCappedEvents(events);
 }
 
 // Live, in-page alert the moment ANY customer's event reaches its guest
@@ -834,54 +980,45 @@ async function quickActivatePayment(eventId) {
   const ev = allEvents.find(e => e.id === eventId);
   const n = askGuestLimit({ name: ev ? ev.name : '', current: null, activated: false, guestCount: ev ? (ev.guestCount || 0) : 0 });
   if (n === null) return;
-  const { doc, updateDoc } = window._fsFns;
   try {
-    await updateDoc(doc(window._db, 'events', eventId), { paid: true, guestLimit: n });
+    await Data.admin.activateEvent(eventId, n);
+    await refreshEvents().catch(() => {});
   } catch (e) {
     alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
     console.error(e);
   }
-}
-
-function watchMyLimitAndRequest(user) {
-  const { doc, onSnapshot, collection, query, where } = window._fsFns;
-  if (limitUnsub) limitUnsub();
-  limitUnsub = onSnapshot(doc(window._db, 'accountLimits', user.uid), (snap) => {
-    myEventLimit = snap.exists() ? (snap.data().eventLimit || 1) : 1;
-    updateCreateGate(false);
-  });
-  if (requestUnsub) requestUnsub();
-  requestUnsub = onSnapshot(
-    query(collection(window._db, 'eventRequests'), where('uid', '==', user.uid), where('status', '==', 'pending')),
-    (snap) => {
-      myPendingRequestId = snap.empty ? null : snap.docs[0].id;
-      updateCreateGate(false);
-    }
-  );
 }
 
 async function requestExtraEvent() {
   if (myPendingRequestId) return;
-  const { collection, addDoc, serverTimestamp } = window._fsFns;
-  const user = window._auth.currentUser;
   try {
-    await addDoc(collection(window._db, 'eventRequests'), {
-      uid: user.uid, email: user.email || '', status: 'pending', requestedAt: serverTimestamp()
-    });
-    notifyAdmin('طلب مناسبة إضافية 🙋', 'طلب من: ' + (user.email || user.uid));
+    const r = await Data.account.requestExtraEvent();
+    if (r.created) notifyAdmin('طلب مناسبة إضافية 🙋', 'طلب من: ' + (shownEmail || shownUid));
+    myPendingRequestId = r.id;
+    updateCreateGate(false);
+    refreshEvents().catch(() => {});
   } catch (e) {
     alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
     console.error(e);
   }
 }
 
-function watchAdminRequests() {
-  const { collection, query, where, onSnapshot } = window._fsFns;
-  if (adminRequestsUnsub) adminRequestsUnsub();
-  adminRequestsUnsub = onSnapshot(
-    query(collection(window._db, 'eventRequests'), where('status', '==', 'pending')),
-    (snap) => renderAdminRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-  );
+let lastReqJson = '';
+// Admin extras: the pending requests, the accounts badge, and the accounts list if it is open.
+async function refreshAdmin() {
+  const uid = shownUid;
+  const [reqs, count] = await Promise.all([Data.admin.requests(), Data.admin.accountsCount()]);
+  if (uid !== shownUid) return;
+  const json = JSON.stringify(reqs);
+  if (json !== lastReqJson) { lastReqJson = json; renderAdminRequests(reqs); }
+  if (allAccounts === null) setAccountsBadge(count);
+  else {
+    const list = await Data.admin.accounts();
+    if (uid !== shownUid) return;
+    allAccounts = list.map(a => ({ id: a.uid, email: a.email, createdAt: a.createdAt }));
+    setAccountsBadge(allAccounts.length);
+    renderAllAccounts();
+  }
 }
 
 function renderAdminRequests(reqs) {
@@ -904,29 +1041,13 @@ function renderAdminRequests(reqs) {
   `).join('');
 }
 
-// Mirrors every signup (see the write in submitAuth and the matching
-// firestore.rules), so the admin sees every account that ever registered —
-// even one that created no event or deleted it, which the events list alone
-// can't show.
-// Collapsed by default, and loaded only when opened: this list grows with
-// every signup, and reading it in full on every admin page load would cost
-// one read per account against the free plan's daily quota. The badge uses
-// a server-side count instead (about one read however many accounts).
-async function loadAccountsCount() {
-  const { collection, getCountFromServer } = window._fsFns;
-  try {
-    const snap = await getCountFromServer(collection(window._db, 'users'));
-    setAccountsBadge(snap.data().count);
-  } catch (e) { console.error('accounts count failed:', e); }
-}
-
 function setAccountsBadge(n) {
   document.getElementById('admin-accounts-section').style.display = n > 0 ? 'block' : 'none';
   document.getElementById('admin-accounts-badge').textContent = n > 99 ? '99+' : String(n);
 }
 
 // What each account has done, from the events this page already reads (no
-// extra Firestore reads): how many events, and whether any is activated.
+// extra reads): how many events, and whether any is activated.
 let accountsFilter = 'all';
 function accountStatus(uid) {
   const evs = allEvents.filter(ev => ev.ownerUid === uid);
@@ -953,8 +1074,7 @@ function setOwnerFilter(uid, email) {
   const bar = document.getElementById('owner-filter-bar');
   bar.style.display = ownerFilter ? 'flex' : 'none';
   if (ownerFilter) document.getElementById('owner-filter-email').textContent = email;
-  const sorted = [...allEvents].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  renderEvents(ownerFilter ? sorted.filter(ev => ev.ownerUid === uid) : sorted, true);
+  renderEvents(ownerFilter ? allEvents.filter(ev => ev.ownerUid === uid) : allEvents, true);
   if (ownerFilter) bar.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -966,10 +1086,9 @@ async function toggleAllAccounts() {
   if (!open || allAccounts) return;
   const list = document.getElementById('admin-accounts-list');
   list.innerHTML = '<div class="sub" style="text-align:center;">⏳ جاري التحميل...</div>';
-  const { collection, query, orderBy, getDocs } = window._fsFns;
   try {
-    const snap = await getDocs(query(collection(window._db, 'users'), orderBy('createdAt', 'desc')));
-    allAccounts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const accounts = await Data.admin.accounts();
+    allAccounts = accounts.map(a => ({ id: a.uid, email: a.email, createdAt: a.createdAt }));
     setAccountsBadge(allAccounts.length);
     renderAllAccounts();
   } catch (e) {
@@ -990,8 +1109,7 @@ function renderAllAccounts() {
     return;
   }
   list.innerHTML = accounts.map(a => {
-    const c = a.createdAt;
-    const dt = c ? (c.toDate ? c.toDate() : (c.seconds ? new Date(c.seconds * 1000) : null)) : null;
+    const dt = a.createdAt ? new Date(a.createdAt) : null;
     // Built by hand (12-hour, ص/م, Western digits) — toLocaleString('ar-SA') can give Arabic-Indic digits or Hijri dates.
     const h = dt ? dt.getHours() : 0;
     const time = dt ? ((h % 12 || 12) + ':' + String(dt.getMinutes()).padStart(2, '0') + ' ' + (h < 12 ? 'ص' : 'م')) : '';
@@ -1010,15 +1128,13 @@ function renderAllAccounts() {
   }).join('');
 }
 
-// Removes the record from this list only — the users/{uid} mirror written
-// at signup. The customer's real sign-in (Firebase Auth) and their events
-// and guests live elsewhere and are untouched; they just won't reappear
-// here, since the record is only ever written once, at signup.
+// Removes the record from this list only — the row the signup mirror wrote.
+// The customer's real sign-in and their events and guests live elsewhere and
+// are untouched.
 async function deleteAccountRecord(uid, email) {
   if (!confirm('حذف "' + email + '" من القائمة؟\n\nيحذف من القائمة فقط — حساب العميل ومناسباته ما تتأثر، ويقدر يدخل عادي. بس ما راح يرجع يظهر هنا.')) return;
-  const { doc, deleteDoc } = window._fsFns;
   try {
-    await deleteDoc(doc(window._db, 'users', uid));
+    await Data.admin.removeAccountRecord(uid);
     allAccounts = allAccounts.filter(a => a.id !== uid);
     setAccountsBadge(allAccounts.length);
     renderAllAccounts();
@@ -1030,49 +1146,43 @@ async function deleteAccountRecord(uid, email) {
 }
 
 async function approveEventRequest(requestId, uid) {
-  const { doc, getDoc, setDoc, updateDoc, increment } = window._fsFns;
   try {
-    const limitRef = doc(window._db, 'accountLimits', uid);
-    const limitSnap = await getDoc(limitRef);
-    if (limitSnap.exists()) {
-      await updateDoc(limitRef, { eventLimit: increment(1) });
-    } else {
-      await setDoc(limitRef, { eventLimit: 2, eventCount: 0 });
-    }
-    await updateDoc(doc(window._db, 'eventRequests', requestId), { status: 'approved' });
+    await Data.admin.approveRequest(requestId);
   } catch (e) {
-    alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
-    console.error(e);
+    if (e.code !== 'already-handled') { alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message); console.error(e); }
   }
+  refreshAdmin().catch(() => {});
 }
 
 async function rejectEventRequest(requestId) {
-  const { doc, updateDoc } = window._fsFns;
   try {
-    await updateDoc(doc(window._db, 'eventRequests', requestId), { status: 'rejected' });
+    await Data.admin.rejectRequest(requestId);
   } catch (e) {
-    alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
-    console.error(e);
+    if (e.code !== 'already-handled') { alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message); console.error(e); }
   }
+  refreshAdmin().catch(() => {});
 }
 
-if (window._auth) {
-  tmark('appDbReady (already)');
-  initAuthWatcher();
-} else {
-  // A slow or dropped connection while firebase-init.js's own CDN imports
-  // load means appDbReady never fires — same "trapped forever" failure the
-  // splash/dashboard fixes closed elsewhere, one layer earlier: with no
-  // fallback here, the login screen was stuck on "جاري التحميل..." forever
-  // with no way out.
-  const appDbTimeout = setTimeout(() => {
-    const el = document.getElementById('auth-loading');
-    el.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
-    el.style.cursor = 'pointer';
-    el.onclick = () => location.reload();
-  }, 8000);
-  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); tmark('appDbReady'); initAuthWatcher(); });
+async function boot() {
+  let rec = null;
+  try { rec = await Data.auth.recoveryFromUrl(); } catch (e) { rec = null; }
+  if (rec && rec.error) {
+    document.getElementById('auth-loading').style.display = 'none';
+    showAuthError(rec.error === 'offline' ? 'تعذّر الاتصال — افتح الرابط مرة ثانية' : 'الرابط منتهي أو مستخدم من قبل — اطلب رابط جديد من "نسيت كلمة المرور؟"');
+  } else if (rec && rec.kind === 'recovery') {
+    document.getElementById('auth-loading').style.display = 'none';
+    tmark('recovery');
+    showRecovery(rec.user && rec.user.email);
+  } else if (rec && rec.kind === 'signup') {
+    showToast('✅ تم تفعيل بريدك');
+  }
+  watchAuth();
 }
+
+try {
+  tmark('supabase');
+  boot().catch(showInitFailure);
+} catch (e) { showInitFailure(e); }
 
 // Last safety net for "stuck on جاري التحميل..." with no way out (a real
 // report: an iPhone sat on it for about a minute and a half after creating

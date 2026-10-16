@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>نموذج: تنبيه رمز الباب</title>
+<style>
+body{font-family:system-ui,"Segoe UI",Tahoma,sans-serif;background:#f6f3ee;margin:0;padding:16px;color:#2a2a2a}
+h2{font-size:15px;margin:22px 0 8px;color:#666}
+.card{max-width:420px;margin:0 auto 14px;background:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 1px 4px #0002}
+.warn{border-inline-start:5px solid #e0a100;background:#fff8e1}
+.lock{border-inline-start:5px solid #c62828;background:#fdecea}
+.card b{display:block;margin-bottom:6px}
+.card p{margin:0 0 10px;font-size:14px;line-height:1.7}
+button{font:inherit;border:0;border-radius:10px;padding:10px 14px;background:#2a2a2a;color:#fff;width:100%}
+button.sec{background:#fff;color:#2a2a2a;border:1px solid #bbb;margin-top:8px}
+small{color:#666;display:block;margin-top:8px;font-size:12.5px}
+.dark{background:#15181d;color:#fff;text-align:center;padding:26px 16px}
+.dark p{color:#ddd}
+</style></head><body>
+<h2>1) لوحة المناسبة — تحذير مبكر (20 محاولة غلط أو أكثر خلال الساعة، والباب لسه مفتوح)</h2>
+<div class="card warn"><b>⚠ محاولات كثيرة على رمز الباب</b>
+<p>تم رصد 24 محاولة خاطئة خلال الساعة الأخيرة. لو ما تتوقعها، غيّر الرمز بزر «رمز جديد». انتبه: تغيير الرمز يطلّع كل أجهزة المشرفين، فلا تغيّره وقت المناسبة.</p>
+<button class="sec">رمز جديد</button></div>
+
+<h2>2) لوحة المناسبة — الباب مقفل للأجهزة الجديدة (60 في الساعة أو 300 في اليوم)</h2>
+<div class="card lock"><b>🔒 الباب مقفل للأجهزة الجديدة</b>
+<p>تم رصد 60 محاولة خاطئة خلال الساعة الأخيرة. الأجهزة اللي دخلت بالرمز قبل كذا تواصل الشغل عادي، لكن أي جهاز جديد ما يقدر يدخل حاليًا.</p>
+<button>إعادة فتح الباب</button>
+<button class="sec">رمز جديد</button>
+<small>«إعادة فتح الباب» يمسح عدّاد المحاولات فقط، والرمز يبقى نفسه وأجهزة المشرفين ما تتأثر.</small></div>
+
+<h2>3) شاشة الماسح عند مشرف جديد (بعد القفل)</h2>
+<div class="card dark"><b>الدخول مقفل مؤقتًا</b>
+<p>تكررت المحاولات الخاطئة. اطلب من صاحب المناسبة يضغط «إعادة فتح الباب» في لوحة المناسبة، ثم حاول مرة ثانية.</p></div>
+
+<h2>4) تأكيد زر «رمز جديد»</h2>
+<div class="card"><b>تغيير الرمز؟</b>
+<p>سيتم إنشاء رمز جديد، وكل أجهزة المشرفين الحالية تطلع وتحتاج الرمز الجديد. لا تغيّره وقت المناسبة إلا للضرورة.</p>
+<button>نعم، غيّر الرمز</button><button class="sec">إلغاء</button></div>
+
+<h2>5) في دليل الاستخدام (تمت إضافتها)</h2>
+<div class="card"><p>«أدخلوا أجهزة الباب (جوالات المشرفين) بالرمز قبل المناسبة، لا في لحظة الزحام: الجهاز المسجَّل قبل الحفل يظل شغالًا حتى لو تكررت محاولات غلط من أي أحد.»</p></div>
+</body></html>

@@ -10,6 +10,14 @@ const STUBS = {
 // Replaces the real Firebase SDK with the in-memory fake, and short-circuits
 // every other third-party host (fonts, qrcodejs, jszip, qr-scanner CDNs) so
 // tests run fully offline and deterministically. Call before page.goto().
+const blocked = new WeakSet();
+async function blockExternal(page) {
+  if (blocked.has(page)) return;
+  blocked.add(page);
+  await page.route(/^https:\/\/(?!.*127\.0\.0\.1).*$/, (route) => route.abort());
+  await page.route('**/vendor/qrcode.min.js*', (route) => route.abort());
+}
+
 async function stubFirebase(page) {
   // Playwright matches routes in reverse registration order (last registered
   // wins), so the broad blocker must be registered FIRST and the specific
@@ -18,12 +26,11 @@ async function stubFirebase(page) {
   // Any other external host: fail fast instead of hanging on a blocked
   // sandbox proxy. Pages under test don't exercise QR/ZIP/camera features,
   // so missing qrcodejs/jszip/qr-scanner globals are fine for these specs.
-  await page.route(/^https:\/\/(?!.*127\.0\.0\.1).*$/, (route) => route.abort());
+  await blockExternal(page);
 
   // The pages now try our own copy of qrcodejs first. It is aborted by default
   // so the older specs, which stub the CDN copy, keep their meaning; a spec
   // that wants the local file calls routeQr() afterwards.
-  await page.route('**/vendor/qrcode.min.js*', (route) => route.abort());
 
   for (const [url, file] of Object.entries(STUBS)) {
     const body = fs.readFileSync(path.join(__dirname, 'mocks', file), 'utf8');
@@ -79,4 +86,125 @@ async function routeQr(page, opts = {}) {
   return { hits, setLocal: (m) => { state.local = m; }, setCdn: (m) => { state.cdn = m; } };
 }
 
-module.exports = { stubFirebase, seedFakeFirebase, routeQr };
+// Replaces the Supabase client (vendor/supabase.min.js) with the in-memory
+// fake in tests/mocks/supabase.stub.js and gives the page a test config, so
+// pages that load supabase-config.js + vendor/supabase.min.js + data.js run
+// offline. Same external-host blocking as stubFirebase. Call before page.goto().
+async function stubSupabase(page) {
+  await blockExternal(page);
+  const stub = fs.readFileSync(path.join(__dirname, 'mocks', 'supabase.stub.js'), 'utf8');
+  await page.route('**/vendor/supabase.min.js*', (route) => route.fulfill({ contentType: 'text/javascript', body: stub }));
+  await page.route('**/supabase-config.js*', (route) => route.fulfill({
+    contentType: 'text/javascript',
+    body: "window.SUPABASE_CONFIG = { url: 'https://stub.supabase.test', anonKey: 'anon-test-key' };",
+  }));
+}
+
+// Seeds the fake Supabase server before the page's own script runs. Rows use
+// the database's snake_case names:
+//   events:   { id: { name, type, date, venue, maps_link, theme, welcome_message, paid, guest_limit } }
+//   slugs:    { slug: eventId }
+//   requests: { eventId: { reqId: { status, guest_id, vip, name } } }
+//   tables:   { tableName: [rows] }   (plain table reads, capped by maxRows)
+// fail: { rpcName: { error: { message, code } | 'network', times } }
+async function seedFakeSupabase(page, { events = {}, slugs = {}, requests = {}, tables = {}, user = null, fail = {}, latency = 0, maxRows = 1000,
+  doors = {}, sessions = {}, owners = {}, admins = [], accounts = {}, limits = {}, eventRequests = [], users = [], authExtra = {} } = {}) {
+  await page.addInitScript((seed) => {
+    window.__fakeSupabase = Object.assign({
+      calls: [],
+      denyRpc: [],
+      auth: Object.assign({ user: seed.user, listeners: [], accounts: seed.accounts, nextSignInError: null, nextResetError: null, nextAnonUid: null }, seed.authExtra),
+    }, seed.state);
+  }, { user, accounts, authExtra, state: { events, slugs, requests, tables, fail, latency, maxRows, doors, sessions, owners, admins, limits, eventRequests, users } });
+}
+
+// The door scanner's server in one call. Defaults: event e1 'حفل تجريبي', door code
+// 123456, no guests. guests: [{ id, name, scanned?, vip?, scanned_at?, changed_at? }].
+// session: true gives `user` a session on the current code (a device that unlocked
+// before). owner / admin: the signed-in user is that event's owner / the admin.
+// Plain-object options after these are passed to seedFakeSupabase.
+async function seedScan(page, { event = {}, pin = '123456', guests = [], user = null, session = false, owner = false, admin = false,
+  lastChange = '2026-01-01T00:00:00.000000+00:00', ...rest } = {}) {
+  const ev = Object.assign({ name: 'حفل تجريبي', type: 'wedding', date: '2026-01-01', venue: 'الرياض', theme: 'gold' }, event);
+  const rows = guests.map((g) => Object.assign({ scanned: false, scanned_at: null, vip: false, changed_at: '2026-01-01T00:00:00.000000+00:00' },
+    g, g.scanned && !g.scanned_at ? { scanned_at: '2026-01-01T00:00:00.000000+00:00' } : {}));
+  const opts = { events: { e1: ev }, doors: { e1: { pin, guests: rows, lastChange } }, user, ...rest };
+  if (user && session) opts.sessions = { e1: { [user.id]: pin } };
+  if (user && owner) opts.owners = { e1: user.id };
+  if (user && admin) opts.admins = [user.email];
+  return seedFakeSupabase(page, opts);
+}
+
+// Turns the Firebase-shaped store the invite specs were written with
+// ({ events, slugs, 'events/<id>/requests' }) into a fake Supabase seed, so a
+// spec reads the same: camelCase event fields become the database's columns,
+// slugs become slug -> event id, requests move under their event. Extra
+// options (fail, latency, user ...) are passed through to seedFakeSupabase.
+async function seedInviteStore(page, { store = {}, ...rest } = {}) {
+  const events = {};
+  for (const [id, e] of Object.entries(store.events || {})) {
+    const { mapsLink, welcomeMessage, guestLimit, ...keep } = e;
+    events[id] = { ...keep };
+    if (mapsLink !== undefined) events[id].maps_link = mapsLink;
+    if (welcomeMessage !== undefined) events[id].welcome_message = welcomeMessage;
+    if (guestLimit !== undefined) events[id].guest_limit = guestLimit;
+  }
+  const slugs = {};
+  for (const [name, v] of Object.entries(store.slugs || {})) slugs[name] = v.eventId;
+  const requests = {};
+  for (const [key, docs] of Object.entries(store)) {
+    const m = key.match(/^events\/([^/]+)\/requests$/);
+    if (!m) continue;
+    requests[m[1]] = {};
+    for (const [rid, r] of Object.entries(docs)) {
+      requests[m[1]][rid] = { status: r.status, guest_id: r.guestId || null, vip: !!r.vip, name: r.name };
+    }
+  }
+  return seedFakeSupabase(page, { events, slugs, requests, ...rest });
+}
+
+// The organizer app's server (app.html). user: { id, email } (signed in, not anonymous)
+// or null. events: [{ id, name, ... database columns }]: owner_uid defaults to
+// the user, created_at to a falling date so the first one is the newest.
+// limits: { uid: { event_limit, event_count } }; eventRequests: [{ id, uid, email, status, requested_at }];
+// users: [{ uid, email, created_at }]. admin: true makes `user` the admin.
+// confirmEmail / recoveryUser (a { id, email }) go to the fake auth: see supabase.stub.js.
+async function seedAppStore(page, { user = null, admin = false, events = [], confirmEmail = false, recoveryUser = null, networkDown = false, hangAuth = false, accounts = {}, ...rest } = {}) {
+  const evs = {};
+  events.forEach((e, i) => {
+    const { id, ...row } = e;
+    evs[id] = Object.assign({ owner_uid: user ? user.id : null, created_at: '2026-01-' + String(28 - i).padStart(2, '0') + 'T00:00:00.000000+00:00' }, row);
+  });
+  const u = user ? Object.assign({ is_anonymous: false }, user) : null;
+  const acc = Object.assign({}, accounts);
+  if (u && !acc[u.email]) acc[u.email] = { id: u.id, password: 'secret12', confirmed: true };
+  return seedFakeSupabase(page, {
+    events: evs, user: u, admins: admin && u ? [u.email] : [], accounts: acc,
+    authExtra: { confirmEmail, recoveryUser, networkDown, hang: hangAuth }, ...rest,
+  });
+}
+
+// The event dashboard's server (event.html and Data.event / Data.guests / Data.requests / Data.door).
+// One event, id e1. event: database columns (owner_uid defaults to `user`); guests: [{ id, name, scanned?, vip?,
+// changed_at?, registered_at? }]; requests: [{ id, name, vip?, status? ('pending'), created_at?, guest_id? }];
+// user: { id, email } (the owner; admin: true makes it the admin); pin: the door code.
+// Plain-object options after these are passed to seedFakeSupabase.
+async function seedEvent(page, { event = {}, guests = [], requests = [], user = null, admin = false, pin = '123456',
+  lastChange = '2026-01-01T00:00:00.000000+00:00', ...rest } = {}) {
+  const u = user ? Object.assign({ is_anonymous: false }, user) : null;
+  const ev = Object.assign({ name: 'حفل تجريبي', type: 'wedding', date: '2026-01-01', venue: 'الرياض', theme: 'gold', paid: false,
+    owner_uid: u ? u.id : null, owner_email: u ? u.email || '' : '', created_at: '2026-01-01T00:00:00.000000+00:00' }, event);
+  const rows = guests.map((g) => Object.assign({ scanned: false, scanned_at: null, vip: false, changed_at: '2026-01-01T00:00:00.000000+00:00',
+    registered_at: '2026-01-01T00:00:00.000000+00:00' }, g, g.scanned && !g.scanned_at ? { scanned_at: '2026-01-01T00:00:00.000000+00:00' } : {}));
+  const reqs = {};
+  requests.forEach((r, i) => {
+    reqs[r.id] = { status: r.status || 'pending', guest_id: r.guest_id || null, vip: !!r.vip, name: r.name,
+      created_at: r.created_at || '2026-01-01T00:' + String(i).padStart(2, '0') + ':00.000000+00:00' };
+  });
+  return seedFakeSupabase(page, {
+    events: { e1: ev }, doors: { e1: { pin, guests: rows, lastChange } }, requests: { e1: reqs },
+    user: u, admins: admin && u ? [u.email] : [], ...rest,
+  });
+}
+
+module.exports = { stubFirebase, seedFakeFirebase, routeQr, stubSupabase, seedFakeSupabase, seedInviteStore, seedScan, seedAppStore, seedEvent };

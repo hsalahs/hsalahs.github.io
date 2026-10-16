@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedEvent } = require('./helpers');
 
 // Real .xlsx files (tests/fixtures), written by openpyxl and xlsxwriter — the
 // second in both its normal and its inline-string flavours — so the reader
@@ -9,18 +9,14 @@ const { stubFirebase, seedFakeFirebase } = require('./helpers');
 const FX = (name) => path.join(__dirname, 'fixtures', name);
 const JSZIP = fs.readFileSync(path.join(__dirname, '..', 'node_modules', 'jszip', 'dist', 'jszip.min.js'), 'utf8');
 
-const EVENT = { name: 'حفل تجريبي', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض', theme: 'gold', createdAt: { seconds: 1 } };
-
+// eventExtra: database columns of the event (a guest_limit, ...). The event is paid.
 async function open(page, eventExtra = {}, { withZip = true } = {}) {
-  await stubFirebase(page);
+  await stubSupabase(page);
   if (withZip) {
     // helpers.js blocks every third-party host; serve the library the page asks the CDN for.
     await page.route('https://cdnjs.cloudflare.com/ajax/libs/jszip/**', (r) => r.fulfill({ contentType: 'text/javascript', body: JSZIP }));
   }
-  await seedFakeFirebase(page, {
-    user: { uid: 'u1', email: 'customer@example.com' },
-    store: { events: { e1: { ...EVENT, paid: true, guestCount: 0, ...eventExtra } }, 'events/e1/guests': {}, 'events/e1/requests': {} },
-  });
+  await seedEvent(page, { user: { id: 'u1', email: 'customer@example.com' }, event: { paid: true, ...eventExtra } });
   const messages = [];
   page.on('dialog', (d) => { messages.push(d.message()); d.accept(); });
   await page.goto('/event.html?id=e1');
@@ -32,8 +28,8 @@ async function importFile(page, name) {
   await page.locator('#csv-import').setInputFiles(FX(name));
 }
 
-const namesOnPage = (page) => page.evaluate(() => Object.values(window.__fakeFirebase.store['events/e1/guests']).map(g => g.name));
-const guestCount = (page) => page.evaluate(() => window.__fakeFirebase.store.events.e1.guestCount);
+const namesOnPage = (page) => page.evaluate(() => window.__fakeSupabase.doors.e1.guests.map(g => g.name));
+const guestCount = (page) => page.evaluate(() => window.__fakeSupabase.doors.e1.guests.length);
 
 test('a single column of names imports, skipping blank rows and tidying the spaces', async ({ page }) => {
   const messages = await open(page);
@@ -130,7 +126,7 @@ test('if the zip library could not be loaded, the customer is told to reload or 
 });
 
 test('an Excel import stops at the guest limit like a CSV one, and says how many were left out', async ({ page }) => {
-  const messages = await open(page, { guestLimit: 100, guestCount: 0 });
+  const messages = await open(page, { guest_limit: 100 });
   await importFile(page, 'large-300.xlsx');
   await expect.poll(() => guestCount(page), { timeout: 20000 }).toBe(100);
   expect(messages.join(' ')).toContain('وصلت لحد الـ100 ضيف، وما انضاف 200 اسم');
@@ -170,4 +166,15 @@ test('with no header, a phone column stored as text is skipped and the names (Ar
   await open(page);
   await importFile(page, 'xlsx-phone-first-no-header.xlsx');
   await expect.poll(async () => (await namesOnPage(page)).sort()).toEqual(['John Smith', 'Sarah سارة', 'أحمد الغامدي'].sort());
+});
+
+test('the names read from the file are sent to the server in add_guests calls of at most 50', async ({ page }) => {
+  await open(page);
+  await importFile(page, 'names-only.xlsx');
+  await expect(page.locator('.guest-item')).toHaveCount(4);
+  const sent = await page.evaluate(() => window.__fakeSupabase.calls.filter((c) => c.name === 'add_guests').map((c) => c.args));
+  expect(sent).toHaveLength(1);
+  expect(sent[0].p_event_id).toBe('e1');
+  expect(sent[0].p_partial).toBe(true);
+  expect(sent[0].p_guests.map((g) => g.name).sort()).toEqual(['أحمد الغامدي', 'سارة العتيبي', 'محمد بن سعد القحطاني', 'نورة'].sort());
 });

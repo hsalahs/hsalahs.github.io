@@ -31,7 +31,7 @@
      when loading gets stuck (25 s), so a stall on the home-screen app, where
      no ?timing=1 can be typed, can still be photographed. -->
 <script>var TM = { m: [], err: '', stuck: false, param: /[?&]timing=1(&|$)/.test(location.search) }; TM.show = TM.param;
-var TM_HOST = 'loading-msg', TM_RES = ['firebase-init.js', 'firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'utils.js', 'icons.js', 'format.js'];
+var TM_HOST = 'loading-msg', TM_RES = ['supabase.min.js', 'data.js', 'utils.js', 'icons.js', 'format.js'];
 function tmShow() {
   var host = document.getElementById(TM_HOST);
   if (!TM.show || !host) return;
@@ -40,8 +40,6 @@ function tmShow() {
   // with the loading message instead of staying on top of the page.
   if (host.style.display === 'none' && !TM.param) {
     if (line) line.remove();
-    var bx = document.getElementById('timing-btns');
-    if (bx) bx.remove();
     return;
   }
   if (!line) {
@@ -62,28 +60,7 @@ function tmShow() {
     }
   } catch (e) {}
   var sw = 'sw:' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes' : 'no');
-  if (TM.stuck || (TM.param && window._fsMode && window._fsMode !== 'default')) tmButtons(line);
-  line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + ' tab:' + (window._fsTab || '?') + ' mode:' + (window._fsMode || '?') + (TM.err ? ' || err: ' + TM.err : '');
-}
-function tmSetMode(v) {
-  try { if (v) sessionStorage.setItem('fsmode', v); else sessionStorage.removeItem('fsmode'); } catch (e) {}
-  location.reload();
-}
-function tmButtons(line) {
-  if (document.getElementById('timing-btns')) return;
-  var box = document.createElement('div');
-  box.id = 'timing-btns';
-  box.style.cssText = 'direction:rtl;text-align:center;padding:0 18px 16px;';
-  var defs = [['جرّب بدون ذاكرة', 'memory'], ['جرّب اتصال بديل', 'long']];
-  defs.forEach(function (d) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = d[0];
-    b.style.cssText = 'background:none;border:1px solid #8d8a84;color:#8d8a84;border-radius:8px;font-size:12px;font-family:inherit;padding:12px 14px;min-height:44px;margin:4px;cursor:pointer;';
-    b.onclick = function () { tmSetMode(d[1]); };
-    box.appendChild(b);
-  });
-  line.parentNode.insertBefore(box, line.nextSibling);
+  line.textContent = TM.m.join(' | ') + ' || ' + res.join(' ') + ' || ' + sw + (TM.err ? ' || err: ' + TM.err : '');
 }
 function tmProbe(label, fn) {
   var t0 = performance.now(), done = false;
@@ -107,7 +84,7 @@ function tmProbes(cacheFn) {
   });
   if (cacheFn) tmProbe('cache', cacheFn);
   tmProbe('net', function (fin) {
-    fetch('https://firestore.googleapis.com/', { mode: 'no-cors', cache: 'no-store' }).then(function () { fin('ok'); }, function () { fin('err'); });
+    fetch((window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url) || 'https://gunizkapwatixvbfliva.supabase.co/', { mode: 'no-cors', cache: 'no-store' }).then(function () { fin('ok'); }, function () { fin('err'); });
   });
 }
 function tmark(k) {
@@ -129,10 +106,7 @@ tmark('script');</script>
 <title>لوحة المناسبة | دعوات</title>
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<script type="module" src="firebase-init.js"></script>
-<link rel="preconnect" href="https://firestore.googleapis.com">
-<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
-<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://gunizkapwatixvbfliva.supabase.co" crossorigin>
 <style>
 @font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/ibm-plex-sans-arabic-400-arabic.woff2) format('woff2');unicode-range:U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1}
 @font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/ibm-plex-sans-arabic-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
@@ -564,7 +538,6 @@ setTimeout(() => {
       <button class="btn danger" style="width:100%; margin-top:12px;" onclick="deleteThisEvent()"><i data-ic="trash-2" data-size="16"></i> حذف المناسبة نهائيًا</button>
     </div>
 
-    <div id="rules-warning" style="display:none; background:rgba(229,72,77,0.10); border:1px solid rgba(229,72,77,0.35); border-radius:14px; padding:12px 16px; margin-bottom:12px; font-size:12.5px; color:#ffb3b3; line-height:1.7;">⚠️ (للأدمن فقط) قواعد أمان Firestore الجديدة غير منشورة بعد — كود دخول السكانر لسه مكشوف لأي شخص معه رابط الدعوة. انشر ملف firestore.rules من Firebase.</div>
     <div id="payment-gate">
       <div class="pg-title" id="pg-title">🔒 الحد المجاني لعدد الضيوف</div>
       <div class="pg-sub" id="pg-sub">أضفت أول 5 ضيوف مجانًا — لإضافة المزيد تواصل معنا.</div>
@@ -603,7 +576,7 @@ setTimeout(() => {
     <div id="page-guests">
       <div class="card">
         <div class="row">
-          <div class="inwrap"><i data-ic="user-plus"></i><input type="text" id="new-guest-name" placeholder="اسم ضيف جديد" style="margin:0;"></div>
+          <div class="inwrap"><i data-ic="user-plus"></i><input type="text" id="new-guest-name" maxlength="100" placeholder="اسم ضيف جديد" style="margin:0;"></div>
           <button class="btn" style="width:auto; margin:0; padding:13px 20px; display:inline-flex; align-items:center; gap:6px;" onclick="addGuest()"><i data-ic="plus"></i> إضافة</button>
         </div>
         <input type="file" id="csv-import" accept=".xlsx,.csv,.txt,.tsv" style="display:none" onchange="importCSV(event)">
@@ -681,6 +654,9 @@ setTimeout(() => {
      long as each CDN took to answer. -->
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script async src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="supabase-config.js"></script>
+<script src="vendor/supabase.min.js"></script>
+<script src="data.js"></script>
 <script src="icons.js"></script>
 <script src="utils.js"></script>
 <script src="format.js"></script>
@@ -689,15 +665,17 @@ setTimeout(() => {
 <script src="xlsx-export.js"></script>
 <script src="attendance-report.js"></script>
 <script>
-// ADMIN_EMAILS/isAdmin, FREE_GUEST_LIMIT, EMAILJS_*/notifyAdmin, and
-// showToast now live in utils.js (shared with app.html and scan.html) —
-// they used to be copy-pasted separately into each page.
+// FREE_GUEST_LIMIT, EMAILJS_*/notifyAdmin, and showToast live in utils.js
+// (shared with app.html and scan.html). Whether the signed-in user is the
+// admin comes from the server (Data.auth.isAdmin, kept in adminFlag).
 const WHATSAPP_NUMBER = '966546664459';
 
 const params = new URLSearchParams(window.location.search);
 const eventId = params.get('id');
 let eventData = null;
 let currentUser = null;
+let adminFlag = false;
+let liveWatch = null;
 
 function guestCount() {
   return (eventData && eventData.guestCount) || 0;
@@ -708,7 +686,7 @@ function guestCount() {
 // for it (guestLimit — see guestCapOf in utils.js); the gate only blocks
 // adding MORE guests once that number is used up. Admins always bypass it.
 function paymentGateActive() {
-  return !!eventData && !isAdmin(currentUser) && guestCount() >= guestCapOf(eventData);
+  return !!eventData && !adminFlag && guestCount() >= guestCapOf(eventData);
 }
 
 // Tracks whether the gate was active on the previous render (null = not
@@ -748,7 +726,7 @@ function renderPaymentGate() {
   const payMenuItem = (tone, icon, color, text) => '<span class="chip ' + tone + '">' + ic(icon) + '</span><span style="color:' + color + ';">' + text + '</span>';
   if (eventData && eventData.paid) {
     const limited = Number.isFinite(cap);
-    if (isAdmin(currentUser)) {
+    if (adminFlag) {
       menuItem.innerHTML = payMenuItem('ok', 'check', '#7fd48a', 'مفعّلة (' + (limited ? cap + ' ' + guestWord(cap) : 'بلا حد') + ') — تعديل الحد');
     } else if (limited) {
       menuItem.innerHTML = active
@@ -757,7 +735,7 @@ function renderPaymentGate() {
     } else {
       menuItem.innerHTML = payMenuItem('ok', 'check', '#7fd48a', 'المناسبة مفعّلة');
     }
-  } else if (isAdmin(currentUser)) {
+  } else if (adminFlag) {
     menuItem.innerHTML = payMenuItem('warn', 'lock-open', '#ff8a8e', 'تفعيل (أدمن)');
   } else if (active) {
     menuItem.innerHTML = payMenuItem('warn', 'lock', '#ff8a8e', 'وصلت للحد المجاني');
@@ -768,7 +746,7 @@ function renderPaymentGate() {
 
 function handlePaymentMenuClick() {
   closeTopMenu();
-  if (!isAdmin(currentUser)) {
+  if (!adminFlag) {
     if (!eventData || !eventData.paid || paymentGateActive()) openPaymentWhatsapp();
     return;
   }
@@ -793,18 +771,17 @@ async function adminSetGuestLimit() {
     guestCount: guestCount()
   });
   if (n === null) return;
-  const { doc, updateDoc, deleteField } = window._fsFns;
   try {
+    await Data.event.setGuestLimit(eventId, n);
     if (n === 0) {
-      await updateDoc(doc(window._db, 'events', eventId), { paid: false, guestLimit: deleteField() });
       eventData.paid = false;
-      delete eventData.guestLimit;
+      eventData.guestLimit = null;
     } else {
-      await updateDoc(doc(window._db, 'events', eventId), { paid: true, guestLimit: n });
       eventData.paid = true;
       eventData.guestLimit = n;
     }
     renderPaymentGate();
+    liveRefresh();
   } catch (e) { showErr(e); }
 }
 let guests = [];
@@ -855,9 +832,8 @@ async function saveShareWelcome() {
   const welcome = document.getElementById('share-welcome').value.trim().slice(0, WELCOME_MAX);
   const value = welcome === EVENT_TYPES[eventTypeOf(eventData)].welcome ? '' : welcome;
   if (value === (eventData.welcomeMessage || '')) return;
-  const { doc, updateDoc } = window._fsFns;
   try {
-    await updateDoc(doc(window._db, 'events', eventId), { welcomeMessage: value });
+    await Data.event.update(eventId, { welcomeMessage: value });
     eventData.welcomeMessage = value;
   } catch (e) {
     console.error('welcome save failed:', e);
@@ -885,90 +861,34 @@ function copyScanLink() {
   navigator.clipboard?.writeText(input.value);
 }
 
-// Six digits (a million possibilities, not the ten thousand of four): the
-// code is checked by Firestore's rules, which can't count wrong attempts
-// without a backend, so length is the only defence against someone who has
-// the scanner link trying every code in turn. From the browser's secure
-// random source rather than Math.random(), which is predictable.
-function generatePin() {
-  const buf = new Uint32Array(1);
-  crypto.getRandomValues(buf);
-  return String(100000 + (buf[0] % 900000));
-}
-
-// 'private': the code lives in events/{id}/private/scan (owner/admin only).
-// 'legacy':  the new security rules aren't deployed yet, so it's still the
-//            old field on the (publicly readable) event doc.
-let scanPinMode = 'legacy';
 let currentScanPin = null;
-// Resolves once loadScanPin() has settled which mode we're in. It runs in
-// the background so its read doesn't delay the dashboard's first paint;
-// anything that writes the code must wait on it first.
+// Resolves once loadScanPin() has finished. It runs in the background so its
+// read doesn't delay the dashboard's first paint; anything that writes the
+// code must wait on it first.
 let pinReady = null;
 
-// Where the door code lives, and the one-time move for older events.
-//
-// It used to be a plain field on the event doc — which has to stay readable
-// by anyone, since invite.html and scan.html show the event's name/date
-// without a sign-in. So anyone holding an invite link could read the door
-// code straight out of the database. It now lives in events/{id}/private/
-// scan, which only the owner and the admin can read; the door device never
-// sees it at all (scan.html + firestore.rules: a device proves it knows the
-// code by submitting it, and the rule does the comparison server-side).
-//
-// Until the new rules are deployed, reading the private doc is denied — in
-// that case this keeps the old behavior so nothing breaks, and tells the
-// admin (only) that the rules still need deploying.
+// The door code lives in event_secrets, which only the owner and the admin
+// can read; the door device never sees it (scan.html proves it knows the code
+// by submitting it to the server). An event that has none yet gets one.
 async function loadScanPin() {
-  const { doc, getDoc, setDoc, updateDoc, deleteField } = window._fsFns;
-  const eventRef = doc(window._db, 'events', eventId);
-  const privateRef = doc(window._db, 'events', eventId, 'private', 'scan');
   try {
-    const snap = await getDoc(privateRef);
-    scanPinMode = 'private';
-    if (snap.exists() && snap.data().scanPin) {
-      currentScanPin = String(snap.data().scanPin);
-    } else {
-      currentScanPin = eventData.scanPin ? String(eventData.scanPin) : generatePin();
-      await setDoc(privateRef, { scanPin: currentScanPin });
-    }
-    if (eventData.scanPin !== undefined) {
-      await updateDoc(eventRef, { scanPin: deleteField() });
-      delete eventData.scanPin;
-    }
+    let pin = await Data.door.code(eventId);
+    if (!pin) pin = await Data.door.regenerate(eventId);
+    currentScanPin = pin ? String(pin) : null;
   } catch (e) {
-    if (e && e.code === 'permission-denied') {
-      scanPinMode = 'legacy';
-      let pin = eventData.scanPin ? String(eventData.scanPin) : null;
-      if (!pin) {
-        pin = generatePin();
-        eventData.scanPin = pin;
-        try { await updateDoc(eventRef, { scanPin: pin }); } catch (e2) { console.error(e2); }
-      }
-      currentScanPin = pin;
-      if (isAdmin(currentUser)) document.getElementById('rules-warning').style.display = 'block';
-    } else {
-      console.error('loadScanPin failed:', e);
-      currentScanPin = eventData.scanPin ? String(eventData.scanPin) : null;
-    }
+    console.error('loadScanPin failed:', e);
+    currentScanPin = null;
   }
 }
 
 // Every door device that unlocked with the old code is cut off the moment
-// this saves: their session docs no longer match, so the rules deny their
-// next read or check-in and scan.html sends them back to the code screen.
+// this saves: their door session no longer matches, so their next read or
+// check-in is refused and scan.html sends them back to the code screen.
 async function regenerateScanPin() {
   if (pinReady) await pinReady;
   if (!confirm('توليد كود دخول جديد؟ أي جهاز دخل بالكود القديم بيحتاج الكود الجديد.')) return;
-  const { doc, setDoc, updateDoc } = window._fsFns;
-  const newPin = generatePin();
   try {
-    if (scanPinMode === 'private') {
-      await setDoc(doc(window._db, 'events', eventId, 'private', 'scan'), { scanPin: newPin });
-    } else {
-      await updateDoc(doc(window._db, 'events', eventId), { scanPin: newPin });
-      eventData.scanPin = newPin;
-    }
+    const newPin = String(await Data.door.regenerate(eventId));
     currentScanPin = newPin;
     document.getElementById('scan-pin-display').textContent = newPin;
     showToast('✅ تم توليد كود جديد');
@@ -1011,83 +931,56 @@ async function saveEventEdit() {
   if (mapsLink && !/^https?:\/\//i.test(mapsLink)) { alert('رابط الموقع لازم يبدأ بـ http:// أو https://'); return; }
   if (slug && slug !== (eventData.slug || '') && slugProblem(slug)) { alert(slugProblem(slug)); return; }
 
-  const { doc, updateDoc } = window._fsFns;
   try {
     if (slug !== (eventData.slug || '')) {
       const ok = await setEventSlug(slug);
       if (!ok) return;
     }
-    await updateDoc(doc(window._db, 'events', eventId), { name, type: editEventType, date, venue, mapsLink });
+    await Data.event.update(eventId, { name, type: editEventType, date, venue, mapsLink });
     eventData.name = name; eventData.type = editEventType; eventData.date = date; eventData.venue = venue; eventData.mapsLink = mapsLink;
     document.getElementById('ev-title').textContent = name;
     renderEventMeta();
     toggleEditEvent();
   } catch (e) {
-    alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
+    alert(errText(e));
     console.error(e);
   }
 }
 
-// Claims slugs/{slug} for this event (first come, first served — the rules
-// only allow creating a name nobody holds) and releases the old one, all in
-// one transaction with the event's own `slug` field. '' removes the link.
+// Claims the readable link name for this event (first come, first served; the
+// server refuses a name somebody holds) and releases the old one. '' removes
+// the link.
 async function setEventSlug(slug) {
-  const { doc, runTransaction } = window._fsFns;
-  const old = eventData.slug || '';
-  const eventRef = doc(window._db, 'events', eventId);
+  let held;
   try {
-    await runTransaction(window._db, async (tx) => {
-      if (slug) {
-        const ref = doc(window._db, 'slugs', slug);
-        const taken = await tx.get(ref);
-        if (taken.exists()) throw new Error('SLUG_TAKEN');
-        tx.set(ref, { eventId, ownerUid: currentUser.uid, createdAt: new Date().toISOString() });
-      }
-      if (old) tx.delete(doc(window._db, 'slugs', old));
-      tx.update(eventRef, { slug });
-    });
+    held = await Data.event.claimSlug(eventId, slug);
   } catch (e) {
-    if (e.message === 'SLUG_TAKEN' || e.code === 'permission-denied') { alert('هذا الرابط مستخدم، جرّب اسم ثاني'); return false; }
+    if (e.code === 'slug-taken') { alert('هذا الرابط مستخدم، جرّب اسم ثاني'); return false; }
     showErr(e);
     return false;
   }
-  eventData.slug = slug;
+  eventData.slug = held || '';
+  eventData.slugDecided = true;
   updateInviteLink();
   return true;
 }
 
 // Every event gets a readable link without the owner typing one: the first
-// time its owner opens the dashboard (no `slug` field yet — a deliberately
-// cleared link is '' and stays cleared), claim a name made from the event's
-// name, adding -2, -3… while one is taken. Silent: if it can't, the event
+// time its owner opens the dashboard (no link chosen yet, and not a
+// deliberately cleared one), the server claims a name made from the event's
+// name, adding -2, -3... while one is taken. Silent: if it can't, the event
 // simply keeps its id link and the owner can still pick a name by hand.
 async function autoClaimSlug() {
-  if (!eventData || eventData.slug !== undefined || eventData.ownerUid !== currentUser.uid) return;
-  const { doc, runTransaction } = window._fsFns;
-  const eventRef = doc(window._db, 'events', eventId);
-  const base = slugFromName(eventData.name);
-  const tries = [base, base + '-2', base + '-3', base + '-4', base + '-' + Math.random().toString(36).slice(2, 6)];
-  for (const slug of tries) {
-    try {
-      const claimed = await runTransaction(window._db, async (tx) => {
-        const ev = await tx.get(eventRef);
-        // Another tab or device got there first: keep its name.
-        if (ev.data().slug !== undefined) return ev.data().slug;
-        const ref = doc(window._db, 'slugs', slug);
-        if ((await tx.get(ref)).exists()) return null;
-        tx.set(ref, { eventId, ownerUid: currentUser.uid, createdAt: new Date().toISOString() });
-        tx.update(eventRef, { slug });
-        return slug;
-      });
-      if (claimed !== null) {
-        eventData.slug = claimed;
-        updateInviteLink();
-        return;
-      }
-    } catch (e) {
-      console.error('autoClaimSlug failed:', e);
-      return;
+  if (!eventData || eventData.slugDecided || eventData.slug || eventData.ownerUid !== currentUser.uid) return;
+  try {
+    const claimed = await Data.event.autoClaimSlug(eventId, slugFromName(eventData.name));
+    if (claimed) {
+      eventData.slug = claimed;
+      eventData.slugDecided = true;
+      updateInviteLink();
     }
+  } catch (e) {
+    console.error('autoClaimSlug failed:', e);
   }
 }
 
@@ -1101,46 +994,20 @@ function updateInviteLink() {
 
 async function deleteThisEvent() {
   if (!(await confirmEventDelete({ name: eventData.name, guestCount: eventData.guestCount }))) return;
-  const { collection, getDocs, deleteDoc, doc, runTransaction } = window._fsFns;
   try {
-    const guestsSnap = await getDocs(collection(window._db, 'events', eventId, 'guests'));
-    const requestsSnap = await getDocs(collection(window._db, 'events', eventId, 'requests'));
-    await Promise.all([
-      ...guestsSnap.docs.map(d => deleteDoc(d.ref)),
-      ...requestsSnap.docs.map(d => deleteDoc(d.ref)),
-      // Before the event doc itself: the rules check ownership through it.
-      deleteDoc(doc(window._db, 'events', eventId, 'roster', 'list')),
-      // Frees the readable link so it can be used again.
-      ...(eventData.slug ? [deleteDoc(doc(window._db, 'slugs', eventData.slug))] : [])
-    ]);
-    await deleteDoc(doc(window._db, 'events', eventId));
-
-    // Frees up the owner's event slot. Best-effort and separate from the
-    // deletion above — without this, deleting an event never lowers
-    // accountLimits.eventCount, so the owner stays stuck at their limit
-    // forever and can't create a replacement event. A failure here (e.g. an
-    // already-corrupt accountLimits doc) must never block the deletion
-    // itself, which is why it's not part of one transaction with it.
-    try {
-      const limitRef = doc(window._db, 'accountLimits', eventData.ownerUid);
-      await runTransaction(window._db, async (tx) => {
-        const limitSnap = await tx.get(limitRef);
-        if (!limitSnap.exists()) return;
-        const count = limitSnap.data().eventCount || 0;
-        if (count > 0) tx.update(limitRef, { eventCount: count - 1 });
-      });
-    } catch (e) { console.error('accountLimits decrement failed:', e); }
-
+    // The server removes the guests, the requests and the link name, and gives
+    // the owner's event slot back.
+    await Data.events.remove(eventId);
+    if (liveWatch) liveWatch.stop();
     goTo('app.html');
   } catch (e) {
-    alert('صار خطأ أثناء الحذف: ' + (e.code || '') + ' — ' + e.message);
+    alert(errText(e, 'صار خطأ أثناء الحذف: '));
     console.error(e);
   }
 }
 
 function doLogout() {
-  const { signOut } = window._authFns;
-  signOut(window._auth).then(() => { goTo('app.html'); });
+  Data.auth.signOut().then(() => { goTo('app.html'); }, (e) => { console.error(e); });
 }
 
 let dashboardStarted = false;
@@ -1169,8 +1036,7 @@ function init() {
   if (authWatching) return;
   authWatching = true;
   try {
-    const { onAuthStateChanged } = window._authFns;
-    onAuthStateChanged(window._auth, (user) => {
+    Data.auth.onChange((user) => {
       if (!firstAuthMarked) { firstAuthMarked = true; tmark('auth ' + (user ? 'user' : 'none')); }
       lastAuthUser = user;
       handleAuthUser(user).catch(showInitFailure);
@@ -1179,9 +1045,9 @@ function init() {
 }
 
 // One sign-in start at a time: a second auth callback (or the retry tap)
-// arriving while the first is still awaiting getDoc must not start the
-// dashboard and its listeners twice. Released when the attempt ends, so a
-// failed getDoc can be retried.
+// arriving while the first is still reading the event must not start the
+// dashboard and its live watch twice. Released when the attempt ends, so a
+// failed read can be retried.
 async function handleAuthUser(user) {
   const signedIn = !!user && !user.isAnonymous;
   if (signedIn) {
@@ -1206,9 +1072,10 @@ async function handleAuthUserNow(user) {
   if (!user || user.isAnonymous) {
     if (dashboardStarted) {
       // Sign-in is shared by every tab of this browser: another tab (the
-      // scanner's lock button) ended it. Listeners would only fail with
-      // permission-denied, so stop showing data instead of a fake outage.
+      // scanner's lock button) ended it. The live reads would only be refused,
+      // so stop showing data instead of a fake outage.
       sessionEnded = true;
+      if (liveWatch) { liveWatch.stop(); liveWatch = null; }
       document.getElementById('dashboard').style.display = 'none';
       document.getElementById('loading-msg').style.display = 'none';
       document.getElementById('denied-msg').style.display = 'block';
@@ -1224,11 +1091,10 @@ async function handleAuthUserNow(user) {
   if (sessionEnded) { window.location.reload(); return; }
   if (dashboardStarted) return;
   currentUser = user;
-  const { doc, getDoc } = window._fsFns;
-  let snap;
+  let ev, admin;
   try {
-    snap = await getDoc(doc(window._db, 'events', eventId));
-    tmark('getDoc done');
+    [admin, ev] = await Promise.all([Data.auth.isAdmin(), Data.event.get(eventId)]);
+    tmark('event read done');
   } catch (e) {
     // Same "trapped forever" failure the splash fix closed, one layer
     // deeper: a dropped connection here used to leave the owner's whole
@@ -1244,12 +1110,13 @@ async function handleAuthUserNow(user) {
   // Signed out (or switched to someone else) while this read was running:
   // the newest auth state decides, not the user this attempt started with.
   if (!lastAuthUser || lastAuthUser.isAnonymous || lastAuthUser.uid !== user.uid) return;
-  if (!snap.exists() || (snap.data().ownerUid !== user.uid && !isAdmin(user))) {
+  adminFlag = admin === true;
+  if (!ev || (ev.ownerUid !== user.uid && !adminFlag)) {
     document.getElementById('loading-msg').style.display = 'none';
     document.getElementById('denied-msg').style.display = 'block';
     return;
   }
-  eventData = snap.data();
+  eventData = ev;
   if (window.showEventKind) window.showEventKind(eventTypeOf(eventData));
 
   pinReady = loadScanPin().then(() => {
@@ -1268,31 +1135,39 @@ async function handleAuthUserNow(user) {
   renderPaymentGate();
   updateNotifButtonLabel();
   dashboardStarted = true;
-  startListeners();
-  watchPaymentStatus();
-  autoClaimSlug();
+  startWatch();
 }
 
-// Live-watches the event doc itself so a customer who already has this page
-// open sees the payment activation the moment the admin flips it — no
-// refresh needed — and gets a toast celebrating it.
-function watchPaymentStatus() {
-  const { doc, onSnapshot } = window._fsFns;
-  onSnapshot(doc(window._db, 'events', eventId), (snap) => {
-    if (!snap.exists()) return;
-    const wasPaid = eventData.paid;
-    const wasCap = guestCapOf(eventData);
-    eventData = { ...eventData, ...snap.data() };
-    document.getElementById('ev-title').textContent = eventData.name;
-    renderEventMeta();
-    renderPaymentGate();
-    if (!isAdmin(currentUser) && guestCapOf(eventData) > wasCap) {
-      const c = guestCapOf(eventData);
-      showToast(!wasPaid && eventData.paid && Number.isFinite(c)
-        ? '🎉 تم تفعيل مناسبتك! تقدر تضيف لين ' + c + ' ' + guestWord(c)
-        : Number.isFinite(c) ? '🎉 تم تحديث حد الضيوف إلى ' + c : '🎉 تم تفعيل مناسبتك!');
-    }
-  });
+// The live poll's numbers (Data.event.watch asks the server every 5 seconds,
+// one small row): a customer who already has this page open sees the payment
+// activation shortly after the admin flips it, with a toast celebrating it.
+function onLiveEvent(l) {
+  watchOK = true;
+  refreshConnectionBanner();
+  if (!l) {
+    // deleted elsewhere: the same screen as an event that is gone or not yours
+    if (liveWatch) { liveWatch.stop(); liveWatch = null; }
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('loading-msg').style.display = 'none';
+    document.getElementById('denied-msg').style.display = 'block';
+    return;
+  }
+  if (!eventData) return;
+  const wasPaid = eventData.paid;
+  const wasCap = guestCapOf(eventData);
+  const wasCount = eventData.guestCount;
+  eventData.paid = l.paid;
+  eventData.guestLimit = l.guestLimit;
+  eventData.guestCount = l.guestCount;
+  eventData.scannedCount = l.scannedCount;
+  if (eventData.paid === wasPaid && guestCapOf(eventData) === wasCap && eventData.guestCount === wasCount) return;
+  renderPaymentGate();
+  if (!adminFlag && guestCapOf(eventData) > wasCap) {
+    const c = guestCapOf(eventData);
+    showToast(!wasPaid && eventData.paid && Number.isFinite(c)
+      ? '🎉 تم تفعيل مناسبتك! تقدر تضيف لين ' + c + ' ' + guestWord(c)
+      : Number.isFinite(c) ? '🎉 تم تحديث حد الضيوف إلى ' + c : '🎉 تم تفعيل مناسبتك!');
+  }
 }
 
 const THEME_COLORS = {
@@ -1313,22 +1188,19 @@ function applyTheme(name) {
 async function setTheme(name) {
   applyTheme(name);
   eventData.theme = name;
-  const { doc, updateDoc } = window._fsFns;
   try {
-    await updateDoc(doc(window._db, 'events', eventId), { theme: name });
+    await Data.event.update(eventId, { theme: name });
   } catch (e) { console.error('Theme sync failed', e); }
 }
 
-// Tracks each listener's connection state separately — the banner must stay
-// visible if EITHER stream is broken, not just clear because the other one
-// happened to succeed. Without this, a dropped connection looks identical
-// to an empty/stale list, and staff can't tell a real "not registered" scan
-// from a network hiccup.
-let guestsListenerOK = true;
-let requestsListenerOK = true;
+// False while the live poll is failing: the banner stays visible until a poll
+// succeeds again. Without it, a dropped connection looks identical to an
+// empty/stale list, and staff can't tell a real "not registered" scan from a
+// network hiccup.
+let watchOK = true;
 function refreshConnectionBanner() {
   const b = document.getElementById('connection-banner');
-  if (b) b.style.display = (guestsListenerOK && requestsListenerOK) || sessionEnded ? 'none' : 'block';
+  if (b) b.style.display = watchOK || sessionEnded ? 'none' : 'block';
 }
 
 // Tracks which pending request IDs we've already seen, so a newly-added
@@ -1338,10 +1210,10 @@ function refreshConnectionBanner() {
 let knownPendingRequestIds = null;
 
 // renderGuests() rebuilds the entire visible list's DOM from scratch — fine
-// for a single scan, but a burst of near-simultaneous Firestore updates
-// (a large CSV/sequential-numbers import writing in batches, several door
-// scanners checking guests in around the same moment) used to trigger one
-// full rebuild PER update, back to back. Coalescing into a single animation
+// for a single scan, but a burst of near-simultaneous updates (a large
+// CSV/sequential-numbers import writing in batches, several door scanners
+// checking guests in around the same moment) used to trigger one full rebuild
+// PER update, back to back. Coalescing into a single animation
 // frame collapses a whole burst into one render, without changing what
 // gets rendered — direct user actions (the filter buttons, typing a
 // search) still call renderGuests() straight away, since those are single
@@ -1356,88 +1228,63 @@ function scheduleRenderGuests() {
   });
 }
 
-// The door scanner's "عرض الأسماء" list, kept as ONE document
-// (events/{id}/roster/list) instead of making every scanner open read every
-// guest document — 1 read instead of 5000 for a 5000-guest event. Written
-// from here, the only page that already holds the full list live, and only
-// while it's open. Each entry is "id|scanned|name" (id never contains "|";
-// the name may, so the reader splits on the first two only) — compact, so
-// even ~10,000 guests stay under Firestore's 1 MB document limit. Throttled:
-// a busy event day changes `scanned` every few seconds, and each roster
-// write is one write against the free plan's daily quota.
-const ROSTER_MIN_INTERVAL = 30 * 1000;
-const ROSTER_MAX_BYTES = 900 * 1000;
-let rosterTimer = null;
-let rosterLastWrite = 0;
-let rosterLastText = null;
-function scheduleRosterWrite() {
-  if (rosterTimer) return;
-  const wait = Math.max(3000, rosterLastWrite + ROSTER_MIN_INTERVAL - Date.now());
-  rosterTimer = setTimeout(writeRoster, wait);
-}
-async function writeRoster() {
-  rosterTimer = null;
-  const entries = guests.map(g => g.id + '|' + (g.scanned ? 1 : 0) + '|' + g.name);
-  const text = entries.join('\n');
-  if (text === rosterLastText) return;
-  // Too big for one document: scan.html falls back to reading the guests
-  // collection itself when there's no roster, so leave none behind.
-  if (new Blob([text]).size > ROSTER_MAX_BYTES) return;
-  const { doc, setDoc, serverTimestamp } = window._fsFns;
-  rosterLastWrite = Date.now();
-  try {
-    await setDoc(doc(window._db, 'events', eventId, 'roster', 'list'), { guests: entries, updatedAt: serverTimestamp() });
-    rosterLastText = text;
-  } catch (e) { console.error('roster write failed:', e); }
-}
-
-function startListeners() {
-  const { collection, query, where, onSnapshot } = window._fsFns;
+// The live view of this event: one poll every 5 seconds (Data.event.watch).
+// The guest list arrives as a delta when something changed, the pending
+// requests only when their count or newest time changed. The poll pauses while
+// the page is hidden, except for an owner who turned on request notifications:
+// those keep a slower check going in the background (30 seconds).
+function startWatch() {
+  if (liveWatch) liveWatch.stop();
   let guestsMarked = false;
-  onSnapshot(collection(window._db, 'events', eventId, 'guests'), (snap) => {
-    const snapAt = performance.now();
-    guests = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
-    updateStats();
-    scheduleRenderGuests();
-    if (!guestsMarked) {
-      guestsMarked = true;
-      tmark('guests ' + (snap.metadata && snap.metadata.fromCache ? 'cache' : 'server') + ' n=' + snap.size);
-      requestAnimationFrame(() => tmark('render ' + Math.round(performance.now() - snapAt) + 'ms'));
-    }
-    // Only from the server's answer, never the local cache's first guess —
-    // a stale cached list must not overwrite a newer roster.
-    if (!(snap.metadata && snap.metadata.fromCache)) scheduleRosterWrite();
-    guestsListenerOK = true;
-    refreshConnectionBanner();
-  }, (error) => {
-    console.error('guests onSnapshot error:', error);
-    guestsListenerOK = false;
-    refreshConnectionBanner();
+  const hiddenIntervalMs = typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 30000 : 0;
+  liveWatch = Data.event.watch(eventId, {
+    hiddenIntervalMs,
+    onLive: onLiveEvent,
+    onGuests: ({ rows, full }) => {
+      const at = performance.now();
+      guests = rows;
+      updateStats();
+      scheduleRenderGuests();
+      if (!guestsMarked) {
+        guestsMarked = true;
+        // A write during the first poll would make it read everything twice: the link is picked after it.
+        autoClaimSlug();
+        tmark('guests ' + (full ? 'full' : 'delta') + ' n=' + rows.length);
+        requestAnimationFrame(() => tmark('render ' + Math.round(performance.now() - at) + 'ms'));
+      }
+    },
+    onRequests: (list) => {
+      requests = sortRequestsOldestFirst(list);
+      updateRequestsBadge();
+      renderRequests();
+      const currentIds = new Set(requests.map(r => r.id));
+      if (knownPendingRequestIds) {
+        requests.forEach(r => {
+          if (!knownPendingRequestIds.has(r.id)) notifyNewRequest(r.name);
+        });
+      }
+      knownPendingRequestIds = currentIds;
+    },
+    onError: (error) => {
+      console.error('live poll error:', error);
+      watchOK = false;
+      refreshConnectionBanner();
+    },
   });
-  // Filtered server-side rather than loaded in full and filtered here: an
-  // event that gets most of its guests through self-registration can rack up
-  // a long history of already-approved/rejected requests, and this listener
-  // only ever displays the pending ones.
-  const pendingRequests = query(collection(window._db, 'events', eventId, 'requests'), where('status', '==', 'pending'));
-  onSnapshot(pendingRequests, (snap) => {
-    requests = sortRequestsOldestFirst(snap.docs.map(d => ({ docId: d.id, ...d.data() })));
-    updateRequestsBadge();
-    renderRequests();
-    requestsListenerOK = true;
-    refreshConnectionBanner();
+}
 
-    const currentIds = new Set(requests.map(r => r.docId));
-    if (knownPendingRequestIds) {
-      requests.forEach(r => {
-        if (!knownPendingRequestIds.has(r.docId)) notifyNewRequest(r.name);
-      });
-    }
-    knownPendingRequestIds = currentIds;
-  }, (error) => {
-    console.error('requests onSnapshot error:', error);
-    requestsListenerOK = false;
-    refreshConnectionBanner();
-  });
+// After an own write: ask for the newest numbers and list at once instead of
+// waiting for the next 5-second poll.
+function liveRefresh(opts) {
+  if (liveWatch) liveWatch.refresh(opts);
+}
+
+// After an own write the guest count moves on screen at once (the limit banner
+// and its toast included), not 5 seconds later; the next poll sets the exact number.
+function bumpGuestCount(delta) {
+  if (!eventData || !delta) return;
+  eventData.guestCount = Math.max(0, guestCount() + delta);
+  renderPaymentGate();
 }
 
 function visibleGuests() {
@@ -1506,17 +1353,17 @@ function renderGuests() {
   el.innerHTML = list.map((g, i) => `
     <div class="guest-item${g.vip ? ' vip' : ''}">
       ${selectionMode
-        ? `<input type="checkbox" class="gsel" ${selectedGuestIds.has(g.docId) ? 'checked' : ''} onchange="toggleGuestSelect('${g.docId}', this.checked)">`
+        ? `<input type="checkbox" class="gsel" ${selectedGuestIds.has(g.id) ? 'checked' : ''} onchange="toggleGuestSelect('${g.id}', this.checked)">`
         : `<span class="gnum">${i + 1}</span>`}
       <div style="flex:1; min-width:0;">
         <div class="name">${escapeHtml(g.name)}${g.vip ? ' <span class="vip-badge">★ VIP</span>' : ''}</div>
         <div class="gid">${escapeHtml(g.id)}</div>
       </div>
       ${selectionMode ? '' : (g.scanned
-        ? `<button class="undo-btn" onclick="undoGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">${ic('undo-2', 12)} تراجع</button>`
-        : `<button class="attend-btn" onclick="markGuestAttend('${g.docId}', '${escapeForJsAttr(g.name)}')">${ic('check', 12)} حضر</button>`)}
-      ${selectionMode ? '' : `<button class="dl-btn" onclick="downloadGuestCard('${g.docId}')">${ic('save', 12)} حفظ</button>
-      <button class="more-btn" onclick="openGuestSheet('${g.docId}')" aria-label="خيارات">${ic('more-vertical', 13)}</button>`}
+        ? `<button class="undo-btn" onclick="undoGuestAttend('${g.id}', '${escapeForJsAttr(g.name)}')">${ic('undo-2', 12)} تراجع</button>`
+        : `<button class="attend-btn" onclick="markGuestAttend('${g.id}', '${escapeForJsAttr(g.name)}')">${ic('check', 12)} حضر</button>`)}
+      ${selectionMode ? '' : `<button class="dl-btn" onclick="downloadGuestCard('${g.id}')">${ic('save', 12)} حفظ</button>
+      <button class="more-btn" onclick="openGuestSheet('${g.id}')" aria-label="خيارات">${ic('more-vertical', 13)}</button>`}
     </div>
   `).join('');
 }
@@ -1536,8 +1383,8 @@ function exitSelectionMode() {
   renderGuests();
 }
 
-function toggleGuestSelect(docId, checked) {
-  if (checked) selectedGuestIds.add(docId); else selectedGuestIds.delete(docId);
+function toggleGuestSelect(id, checked) {
+  if (checked) selectedGuestIds.add(id); else selectedGuestIds.delete(id);
   updateBulkCount();
 }
 
@@ -1549,126 +1396,87 @@ async function bulkDeleteSelected() {
   const ids = [...selectedGuestIds];
   if (ids.length === 0) { showToast('حدد ضيف واحد على الأقل'); return; }
   if (!confirm('حذف ' + ids.length + ' ' + guestWord(ids.length) + ' نهائيًا؟ هذا الإجراء لا يمكن التراجع عنه.')) return;
-  // Sequential, not a single batched write: firestore.rules caps guestCount
-  // at exactly -1 per write (see deleteGuest), so each guest is its own
-  // delete+decrement transaction, same as deleting one at a time.
+  // In chunks of 100, so the progress toast moves.
   let deleted = 0;
   showToast('⏳ جاري الحذف... 0 / ' + ids.length);
-  for (const docId of ids) {
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
     try {
-      await removeGuestDoc(docId);
-      deleted++;
-      showToast('⏳ جاري الحذف... ' + deleted + ' / ' + ids.length);
+      const n = await Data.guests.removeMany(eventId, chunk);
+      deleted += n;
+      bumpGuestCount(-n);
+      dropGuestsLocally(chunk);
+      showToast('⏳ جاري الحذف... ' + Math.min(i + chunk.length, ids.length) + ' / ' + ids.length);
     } catch (e) {
+      liveRefresh();
       showErr(e);
-      if (window._isFirestoreTerminated(e)) return;
+      return;
     }
   }
   exitSelectionMode();
+  liveRefresh();
   showToast('✅ تم حذف ' + deleted + ' ' + guestWord(deleted));
 }
 
-async function markGuestAttend(docId, name) {
+// A guest this page just deleted leaves the shown list at once.
+function dropGuestsLocally(ids) {
+  const gone = new Set(ids);
+  guests = guests.filter(g => !gone.has(g.id));
+  updateStats();
+  renderGuests();
+}
+
+async function markGuestAttend(id, name) {
   // This is the manual "mark attended" button in the guest list, separate
   // from actually scanning someone's barcode at the door — a stray tap
   // here shouldn't silently check someone in.
   if (!confirm('تسجيل حضور "' + name + '"؟')) return;
-  // A transaction, not a plain write: scan.html's live door counter
-  // (events/{id}.scannedCount) must move in lockstep with this guest's
-  // `scanned` flip, same as the scanner's own check-in does, or the
-  // dashboard and the door counter drift apart.
-  const { doc, runTransaction } = window._fsFns;
-  const gRef = doc(window._db, 'events', eventId, 'guests', docId);
-  const eventRef = doc(window._db, 'events', eventId);
   try {
-    await runTransaction(window._db, async (tx) => {
-      const snap = await tx.get(gRef);
-      if (!snap.exists() || snap.data().scanned) return;
-      const evSnap = await tx.get(eventRef);
-      tx.update(gRef, { scanned: true, scannedAt: new Date().toISOString() });
-      tx.update(eventRef, { scannedCount: (evSnap.data().scannedCount || 0) + 1 });
-    });
+    await Data.guests.setScanned(eventId, id, true);
+    const g = guests.find(x => x.id === id);
+    if (g) { g.scanned = true; g.scannedAt = new Date().toISOString(); updateStats(); renderGuests(); }
+    liveRefresh();
     showToast('✅ تم تسجيل حضور ' + name);
   } catch (e) { showErr(e); }
 }
 
-async function undoGuestAttend(docId, name) {
-  // Mirrors markGuestAttend: decrements scannedCount in the same
-  // transaction as the flip back to unscanned, so a guest who's undone
-  // and later re-scanned at the door isn't counted twice.
+async function undoGuestAttend(id, name) {
   if (!confirm('التراجع عن حضور "' + name + '"؟')) return;
-  const { doc, runTransaction } = window._fsFns;
-  const gRef = doc(window._db, 'events', eventId, 'guests', docId);
-  const eventRef = doc(window._db, 'events', eventId);
   try {
-    await runTransaction(window._db, async (tx) => {
-      const snap = await tx.get(gRef);
-      if (!snap.exists() || !snap.data().scanned) return;
-      const evSnap = await tx.get(eventRef);
-      tx.update(gRef, { scanned: false, scannedAt: null });
-      tx.update(eventRef, { scannedCount: Math.max(0, (evSnap.data().scannedCount || 0) - 1) });
-    });
+    await Data.guests.setScanned(eventId, id, false);
+    const g = guests.find(x => x.id === id);
+    if (g) { g.scanned = false; g.scannedAt = ''; updateStats(); renderGuests(); }
+    liveRefresh();
     showToast('↩️ تم التراجع — ' + name + ' لم يصل');
   } catch (e) { showErr(e); }
 }
 
 // Marks a guest as VIP (or back): their card is drawn in the dark VIP design
-// and the door scanner shows "★ VIP" when they arrive. A plain owner edit of
-// the guest doc — already allowed by firestore.rules.
-async function toggleGuestVip(docId) {
-  const g = guests.find(x => x.docId === docId);
+// and the door scanner shows "★ VIP" when they arrive. The server also updates
+// the guest's registration request in the same step, so a guest who registered
+// from the link sees the VIP card on their own invite page.
+async function toggleGuestVip(id) {
+  const g = guests.find(x => x.id === id);
   if (!g) return;
-  const { doc, updateDoc } = window._fsFns;
   const newValue = !g.vip;
   try {
-    await updateDoc(doc(window._db, 'events', eventId, 'guests', docId), { vip: newValue });
+    await Data.guests.setVip(eventId, id, newValue);
   } catch (e) { showErr(e); return; }
+  g.vip = newValue;
+  renderGuests();
+  liveRefresh();
   showToast(newValue ? '⭐ ' + g.name + ' صار VIP — حمّل بطاقته من جديد' : '✅ ألغينا تمييز ' + g.name);
-  // A guest who registered from the link also sees the VIP card on their own
-  // invite page, which reads vip from the request doc (id == the guest's reqId).
-  if (g.reqId) {
-    try {
-      await updateDoc(doc(window._db, 'events', eventId, 'requests', g.reqId), { vip: newValue });
-    } catch (e) {
-      if (!(e && e.code === 'not-found')) showToast('⚠️ تعذّر تحديث بطاقة الضيف عند الضيف');
-    }
-  }
 }
 
-async function deleteGuest(docId, name) {
+async function deleteGuest(id, name) {
   if (!confirm('حذف "' + name + '" نهائيًا؟')) return;
-  // A transaction, not a plain deleteDoc: frees up the guest's slot in the
-  // same write as removing them, so a customer who deletes a duplicate or
-  // mistaken entry can add a replacement right away instead of it counting
-  // against their cap forever. firestore.rules caps this at exactly -1 per
-  // write, floored at 0 — see the guestCount rule next to scannedCount's.
   try {
-    await removeGuestDoc(docId);
+    await Data.guests.remove(eventId, id);
+    bumpGuestCount(-1);
+    dropGuestsLocally([id]);
+    liveRefresh();
     showToast('✅ تم حذف الضيف');
   } catch (e) { showErr(e); }
-}
-
-// Shared by deleteGuest and bulkDeleteSelected. A guest who already checked
-// in is first un-checked-in (scannedCount -1, same as undoGuestAttend), or
-// the door counter in scan.html would keep counting someone who no longer
-// exists. That has to be its own transaction: firestore.rules lets
-// guestCount drop only in a write that touches nothing else.
-async function removeGuestDoc(docId) {
-  const { doc, runTransaction } = window._fsFns;
-  const gRef = doc(window._db, 'events', eventId, 'guests', docId);
-  const eventRef = doc(window._db, 'events', eventId);
-  await runTransaction(window._db, async (tx) => {
-    const gSnap = await tx.get(gRef);
-    if (!gSnap.exists() || !gSnap.data().scanned) return;
-    const evSnap = await tx.get(eventRef);
-    tx.update(gRef, { scanned: false, scannedAt: null });
-    tx.update(eventRef, { scannedCount: Math.max(0, (evSnap.data().scannedCount || 0) - 1) });
-  });
-  await runTransaction(window._db, async (tx) => {
-    const evSnap = await tx.get(eventRef);
-    tx.delete(gRef);
-    tx.update(eventRef, { guestCount: Math.max(0, (evSnap.data().guestCount || 0) - 1) });
-  });
 }
 
 function hexToRgba(hex, alpha) {
@@ -1973,11 +1781,11 @@ function buildGuestCardNow(guest) {
 }
 
 const cardBusy = new Set();
-async function downloadGuestCard(docId) {
-  const guest = guests.find(g => g.docId === docId);
-  if (!guest || cardBusy.has(docId)) return;
-  cardBusy.add(docId);
-  try { await downloadGuestCardNow(guest); } finally { cardBusy.delete(docId); }
+async function downloadGuestCard(id) {
+  const guest = guests.find(g => g.id === id);
+  if (!guest || cardBusy.has(id)) return;
+  cardBusy.add(id);
+  try { await downloadGuestCardNow(guest); } finally { cardBusy.delete(id); }
 }
 
 async function downloadGuestCardNow(guest) {
@@ -2033,13 +1841,13 @@ document.addEventListener('click', (e) => {
   if (menu && menu.style.display === 'block' && !e.target.closest('.toolbar')) closeTopMenu();
 });
 
-// The guest whose ⋮ sheet is open (by doc id — the row itself is re-rendered
-// on every snapshot, so the sheet looks the guest up again when acting).
+// The guest whose ⋮ sheet is open (by id — the row itself is re-rendered
+// on every update, so the sheet looks the guest up again when acting).
 let sheetGuestId = null;
-function openGuestSheet(docId) {
-  const g = guests.find(x => x.docId === docId);
+function openGuestSheet(id) {
+  const g = guests.find(x => x.id === id);
   if (!g) return;
-  sheetGuestId = docId;
+  sheetGuestId = id;
   document.getElementById('gs-name').innerHTML = escapeHtml(g.name) + (g.vip ? ' <span class="vip-badge">★ VIP</span>' : '');
   document.getElementById('gs-sub').innerHTML = 'الكود <b>' + escapeHtml(g.id) + '</b> · ' + (g.scanned ? 'حضر' : 'لم يحضر بعد');
   document.getElementById('gs-vip-text').innerHTML = g.vip
@@ -2057,9 +1865,9 @@ function sheetToggleVip() {
   if (id) toggleGuestVip(id);
 }
 function sheetDeleteGuest() {
-  const g = guests.find(x => x.docId === sheetGuestId);
+  const g = guests.find(x => x.id === sheetGuestId);
   closeGuestSheet();
-  if (g) deleteGuest(g.docId, g.name);
+  if (g) deleteGuest(g.id, g.name);
 }
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('guest-sheet').classList.contains('active')) closeGuestSheet();
@@ -2301,25 +2109,20 @@ async function toggleRequestNotifications() {
   updateNotifButtonLabel();
   if (perm === 'granted') {
     showToast('✅ تم تفعيل إشعارات الطلبات');
+    if (liveWatch) liveWatch.setHiddenInterval(30000);
     try { new Notification('🎉 تم التفعيل', { body: 'بتوصلك إشعارات لما يوصل طلب جديد، بس لازم الصفحة تكون مفتوحة بالخلفية' }); } catch (e) {}
   } else {
     showToast('⚠️ ما وافقت على الإشعارات');
   }
 }
 
-// createdAt is an ISO string on new requests; older or hand-made ones may
-// hold a Timestamp-like value, and a missing one counts as the oldest.
+// createdAt is an ISO string; a missing one counts as the oldest.
 function requestTime(r) {
-  const c = r.createdAt;
-  if (!c) return 0;
-  if (typeof c === 'string') { const t = Date.parse(c); return isNaN(t) ? 0 : t; }
-  if (typeof c === 'number') return c;
-  if (typeof c.toMillis === 'function') return c.toMillis();
-  if (typeof c.seconds === 'number') return c.seconds * 1000;
-  return 0;
+  const t = Date.parse(r.createdAt || '');
+  return isNaN(t) ? 0 : t;
 }
 function sortRequestsOldestFirst(list) {
-  return list.slice().sort((a, b) => (requestTime(a) - requestTime(b)) || (a.docId < b.docId ? -1 : a.docId > b.docId ? 1 : 0));
+  return list.slice().sort((a, b) => (requestTime(a) - requestTime(b)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 let bulkApproving = false;
@@ -2342,16 +2145,16 @@ function renderRequests() {
       <div class="pending-info">
         <div class="pname">${escapeHtml(r.name)}</div>
       </div>
-      <button class="approve-btn" onclick="approveRequest('${r.docId}')"${dis}>${ic('check', 13)} قبول</button>
-      <button class="vip-approve-btn" onclick="approveRequest('${r.docId}', true)"${dis}>${ic('star', 13)} قبول كـ VIP</button>
-      <button class="reject-btn" onclick="rejectRequest('${r.docId}')"${dis}>${ic('x', 13)} رفض</button>
+      <button class="approve-btn" onclick="approveRequest('${r.id}')"${dis}>${ic('check', 13)} قبول</button>
+      <button class="vip-approve-btn" onclick="approveRequest('${r.id}', true)"${dis}>${ic('star', 13)} قبول كـ VIP</button>
+      <button class="reject-btn" onclick="rejectRequest('${r.id}')"${dis}>${ic('x', 13)} رفض</button>
     </div>
   `).join('');
 }
 
 // How many of n pending requests the guest limit lets through right now.
 function approveAllFit(n) {
-  return isAdmin(currentUser) ? n : Math.max(0, Math.min(n, guestCapOf(eventData) - guestCount()));
+  return adminFlag ? n : Math.max(0, Math.min(n, guestCapOf(eventData) - guestCount()));
 }
 
 function openApproveAllModal() {
@@ -2372,9 +2175,9 @@ function closeApproveAllModal() {
   document.getElementById('approve-all-modal').classList.remove('active');
 }
 
-// Approves the frozen queue in chunks of 25, one transaction per chunk (same
-// shape as importGuestNames), so a request approved elsewhere in the meantime
-// is skipped and the guest cap is re-checked against the live counter.
+// Approves the frozen queue in chunks of 25, one server call per chunk, so a
+// request approved elsewhere in the meantime is skipped and the guest cap is
+// re-checked by the server on every chunk.
 async function approveAllRequests() {
   if (bulkApproving) return;
   const queue = approveAllQueue.slice();
@@ -2383,9 +2186,6 @@ async function approveAllRequests() {
   if (paymentGateActive()) { openPaymentWhatsapp(); return; }
   const fit = approveAllFit(queue.length);
   if (fit === 0) { openPaymentWhatsapp(); return; }
-  const { doc, runTransaction } = window._fsFns;
-  const eventRef = doc(window._db, 'events', eventId);
-  const admin = isAdmin(currentUser);
   let accepted = 0;
   let skipped = 0;
   let capped = false;
@@ -2398,34 +2198,14 @@ async function approveAllRequests() {
   try {
     const chunkSize = 25;
     for (let i = 0; i < queue.length && !capped; i += chunkSize) {
-      const ids = queue.slice(i, i + chunkSize).map(r => r.docId);
-      const res = await runTransaction(window._db, async (tx) => {
-        const evSnap = await tx.get(eventRef);
-        const data = evSnap.data() || {};
-        const count = data.guestCount || 0;
-        const cap = guestCapOf(data);
-        const refs = ids.map(id => doc(window._db, 'events', eventId, 'requests', id));
-        const snaps = await Promise.all(refs.map(r => tx.get(r)));
-        const live = [];
-        let gone = 0;
-        snaps.forEach((snap, k) => {
-          const d = snap.exists() ? snap.data() : null;
-          if (!d || d.status !== 'pending') { gone++; return; }
-          live.push({ ref: refs[k], d });
-        });
-        const allowed = admin ? live.length : Math.max(0, Math.min(live.length, cap - count));
-        live.slice(0, allowed).forEach(({ ref, d }) => {
-          const guestId = newGuestId();
-          const guestRef = doc(window._db, 'events', eventId, 'guests', guestId);
-          tx.set(guestRef, { id: guestId, name: d.name, ...(d.reqId !== undefined ? { reqId: d.reqId } : {}), scanned: false, registeredAt: new Date().toISOString() });
-          tx.update(ref, { status: 'approved', guestId });
-        });
-        if (allowed > 0) tx.update(eventRef, { guestCount: count + allowed });
-        return { allowed, gone, capped: allowed < live.length };
-      });
-      accepted += res.allowed;
-      skipped += res.gone;
-      capped = res.capped;
+      const chunk = queue.slice(i, i + chunkSize);
+      const res = await Data.requests.approve(eventId, chunk.map(r => ({ reqId: r.id })));
+      accepted += res.approved.length;
+      bumpGuestCount(res.approved.length);
+      if (res.blocked) capped = true; else skipped += chunk.length - res.approved.length;
+      const done = new Set(res.approved);
+      requests = requests.filter(r => !done.has(r.id));
+      updateRequestsBadge();
       bulkDone = accepted;
       renderRequests();
       showToast('⏳ جاري القبول... ' + accepted + ' / ' + fit);
@@ -2438,6 +2218,7 @@ async function approveAllRequests() {
   } finally {
     bulkApproving = false;
     renderRequests();
+    liveRefresh();
   }
   if (failed) return;
   const remaining = queue.length - accepted - skipped;
@@ -2452,28 +2233,18 @@ async function approveAllRequests() {
   }
 }
 
-// The guest's barcode text ("WD-...") IS the Firestore document ID — not a
-// separate field next to an unrelated auto/random doc ID. That used to be
-// two independent random strings per guest for no real reason, and it meant
-// the scanner could only find a guest by loading every guest and searching
-// in memory. With the code as the doc ID, the scanner looks a guest up with
-// one direct getDoc(), no collection read at all.
-// Picked client-side (not addDoc's auto-ID) so it's ready before
-// runTransaction runs — transactions need the ref up front.
-function newGuestId() {
-  return 'WD-' + Math.random().toString(36).substr(2, 9).toUpperCase() + Date.now().toString(36).toUpperCase().substr(-4);
+const ERR_TEXT = {
+  offline: 'تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية',
+  timeout: 'الاتصال بطيء وما انتهت العملية — حدّث الصفحة وتأكد قبل ما تعيد',
+  permission: 'ما عندك صلاحية لهذا الإجراء — سجّل الدخول من جديد',
+};
+// The text of an error alert: one sentence for the codes that have one, else the old «prefix code — message».
+function errText(e, prefix) {
+  return ERR_TEXT[e.code] || (prefix || 'صار خطأ: ') + (e.code || '') + ' — ' + e.message;
 }
 
 function showErr(e) {
-  // Safety net for the reload in firebase-init.js: never leave the customer
-  // on a page whose connection is gone for good.
-  if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
-    if (window._leaving) return;
-    showToast('⏳ انقطع الاتصال — جاري تحديث الصفحة...');
-    setTimeout(() => { if (!window._leaving) location.reload(); }, 800);
-    return;
-  }
-  alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
+  alert(errText(e));
   console.error(e);
 }
 
@@ -2486,40 +2257,63 @@ async function addGuest() {
   // can legitimately exist on both sides of the family, each needing
   // their own invitation.
   if (guests.some(g => g.name === name)) { showToast('⚠️ الاسم موجود بالقائمة'); return; }
-  const { doc, runTransaction } = window._fsFns;
-  const eventRef = doc(window._db, 'events', eventId);
-  const guestId = newGuestId();
-  const guestRef = doc(window._db, 'events', eventId, 'guests', guestId);
-  let justHitCap = false;
+  let res;
   try {
-    await runTransaction(window._db, async (tx) => {
-      const snap = await tx.get(eventRef);
-      const data = snap.data() || {};
-      const count = data.guestCount || 0;
-      const cap = guestCapOf(data);
-      if (!isAdmin(currentUser) && count >= cap) throw new Error('GATE');
-      tx.set(guestRef, { id: guestId, name, scanned: false, registeredAt: new Date().toISOString() });
-      tx.update(eventRef, { guestCount: count + 1 });
-      justHitCap = !isAdmin(currentUser) && count + 1 >= cap;
-    });
-    nameInput.value = '';
-    nameInput.focus();
-    // If this is the add that hits the free-guest cap, that more important
-    // notification (fired separately by the live event listener) should
-    // own the toast instead of racing this generic one for the same slot.
-    if (!justHitCap) showToast('✅ تمت إضافة ' + name);
+    res = await Data.guests.add(eventId, [{ name }], false);
   } catch (e) {
-    if (e.message === 'GATE') { openPaymentWhatsapp(); return; }
+    if (e.code === 'cap-reached') { openPaymentWhatsapp(); return; }
     showErr(e);
+    return;
   }
+  if (res.blocked) { openPaymentWhatsapp(); return; }
+  const justHitCap = !adminFlag && guestCount() + 1 >= guestCapOf(eventData);
+  bumpGuestCount(1);
+  nameInput.value = '';
+  nameInput.focus();
+  if (res.ids[0]) {
+    guests = guests.concat([{ id: res.ids[0], name, scanned: false, scannedAt: '', vip: false, registeredAt: new Date().toISOString() }]);
+    updateStats();
+    scheduleRenderGuests();
+  }
+  liveRefresh();
+  // If this is the add that hits the free-guest cap, that more important
+  // notification (fired separately by the live poll) should
+  // own the toast instead of racing this generic one for the same slot.
+  if (!justHitCap) showToast('✅ تمت إضافة ' + name);
 }
 
 // Shared by importCSV and addSequentialNumbers: dedupes the given names
 // against existing guests (and against repeats within the same list) then
-// writes them in gate-aware transactional batches. Used for both a real
+// writes them in gate-aware batches. Used for both a real
 // name list and a plain range like "1".."200" for events that hand out
 // numbered rather than named entries — the guest doc doesn't care which.
+// One import at a time. After a failed batch (a lost reply may still have written
+// it) the list is read again from the server and awaited before anything else
+// can be imported, so uploading the same file twice cannot double the guests.
+let importBusy = false;
+let importStale = false;
+async function refreshGuestsNow() {
+  guests = await Data.guests.list(eventId);
+  updateStats();
+  renderGuests();
+  liveRefresh({ full: true });
+}
 async function importGuestNames(names) {
+  if (importBusy) return;
+  importBusy = true;
+  try {
+    if (importStale) { await refreshGuestsNow(); importStale = false; }
+    await importGuestNamesNow(names);
+  } catch (e) {
+    importStale = true;
+    try { await refreshGuestsNow(); importStale = false; } catch (e2) {}
+    throw e;
+  } finally {
+    importBusy = false;
+  }
+}
+
+async function importGuestNamesNow(names) {
   // Dedupe against existing guests AND against repeats within this same
   // list, synchronously, before any writes start — otherwise duplicate
   // names in the same list all pass the check in parallel and all get
@@ -2533,45 +2327,33 @@ async function importGuestNames(names) {
     toAdd.push(name);
   }
 
-  const { doc, runTransaction } = window._fsFns;
-  const eventRef = doc(window._db, 'events', eventId);
   let added = 0;
   let blockedByGate = 0;
-  let capForMsg = FREE_GUEST_LIMIT;
   const batchSize = 50;
   const total = toAdd.length;
-  // Always shown, even for a handful of names: adding guests writes through
-  // a transaction, which — unlike a plain write — isn't echoed to the UI
+  // Always shown, even for a handful of names: a write is not echoed to the UI
   // until the server round-trip actually completes. With no feedback at
   // all, a short wait on a slow connection looked identical to the button
   // not having done anything, and reaching for a manual refresh was the
   // only way anyone found to tell. Same progress toast pattern as the bulk
   // card download; it just goes away on its own once the alert() below replaces it.
   showToast('⏳ جاري الإضافة... 0 / ' + total);
-  for (let i = 0; i < toAdd.length; i += batchSize) {
-    const batch = toAdd.slice(i, i + batchSize);
-    const addedThisBatch = await runTransaction(window._db, async (tx) => {
-      const snap = await tx.get(eventRef);
-      const data = snap.data() || {};
-      const count = data.guestCount || 0;
-      const cap = guestCapOf(data);
-      capForMsg = cap;
-      const allowed = isAdmin(currentUser) ? batch.length : Math.max(0, Math.min(batch.length, cap - count));
-      const toWrite = batch.slice(0, allowed);
-      toWrite.forEach(name => {
-        const guestId = newGuestId();
-        const guestRef = doc(window._db, 'events', eventId, 'guests', guestId);
-        tx.set(guestRef, { id: guestId, name, scanned: false, registeredAt: new Date().toISOString() });
-      });
-      if (toWrite.length > 0) tx.update(eventRef, { guestCount: count + toWrite.length });
-      return toWrite.length;
-    });
-    added += addedThisBatch;
-    showToast('⏳ جاري الإضافة... ' + Math.min(added, total) + ' / ' + total);
-    // Everything not yet written is left out — this batch's remainder AND every later batch.
-    if (addedThisBatch < batch.length) { blockedByGate = total - added; break; }
+  try {
+    for (let i = 0; i < toAdd.length; i += batchSize) {
+      const batch = toAdd.slice(i, i + batchSize);
+      const res = await Data.guests.add(eventId, batch.map(name => ({ name })), true);
+      added += res.added;
+      bumpGuestCount(res.added);
+      showToast('⏳ جاري الإضافة... ' + Math.min(added, total) + ' / ' + total);
+      // Everything not yet written is left out — this batch's remainder AND every later batch.
+      if (res.added < batch.length) { blockedByGate = total - added; break; }
+    }
+  } finally {
+    // Also after a failed call: part of the list may have landed on the server.
+    liveRefresh();
   }
 
+  const capForMsg = guestCapOf(eventData);
   let msg = 'تم استيراد ' + added + ' ' + guestWord(added) + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' ' + arPlural(duplicates, 'اسم مكرر', 'اسمين مكررين', 'أسماء مكررة') + ')' : '');
   if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + capForMsg + ' ' + guestWord(capForMsg) + '، وما انضاف ' + blockedByGate + ' ' + arPlural(blockedByGate, 'اسم', 'اسمين', 'أسماء') + '. تواصل معنا لزيادة العدد.';
   alert(msg);
@@ -2663,67 +2445,50 @@ async function addSequentialNumbers() {
 
 const approvingNow = new Set();
 
-async function approveRequest(reqDocId, vip) {
+async function approveRequest(reqId, vip) {
   if (paymentGateActive()) { openPaymentWhatsapp(); return; }
-  const req = requests.find(r => r.docId === reqDocId);
-  if (!req || approvingNow.has(reqDocId)) return;
-  const { doc, runTransaction } = window._fsFns;
-  const eventRef = doc(window._db, 'events', eventId);
-  const guestId = newGuestId();
-  const guestRef = doc(window._db, 'events', eventId, 'guests', guestId);
-  const reqRef = doc(window._db, 'events', eventId, 'requests', reqDocId);
-  approvingNow.add(reqDocId);
+  const req = requests.find(r => r.id === reqId);
+  if (!req || approvingNow.has(reqId)) return;
+  approvingNow.add(reqId);
   try {
-    await runTransaction(window._db, async (tx) => {
-      // A second tab (or «اقبل الكل») may have approved this request already:
-      // re-check inside the transaction so one request never makes two guests.
-      const reqSnap = await tx.get(reqRef);
-      if (!reqSnap.exists() || (reqSnap.data() || {}).status !== 'pending') throw new Error('ALREADY');
-      const snap = await tx.get(eventRef);
-      const data = snap.data() || {};
-      const count = data.guestCount || 0;
-      if (!isAdmin(currentUser) && count >= guestCapOf(data)) throw new Error('GATE');
-      tx.set(guestRef, { id: guestId, name: req.name, reqId: req.reqId, scanned: false, registeredAt: new Date().toISOString(), ...(vip ? { vip: true } : {}) });
-      tx.update(eventRef, { guestCount: count + 1 });
-      // The guest's invite page reads the barcode id from here — it can't
-      // read the guests collection itself (that's no longer world-readable).
-      tx.update(reqRef, { status: 'approved', guestId, ...(vip ? { vip: true } : {}) });
-    });
+    // The server re-checks inside the same step that a second tab (or
+    // «اقبل الكل») has not approved this request already, and the guest limit.
+    const res = await Data.requests.approve(eventId, [{ reqId, vip: !!vip }]);
+    if (res.approved.length === 0) {
+      if (res.blocked) { openPaymentWhatsapp(); return; }
+      showToast('ℹ️ هذا الطلب تمت الموافقة عليه مسبقًا');
+      liveRefresh();
+      return;
+    }
+    requests = requests.filter(r => r.id !== reqId);
+    bumpGuestCount(1);
+    updateRequestsBadge();
+    renderRequests();
+    liveRefresh();
     showToast('✅ تمت الموافقة — ' + req.name + (vip ? ' (VIP)' : ''));
   } catch (e) {
-    if (e.message === 'GATE') { openPaymentWhatsapp(); return; }
-    if (e.message === 'ALREADY') { showToast('ℹ️ هذا الطلب تمت الموافقة عليه مسبقًا'); return; }
+    if (e.code === 'cap-reached') { openPaymentWhatsapp(); return; }
+    if (e.code === 'already-handled') { showToast('ℹ️ هذا الطلب تمت الموافقة عليه مسبقًا'); return; }
     showErr(e);
   } finally {
-    approvingNow.delete(reqDocId);
+    approvingNow.delete(reqId);
   }
 }
 
-async function rejectRequest(reqDocId) {
-  const { doc, updateDoc } = window._fsFns;
-  const req = requests.find(r => r.docId === reqDocId);
+async function rejectRequest(reqId) {
+  const req = requests.find(r => r.id === reqId);
   try {
-    await updateDoc(doc(window._db, 'events', eventId, 'requests', reqDocId), { status: 'rejected' });
+    await Data.requests.reject(eventId, reqId);
+    requests = requests.filter(r => r.id !== reqId);
+    updateRequestsBadge();
+    renderRequests();
+    liveRefresh();
     showToast('🗑 تم رفض الطلب' + (req ? ' — ' + req.name : ''));
   } catch (e) { showErr(e); }
 }
 
-if (window._auth) {
-  tmark('appDbReady (already)');
-  init();
-} else {
-  // Same "trapped forever" failure the getDoc retry above closes, one layer
-  // earlier: a slow or dropped connection while firebase-init.js's own CDN
-  // imports load means appDbReady never fires, leaving this stuck on
-  // "جاري التحميل..." forever with no way out.
-  const appDbTimeout = setTimeout(() => {
-    const el = document.getElementById('loading-msg');
-    el.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
-    el.style.cursor = 'pointer';
-    el.onclick = () => location.reload();
-  }, 8000);
-  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); tmark('appDbReady'); init(); });
-}
+tmark('supabase');
+init();
 
 // Last safety net for "stuck on جاري التحميل..." with no way out (a real
 // report: an iPhone sat on it for about a minute and a half after creating
@@ -2738,10 +2503,7 @@ setTimeout(() => {
   if (!el || el.style.display === 'none' || el.onclick || el.textContent.trim() !== 'جاري التحميل...') return;
   el.textContent = 'الاتصال بطيء، لحظات…';
   tmark('slow');
-  tmProbes(function (fin) {
-    var f = window._fsFns;
-    f.getDocFromCache(f.doc(window._db, 'events', eventId)).then(function () { fin('ok'); }, function () { fin('miss'); });
-  });
+  tmProbes();
 }, SLOW_LOADING_MS);
 setTimeout(() => {
   const el = document.getElementById('loading-msg');

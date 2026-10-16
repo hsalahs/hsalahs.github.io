@@ -46,10 +46,7 @@
 <meta name="apple-mobile-web-app-title" content="سكانر">
 <meta name="mobile-web-app-capable" content="yes">
 
-<script type="module" src="firebase-init.js"></script>
-<link rel="preconnect" href="https://firestore.googleapis.com">
-<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
-<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://gunizkapwatixvbfliva.supabase.co" crossorigin>
 <style>
 @font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/ibm-plex-sans-arabic-400-arabic.woff2) format('woff2');unicode-range:U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1}
 @font-face{font-family:'IBM Plex Sans Arabic';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/ibm-plex-sans-arabic-400-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
@@ -111,7 +108,7 @@
   .manual-divider::before, .manual-divider::after { content:''; flex:1; height:1px; background:rgba(var(--accent-rgb),0.2); }
   .manual-row { display:flex; gap:8px; align-items:stretch; }
   .manual-row input { flex:1; }
-  .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; display:none; }
+  .err { color:#ff9d9d; font-size:13px; margin-bottom:10px; display:none; text-wrap:balance; }
   .camera-status { font-size:13px; color:#B8B4AC; margin-bottom:14px; text-align:center; }
   #camera-wrapper { position:relative; width:100%; max-width:320px; margin:0 auto; border-radius:16px; overflow:hidden; border:2px solid var(--gold); background:#000; }
   #camera-wrapper::before { content:''; display:block; padding-top:100%; }
@@ -134,6 +131,7 @@
   .vip-flag { display:inline-block; margin:0 auto 12px; padding:5px 18px; border-radius:99px; font-weight:700; font-size:18px; letter-spacing:1px; color:#1a1400; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); }
   #result-name { max-width:100%; font-size:var(--res-name); font-weight:700; line-height:1.3; margin-bottom:12px; overflow-wrap:anywhere; }
   #result-status { font-size:var(--res-status); font-weight:500; line-height:1.5; overflow-wrap:anywhere; }
+  #result-since { font-size:16px; font-weight:400; line-height:1.5; margin-top:6px; color:rgba(255,255,255,0.9); }
   #result-hint { font-size:var(--res-hint); margin-top:28px; color:rgba(255,255,255,0.9); }
   @media (prefers-reduced-motion:no-preference) {
     #result-overlay.rs-show { animation:resultPop 0.18s ease-out; }
@@ -277,12 +275,16 @@
   <div class="vip-flag" id="result-vip" style="display:none;">★ VIP</div>
   <div id="result-name"></div>
   <div id="result-status"></div>
+  <div id="result-since" style="display:none"></div>
   <div id="result-hint">المس الشاشة لإغلاقها</div>
 </div>
 
 <!-- Moved out of <head> so it doesn't block first paint (and the splash
      screen) on a fetch to another CDN — nothing needs it until the script
      below runs. -->
+<script src="supabase-config.js"></script>
+<script src="vendor/supabase.min.js"></script>
+<script src="data.js"></script>
 <script src="vendor/qr-scanner.umd.min.js"></script>
 <script src="icons.js"></script>
 <script src="utils.js"></script>
@@ -300,36 +302,18 @@ function applyEventTheme(name) {
   else document.body.removeAttribute('data-theme');
 }
 let guests = [];
-let eventUnsub = null;
+let scanWatch = null;
+let curUser = null;
 let qrScanner = null;
 let lastScanned = null;
 let scanCooldown = false;
 let audioCtx = null;
 
-// ADMIN_EMAILS/isAdmin now live in utils.js (shared with app.html and
-// event.html). An admin who's already signed in on this device (their
-// session persists across all pages, same origin) shouldn't have to ask
-// the customer for the door code — they already have full access
-// everywhere else.
-
-// Firebase Auth restores a persisted session asynchronously, so the first
-// onAuthStateChanged callback is the earliest point we can reliably know
-// whether this device is signed in — checking auth.currentUser directly
-// right after load would almost always read null even for an admin.
-// The unsubscribe is deferred to a microtask (not called from inside this
-// same synchronous callback) because Firebase Auth's real SDK — and this
-// project's test stub — can invoke the callback synchronously before
-// onAuthStateChanged() has even returned, which would mean calling `unsub`
-// before it's assigned.
-function waitForAuth() {
-  return new Promise((resolve) => {
-    const { onAuthStateChanged } = window._authFns;
-    const unsub = onAuthStateChanged(window._auth, (user) => {
-      resolve(user);
-      Promise.resolve().then(() => unsub && unsub());
-    });
-  });
-}
+// The signed-in user of this browser (null = nobody), kept current by
+// Data.auth.onChange. An admin or organizer who is already signed in on this
+// device (their session persists across all pages, same origin) shouldn't have
+// to ask the customer for the door code: the server answers the door calls
+// for them, so opening the scanner is just trying one.
 
 // Scan result look and timing in one place (colours and sizes are the
 // --res-* variables on #result-overlay in the CSS). autoMs 0 = stays until tapped.
@@ -391,7 +375,19 @@ let resultTimer = null, lastClearTimer = null, resultShownAt = 0, resultUp = fal
 
 let scanEpoch = 0;
 
-function showResult(kind, name, vip, message) {
+function sinceText(iso) {
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return '';
+  const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (sec < 3) return 'دخل قبل لحظات';
+  if (sec < 60) return 'دخل قبل ' + (sec === 1 ? 'ثانية' : sec === 2 ? 'ثانيتين' : sec + (sec <= 10 ? ' ثوانٍ' : ' ثانية'));
+  const min = Math.floor(sec / 60);
+  if (min < 60) return 'دخل قبل ' + (min === 1 ? 'دقيقة' : min === 2 ? 'دقيقتين' : min + (min <= 10 ? ' دقائق' : ' دقيقة'));
+  const d = new Date(t), h = d.getHours();
+  return 'دخل الساعة ' + (h % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + (h < 12 ? 'ص' : 'م');
+}
+
+function showResult(kind, name, vip, message, since) {
   const def = RESULT_UI[kind];
   const ov = document.getElementById('result-overlay');
   if (document.getElementById('scanner-view').style.display === 'none') return;
@@ -402,6 +398,9 @@ function showResult(kind, name, vip, message) {
   document.getElementById('result-vip').style.display = vip ? 'inline-block' : 'none';
   document.getElementById('result-name').textContent = name || '';
   document.getElementById('result-status').textContent = message || def.status;
+  const sn = document.getElementById('result-since');
+  sn.textContent = since ? sinceText(since) : '';
+  sn.style.display = sn.textContent ? 'block' : 'none';
   ov.style.display = 'flex';
   void ov.offsetWidth;
   ov.classList.add('rs-show');
@@ -432,23 +431,20 @@ function onResultTap() {
   hideResult();
 }
 
-// The door code is never sent to this page. Unlocking means creating this
-// device's own session document (under an anonymous Firebase identity —
-// door staff have no account) containing the code they were given; the
-// Firestore security rule compares it against the real code server-side and
-// only lets the write through on a match. All this page ever learns is
-// accepted or denied. Every guest read and every check-in write is then
-// gated on that session doc still being valid, so "generate a new code" on
-// the dashboard cuts every device off at once.
+// The door code is never kept on this page. Unlocking means asking the
+// server to open a door session for this device (under an anonymous identity —
+// door staff have no account) with the code they were given; the server
+// compares it with the real code and answers ok, wrong or locked. Every guest
+// read and every check-in is then gated on that session still being valid, so
+// "generate a new code" on the dashboard cuts every device off at once.
 let identityP = null;
 function ensureIdentity() {
-  const current = window._auth.currentUser;
-  if (current) return Promise.resolve(current);
+  if (curUser) return Promise.resolve(curUser);
   if (identityP) return identityP;
-  const { signInAnonymously } = window._authFns;
   identityP = (async () => {
-    const cred = await signInAnonymously(window._auth);
-    return cred.user;
+    const user = await Data.auth.signInAnon();
+    curUser = user;
+    return user;
   })().finally(() => { identityP = null; });
   return identityP;
 }
@@ -458,13 +454,8 @@ function ensureIdentity() {
 // ensureIdentity() again and reports a failure itself. Skipped when the
 // device already has a user (admin, organizer, or a returning door device).
 function warmIdentity() {
-  if (window._auth.currentUser) return;
+  if (curUser) return;
   ensureIdentity().catch(() => {});
-}
-
-function sessionRef(uid) {
-  const { doc } = window._fsFns;
-  return doc(window._db, 'events', eventId, 'scanSessions', uid);
 }
 
 function showPinError(msg) {
@@ -473,6 +464,13 @@ function showPinError(msg) {
   err.style.display = 'block';
 }
 
+// Code screen texts. 'locked' = too many wrong codes from this device.
+const PIN_TEXT = {
+  wrong: 'رقم غير صحيح',
+  locked: 'الدخول مقفل مؤقتًا، حاول بعد قليل أو كلّم صاحب المناسبة',
+  offline: '⚠️ تعذّر الاتصال — تأكد من الإنترنت وحاول مرة ثانية',
+};
+
 async function checkPin(ev) {
   const clickDelay = ev && ev.timeStamp ? performance.now() - ev.timeStamp : 0;
   const val = document.getElementById('pin-input').value.trim();
@@ -480,28 +478,25 @@ async function checkPin(ev) {
   if (!val) return;
 
   const tapAt = performance.now();
-  let user;
   try {
-    user = await ensureIdentity();
+    await ensureIdentity();
   } catch (e) {
     console.error('anonymous sign-in failed:', e);
-    showPinError(e.code === 'auth/admin-restricted-operation' || e.code === 'auth/operation-not-allowed'
-      ? '⚠️ تسجيل الدخول المجهول غير مفعّل بإعدادات Firebase (Authentication ← Sign-in method ← Anonymous)'
-      : '⚠️ تعذّر الاتصال — تأكد من الإنترنت وحاول مرة ثانية');
+    showPinError(PIN_TEXT.offline);
     return;
   }
 
   const identityAt = performance.now();
-  const { setDoc } = window._fsFns;
+  let answer;
   try {
-    await setDoc(sessionRef(user.uid), { pin: val, createdAt: new Date().toISOString() });
+    answer = await Data.scan.start(eventId, val);
   } catch (e) {
-    if (e.code === 'permission-denied') {
-      showPinError('رقم غير صحيح');
-    } else {
-      console.error(e);
-      showPinError('⚠️ تعذّر الاتصال — تأكد من الإنترنت وحاول مرة ثانية');
-    }
+    console.error(e);
+    showPinError(PIN_TEXT.offline);
+    return;
+  }
+  if (answer !== 'ok') {
+    showPinError(PIN_TEXT[answer] || PIN_TEXT.wrong);
     return;
   }
   const writeAt = performance.now();
@@ -520,34 +515,37 @@ async function checkPin(ev) {
   }
 }
 
-// True only for a device that got in by proving the code (a session doc
+// True only for a device that got in by proving the code (a door session
 // exists for it). The organizer and the admin get in on their own account
 // and have nothing to re-check.
 let usesSessionDoc = false;
 let sessionTimer = null;
 let verifyingSession = false;
 
-// Firestore doesn't re-check a listener that's already open when the code
-// changes, so a revoked device would keep showing (and receiving) the guest
-// list until its next reload. This asks again: once a minute, and right
-// when the page comes back to the foreground or the phone regains signal
-// (the moments a paused or offline page would otherwise still look valid).
-// A failed check for any reason other than "denied" is ignored — a dropped
-// connection must never throw door staff out mid-event.
+// The counter poll notices a cut-off session within seconds; this asks again
+// directly: once a minute, and right when the page comes back to the
+// foreground or the phone regains signal (the moments a paused or offline
+// page would otherwise still look valid). A failed check for any reason other
+// than "refused" is ignored — a dropped connection must never throw door
+// staff out mid-event.
 async function verifySession() {
   if (!usesSessionDoc || verifyingSession) return;
-  const user = window._auth.currentUser;
-  if (!user) return;
+  if (!curUser) return;
   verifyingSession = true;
   try {
-    const { getDoc } = window._fsFns;
-    const snap = await getDoc(sessionRef(user.uid));
-    if (usesSessionDoc && !snap.exists()) sessionRevoked();
+    const ok = await Data.scan.valid(eventId);
+    if (usesSessionDoc && !ok) sessionRevoked();
   } catch (e) {
-    if (usesSessionDoc && e && e.code === 'permission-denied') sessionRevoked();
+    if (usesSessionDoc && isAccessLost(e)) sessionRevoked(e.code === 'auth-lost' ? 'signedout' : undefined);
   } finally {
     verifyingSession = false;
   }
+}
+
+// The server refused this device (code changed / session gone) or the sign-in
+// itself is dead.
+function isAccessLost(e) {
+  return !!e && (e.code === 'no-session' || e.code === 'auth-lost' || e.code === 'permission');
 }
 
 function startSessionWatch() {
@@ -572,18 +570,19 @@ window.addEventListener('online', verifySession);
 //    organizer generated a new door code;
 //  - 'access': signed in as the organizer/admin, yet not allowed.
 function whyAccessLost() {
-  if (!window._auth.currentUser) return 'signedout';
+  if (!curUser) return 'signedout';
   return usesSessionDoc ? 'code' : 'access';
 }
 
 // This device stopped being accepted mid-event. Back to the code screen with
 // the real reason instead of a misleading "connection lost" banner, a
 // check-in that silently never completes, or a wrong "code changed" message.
-function sessionRevoked() {
-  const why = whyAccessLost();
+// reason: pass 'signedout' when the sign-in itself is known to be gone.
+function sessionRevoked(reason) {
+  const why = reason || whyAccessLost();
   usesSessionDoc = false;
   stopSessionWatch();
-  if (eventUnsub) { eventUnsub(); eventUnsub = null; }
+  stopScanWatch();
   if (qrScanner) {
     try { qrScanner.stop(); } catch (_) {}
     try { qrScanner.destroy(); } catch (_) {}
@@ -603,15 +602,16 @@ function sessionRevoked() {
 }
 
 // Notices the sign-out itself, the moment it happens in another tab of this
-// browser, instead of waiting for Firestore to start refusing reads.
+// browser, instead of waiting for the server to start refusing calls.
 // (lockDevice() signs out on purpose and shows the code screen itself.)
 let lockingDevice = false;
 function watchSignOut(initialUser) {
   let hadUser = !!initialUser;
-  window._authFns.onAuthStateChanged(window._auth, (user) => {
+  Data.auth.onChange((user) => {
+    curUser = user;
     if (user) { hadUser = true; return; }
     const scannerShowing = document.getElementById('scanner-view').style.display === 'block';
-    if (hadUser && !lockingDevice && scannerShowing) sessionRevoked();
+    if (hadUser && !lockingDevice && scannerShowing) sessionRevoked('signedout');
     hadUser = false;
   });
 }
@@ -631,7 +631,7 @@ function hideAdminLogin() {
 // A real sign-in with the admin's own account, rather than a shared code —
 // this page's source is public (static hosting, no backend), so anything
 // written into it as a literal string is effectively public too. A real
-// password, checked by Firebase's own servers, isn't.
+// password, checked by the server, isn't.
 async function submitAdminLogin() {
   const email = document.getElementById('admin-email').value.trim();
   const pass = document.getElementById('admin-pass').value;
@@ -640,24 +640,23 @@ async function submitAdminLogin() {
   err.style.display = 'none';
   if (!email || !pass) { showErr('عبّي البريد وكلمة المرور'); return; }
 
-  const { signInWithEmailAndPassword, signOut } = window._authFns;
   try {
     if (identityP) { try { await identityP; } catch (e) {} }
-    let cred = await signInWithEmailAndPassword(window._auth, email, pass);
-    const now = window._auth.currentUser;
-    if (now && now.isAnonymous && !cred.user.isAnonymous) {
-      cred = await signInWithEmailAndPassword(window._auth, email, pass);
-    }
-    if (!isAdmin(cred.user)) {
-      await signOut(window._auth);
+    const user = await Data.auth.signInWithPassword(email, pass);
+    curUser = user;
+    if (!(await Data.auth.isAdmin())) {
+      lockingDevice = true;
+      try { await Data.auth.signOut(); } finally { lockingDevice = false; }
+      curUser = null;
       showErr('هذا الحساب ليس حساب الأدمن');
       return;
     }
+    usesSessionDoc = false;
     showScanner();
   } catch (e) {
     const map = {
-      'auth/invalid-credential': 'البريد أو كلمة المرور غلط',
-      'auth/invalid-email': 'صيغة البريد غير صحيحة',
+      'invalid-credential': 'البريد أو كلمة المرور غلط',
+      'invalid-email': 'صيغة البريد غير صحيحة',
     };
     showErr(map[e.code] || ('خطأ: ' + e.message));
   }
@@ -683,8 +682,7 @@ function showScanner() {
   const lockLabel = usesSessionDoc ? 'تسجيل خروج من هذا الجهاز' : 'إغلاق الماسح';
   lockBtn.innerHTML = ic(usesSessionDoc ? 'log-out' : 'x', 14) + ' ' + lockLabel;
   lockBtn.setAttribute('aria-label', lockLabel);
-  loadGuestsOnce();
-  startEventCounterWatch();
+  startScanData();
   if (usesSessionDoc) startSessionWatch();
 }
 
@@ -693,14 +691,13 @@ function showScanner() {
 // organizer's other tabs of this browser).
 async function lockOrClose() {
   if (usesSessionDoc) return lockDevice();
-  const user = window._auth.currentUser;
-  if (!user || user.isAnonymous) return lockDevice();
+  if (!curUser || curUser.isAnonymous) return lockDevice();
   lockingDevice = true;
   scanEpoch++;
   hideResult(true);
   resetListState();
   stopSessionWatch();
-  if (eventUnsub) { eventUnsub(); eventUnsub = null; }
+  stopScanWatch();
   if (qrScanner) {
     try { qrScanner.stop(); } catch (_) {}
     try { qrScanner.destroy(); } catch (_) {}
@@ -713,7 +710,7 @@ async function lockOrClose() {
 // security staff handing a personal phone back at the end of their shift,
 // or an admin done checking in on a borrowed device — without needing the
 // owner to change the door code for everyone. Clears every source of
-// access this device could have: its proven-code session doc, and whatever
+// access this device could have: its proven-code session, and whatever
 // identity it's signed in with (anonymous, admin, or owner).
 async function lockDevice() {
   lockingDevice = true;
@@ -722,13 +719,12 @@ async function lockDevice() {
   resetListState();
   usesSessionDoc = false;
   stopSessionWatch();
-  if (eventUnsub) { eventUnsub(); eventUnsub = null; }
-  const user = window._auth.currentUser;
-  if (user) {
-    const { deleteDoc } = window._fsFns;
-    try { await deleteDoc(sessionRef(user.uid)); } catch (e) {}
+  stopScanWatch();
+  if (curUser) {
+    try { await Data.scan.end(eventId); } catch (e) {}
   }
-  try { await window._authFns.signOut(window._auth); } catch (e) {}
+  try { await Data.auth.signOut(); } catch (e) {}
+  curUser = null;
   document.getElementById('scanner-view').style.display = 'none';
   document.getElementById('pin-input').value = '';
   document.getElementById('pin-err').style.display = 'none';
@@ -739,13 +735,12 @@ async function lockDevice() {
 
 function offlineCacheKey() { return 'scan_offline_cache_' + eventId; }
 
-// Live check-in has to stay a real transactional write (that's what
-// prevents two people using the same barcode), so it can't be trusted to
-// work offline. But door staff still need SOME fallback when the
-// connection drops mid-event — being able to at least read off a name is
-// far better than nothing. This mirrors the last successfully-synced
-// guest list into localStorage on every update, so it survives a
-// disconnect (and even a page reload) independent of the network.
+// Every check-in is verified by the server (that's what prevents two people
+// using the same barcode), so it can't work offline. But door staff still
+// need SOME fallback when the connection drops mid-event — being able to at
+// least read off a name is far better than nothing. This mirrors the last
+// successfully-synced guest list into localStorage on every update, so it
+// survives a disconnect (and even a page reload) independent of the network.
 function cacheGuestsOffline() {
   const savedAt = new Date().toISOString();
   listCacheSavedAt = savedAt;
@@ -757,7 +752,7 @@ function cacheGuestsOffline() {
       // When the list last came from the server — unlike savedAt, a scan on
       // this device doesn't move it (see loadGuestsOnce).
       loadedAt: guestsLoadedAt,
-      // Cursor for the delta sync of who entered (see syncEnteredGuests) and
+      // Cursor for the delta sync of changed guests (see Data.scan.watch) and
       // when that last ran; like loadedAt, a scan on this device leaves them.
       syncedAt: syncCursor,
       syncedOn: lastSyncAt ? new Date(lastSyncAt).toISOString() : null,
@@ -779,10 +774,7 @@ async function refreshOfflineList() {
   btn.textContent = '⏳ جاري التحديث...';
   pendingListId = null;
   try {
-    const loaded = await loadGuestsOnce(true);
-    if (epoch !== scanEpoch) return;
-    // 'full' = every guest was just downloaded, so there is nothing newer to ask for.
-    if (loaded === 'ok') await syncEnteredGuests(true);
+    await loadGuestsOnce(true);
     if (epoch !== scanEpoch) return;
     prepareListSource();
   } finally {
@@ -802,16 +794,14 @@ const LIST_CONFIRM_GUARD_MS = 400;
 let pendingListId = null, listBusyId = null, listArmedAt = 0, listSearchTimer = null;
 let listCacheSavedAt = null, listFallback = null;
 const localCheckinTimes = {};
-const SYNC_AUTO_MS = 2 * 60 * 1000;
-// The cursor is compared with scannedAt written by OTHER phones' clocks: a
-// phone whose clock is more than 5 minutes behind can have its check-ins
-// missed until the saved copy is rebuilt (3 hours) or the roster is newer.
-const SYNC_OVERLAP_MS = 5 * 60 * 1000;
-const SYNC_TIMEOUT_MS = 8000;
-const FULL_LOAD_TIMEOUT_MS = 30000;
-let fullLoadInFlight = false;
 const SYNC_STALE_MS = 10 * 60 * 1000;
-let syncCursor = null, lastSyncAt = null, deltaBusy = false, deltaFailed = false, syncInFlight = null;
+// A poll that was already on its way when this device checked a guest in can
+// still say "not entered" / the old count: for this long after a local
+// check-in such an answer never takes the guest or the counter back.
+const LOCAL_WIN_MS = 20000;
+const localAdmitAt = {};
+let countFloor = { value: 0, at: 0 };
+let syncCursor = null, lastSyncAt = null, deltaFailed = false, listLastChange = null;
 
 function prepareListSource() {
   if (guests.length) return;
@@ -828,7 +818,6 @@ function resetListState() {
   clearTimeout(listSearchTimer);
   pendingListId = null;
   listBusyId = null;
-  deltaBusy = false;
   if (document.getElementById('offline-list-section').style.display === 'block') renderOfflineList();
 }
 
@@ -841,7 +830,7 @@ function toggleOfflineList() {
   if (!showing) {
     prepareListSource();
     renderOfflineList();
-    syncEnteredGuests(false);
+    if (scanWatch) scanWatch.refresh();
   }
 }
 
@@ -859,80 +848,6 @@ function listTime(d) {
 
 function listIsOpen() {
   return document.getElementById('offline-list-section').style.display === 'block';
-}
-
-// Who entered on other phones, without the dashboard being open: one query on
-// guests whose scannedAt is later than the cursor (single-field range, the
-// automatic index). The cursor trails the query by 5 minutes so a check-in
-// that committed while the previous query ran is never missed. Runs when the
-// list opens (if the last sync is over 2 minutes old) and on "تحديث القائمة";
-// there is deliberately no timer, it would multiply the reads.
-async function syncEnteredGuests(force) {
-  if (deltaBusy && force) {
-    // A tap on "تحديث القائمة" during an automatic sync waits for it, then
-    // runs its own forced one.
-    const epoch = scanEpoch;
-    if (syncInFlight) { try { await syncInFlight; } catch (_) {} }
-    if (epoch !== scanEpoch) return;
-  }
-  const p = runSync(force);
-  syncInFlight = p;
-  try { await p; } finally { if (syncInFlight === p) syncInFlight = null; }
-}
-
-async function runSync(force) {
-  if (deltaBusy || !guests.length || !syncCursor || !eventId) return;
-  if (!force && lastSyncAt && Date.now() - lastSyncAt < SYNC_AUTO_MS) return;
-  const epoch = scanEpoch;
-  const startedAt = Date.now();
-  deltaBusy = true;
-  let timer = null;
-  try {
-    const { collection, getDocs, query, where } = window._fsFns;
-    const q = query(collection(window._db, 'events', eventId, 'guests'), where('scannedAt', '>', syncCursor));
-    const snap = await Promise.race([
-      getDocs(q),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('sync timeout')), SYNC_TIMEOUT_MS); }),
-    ]);
-    if (epoch !== scanEpoch) return;
-    const byId = {};
-    guests.forEach(g => { byId[g.id] = g; });
-    snap.docs.forEach(d => {
-      const data = d.data() || {};
-      let g = byId[d.id];
-      if (!g) {
-        g = { docId: d.id, id: d.id, name: data.name || '', scanned: true };
-        guests.push(g);
-        byId[d.id] = g;
-      }
-      g.scanned = true;
-      if (!localCheckinTimes[d.id] && data.scannedAt) {
-        const when = new Date(data.scannedAt);
-        if (!isNaN(when.getTime())) localCheckinTimes[d.id] = listTime(when);
-      }
-      if (pendingListId === d.id) pendingListId = null;
-    });
-    syncCursor = new Date(startedAt - SYNC_OVERLAP_MS).toISOString();
-    lastSyncAt = startedAt;
-    deltaFailed = false;
-    updateScanCounter();
-    cacheGuestsOffline();
-  } catch (e) {
-    if (epoch !== scanEpoch) return;
-    console.error('names sync error:', e);
-    if (e && e.code === 'permission-denied') { sessionRevoked(); return; }
-    if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
-      setTimeout(() => { if (!window._leaving) location.reload(); }, 800);
-      return;
-    }
-    deltaFailed = true;
-  } finally {
-    clearTimeout(timer);
-    if (epoch === scanEpoch) {
-      deltaBusy = false;
-      if (listIsOpen()) renderOfflineList();
-    }
-  }
 }
 
 function listRowHtml(g, canCheckIn) {
@@ -1041,37 +956,108 @@ document.getElementById('offline-list-results').addEventListener('click', (e) =>
   else if (act === 'cancel') cancelListRow();
 });
 
-// Driven by eventData (events/{id}.guestCount / .scannedCount, kept live by
-// startEventCounterWatch below) rather than the once-loaded `guests` array —
-// this is what makes the counter reflect every device's scans, and guests
-// the organizer adds after this scanner opened, without reading every guest.
-// Total comes from the once-loaded guests array, NOT events/{id}.guestCount:
-// guestCount is a cap-usage counter (bumped on add, deliberately never
-// decreased — deleteGuest() in event.html doesn't touch it, so it drifts
-// upward of the real guest count as soon as anyone deletes a guest — an
-// event that had 8 added and 5 deleted shows guestCount:8 forever, while
-// the dashboard's own "كل الضيوف" already correctly reads guests.length for
-// exactly this reason). scannedCount has no such history: it's a new field
-// this scanner itself is the only writer of, so it's safe to trust live.
+// The scanned number comes from eventData.scannedCount, kept live by
+// Data.scan.watch (a poll every few seconds of one small row) rather than
+// from the guests array — this is what makes the counter reflect every
+// device's scans without downloading every guest. The total is the number of
+// guests in the list this page holds (kept current by the same watch).
 function updateScanCounter() {
   const total = guests.length;
   const scanned = eventData ? (eventData.scannedCount || 0) : 0;
   document.getElementById('scan-counter').textContent = 'تم الدخول: ' + scanned + ' من ' + total; // "من", not "/": in RTL text "1 / 3" displays as "3 / 1"
 }
 
-// One cheap document listener instead of reading every guest to compute the
-// scanned count. Only that field is applied from it — the theme and other
-// event fields intentionally still only load once, when the page opens.
-function startEventCounterWatch() {
-  const { doc, onSnapshot } = window._fsFns;
-  if (eventUnsub) eventUnsub();
-  eventUnsub = onSnapshot(doc(window._db, 'events', eventId), (snap) => {
-    if (!snap.exists()) return;
-    eventData.scannedCount = snap.data().scannedCount;
-    updateScanCounter();
-  }, (error) => {
-    console.error('event counter watch error:', error);
+// The count a poll reports never takes the counter below what this device
+// just got back from its own check-in (that poll may have been asked before the
+// check-in committed). After LOCAL_WIN_MS the server's number is taken as is,
+// so an undo done on the dashboard still shows.
+function applyServerCount(n) {
+  const held = Date.now() - countFloor.at < LOCAL_WIN_MS ? countFloor.value : 0;
+  eventData.scannedCount = Math.max(n || 0, held);
+}
+
+function stopScanWatch() {
+  if (scanWatch) { scanWatch.stop(); scanWatch = null; }
+}
+
+function onScanCounter(ev) {
+  if (!eventData) return;
+  eventData.lastChange = ev.lastChange;
+  eventData.guestCount = ev.guestCount;
+  applyServerCount(ev.scannedCount);
+  // nothing changed since the list was read: it is as fresh as this answer
+  if (ev.lastChange === listLastChange) {
+    lastSyncAt = Date.now();
+    if (deltaFailed) { deltaFailed = false; if (listIsOpen()) renderOfflineList(); }
+  }
+  updateScanCounter();
+}
+
+// A failed poll: a refused session sends the device back to the code screen;
+// a failed counter poll is a connection problem (the poller keeps trying), a
+// failed names poll keeps the list and says so in its meta line.
+function onScanError(e, kind) {
+  if (isAccessLost(e)) { sessionRevoked(e.code === 'auth-lost' ? 'signedout' : undefined); return; }
+  console.error('door poll error:', e);
+  if (kind === 'names') {
+    deltaFailed = true;
+    if (listIsOpen()) renderOfflineList();
+  }
+}
+
+// Folds server rows into the in-memory list (by id, so applying the same rows
+// twice changes nothing). full = rows are the whole list: guests that are no
+// longer in it were deleted. A guest this device checked in a moment ago is
+// not turned back to "not entered" by an answer that may predate it.
+function mergeGuests(rows, full) {
+  // times (✓ دخل HH:MM) only come from changed-names answers, as before; the full list has none
+  const byId = new Map();
+  guests.forEach(g => { byId.set(g.id, g); });
+  const seen = new Set();
+  rows.forEach(r => {
+    if (r.deleted) {
+      // a guest deleted on the dashboard (delta rows carry deletions)
+      byId.delete(r.id);
+      guests = guests.filter(x => x.id !== r.id);
+      delete localCheckinTimes[r.id];
+      if (pendingListId === r.id) pendingListId = null;
+      return;
+    }
+    seen.add(r.id);
+    let g = byId.get(r.id);
+    if (!g) {
+      g = { docId: r.id, id: r.id };
+      guests.push(g);
+      byId.set(r.id, g);
+    }
+    g.name = r.name;
+    g.vip = r.vip;
+    const mine = localAdmitAt[r.id] && Date.now() - localAdmitAt[r.id] < LOCAL_WIN_MS;
+    g.scanned = r.scanned || (!!g.scanned && !!mine);
+    if (g.scanned) {
+      if (!full && !localCheckinTimes[r.id] && r.scannedAt) {
+        const when = new Date(r.scannedAt);
+        if (!isNaN(when.getTime())) localCheckinTimes[r.id] = listTime(when);
+      }
+      if (pendingListId === r.id) pendingListId = null;
+    } else {
+      delete localCheckinTimes[r.id];
+    }
   });
+  if (full) guests = guests.filter(g => seen.has(g.id));
+}
+
+// Rows from Data.scan.watch (a delta with its deletions, or the full list).
+function onScanGuests(res) {
+  mergeGuests(res.rows, res.full);
+  syncCursor = res.cursor;
+  lastSyncAt = Date.now();
+  listLastChange = res.lastChange;
+  deltaFailed = false;
+  refreshConnectionBanner(true);
+  updateScanCounter();
+  cacheGuestsOffline();
+  if (listIsOpen()) renderOfflineList();
 }
 
 // Without this, a dropped connection looks identical to an empty/stale
@@ -1082,21 +1068,9 @@ function refreshConnectionBanner(ok) {
   if (b) b.style.display = ok ? 'none' : 'block';
 }
 
-// A one-time read instead of a live listener: this used to re-download the
-// whole guest list on every scanner open AND on every change to it for as
-// long as the tab stayed open (an event-day flood of reads against the free
-// plan's shared daily quota). The counter and the offline cache just stay
-// in step with what THIS device does afterward (see handleScan) — the
-// authoritative duplicate check is the transaction inside handleScan, not
-// this list, so a guest scanned from another device between this load and
-// the next page open is still caught correctly, just not reflected in the
-// counter until reopened.
-//
-// That one read is still one document read PER GUEST (5000 for a 5000-guest
-// event), and a door phone reopens this page often — locked and unlocked,
-// or reloaded by firebase-init.js after iOS Safari kills the connection.
-// So a copy this device downloaded less than OFFLINE_LIST_MAX_AGE ago is
-// reused as-is: zero reads. "🔄 تحديث القائمة" forces a fresh download.
+// A copy this device downloaded less than OFFLINE_LIST_MAX_AGE ago is shown
+// at once (the watch then catches it up from its cursor, deletions included).
+// "🔄 تحديث القائمة" forces a fresh full download.
 const OFFLINE_LIST_MAX_AGE = 3 * 60 * 60 * 1000;
 let guestsLoadedAt = null;
 async function loadGuestsOnce(force) {
@@ -1107,116 +1081,51 @@ async function loadGuestsOnce(force) {
     listCacheSavedAt = cached.savedAt;
     syncCursor = cached.syncedAt;
     lastSyncAt = cached.syncedOn ? new Date(cached.syncedOn).getTime() : null;
+    listLastChange = null;
     updateScanCounter();
-    return;
+    return 'cache';
   }
-  const { collection, getDocs, doc, getDoc } = window._fsFns;
   const epoch = scanEpoch;
   const hadList = guests.length > 0;
+  const changeBefore = eventData ? eventData.lastChange : undefined;
   try {
-    // The roster event.html keeps (one document, one read). Events whose
-    // owner hasn't opened the dashboard since it existed — or too big for one
-    // document — have none, and fall back to reading every guest.
-    // A failed roster read (say, rules not yet allowing it) must not look
-    // like a revoked session. With no list yet it falls back to the old way;
-    // with a list on screen (a refresh) the old list is kept and the failure
-    // is shown, never a download of every guest.
-    let roster = null, rosterErr = null, rosterTimer = null;
-    try {
-      roster = await Promise.race([
-        getDoc(doc(window._db, 'events', eventId, 'roster', 'list')),
-        new Promise((_, reject) => { rosterTimer = setTimeout(() => reject(new Error('roster timeout')), SYNC_TIMEOUT_MS); }),
-      ]);
-    } catch (e) { rosterErr = e; }
-    clearTimeout(rosterTimer);
+    const res = await Data.scan.guests(eventId, null);
     if (epoch !== scanEpoch) return 'stale';
-    if (hadList && (rosterErr || (roster && roster.metadata && roster.metadata.fromCache))) {
-      if (rosterErr && rosterErr.code === 'permission-denied') { sessionRevoked(); return 'stale'; }
-      if (rosterErr && window._isFirestoreTerminated && window._isFirestoreTerminated(rosterErr)) {
-        setTimeout(() => { if (!window._leaving) location.reload(); }, 800);
-        return 'stale';
-      }
-      deltaFailed = true;
-      return 'failed';
-    }
-    const rosterExists = !!roster && roster.exists();
-    const rosterHasList = rosterExists && Array.isArray(roster.data().guests);
-    if (hadList && rosterExists && !rosterHasList) { deltaFailed = true; return 'failed'; }
-    const startedAt = Date.now();
-    // What this device already knows is kept: a refresh never turns an
-    // entered guest back into one who has not entered. With no list in memory
-    // (the saved copy expired, or the page reloaded) the saved copy, even an
-    // expired one, is that knowledge and its cursor is the floor for the
-    // new cursor, so the admissions it already holds are not read again. A
-    // copy without syncedAt (old format) is the one exception: it is rebuilt
-    // from the roster alone.
-    const prev = hadList ? guests : (cached && cached.syncedAt ? cached.guests : []);
-    const knownIn = {};
-    prev.forEach(g => { if (g.scanned) knownIn[g.id] = true; });
-    const baseCursor = syncCursor || (!hadList && cached && cached.syncedAt) || null;
-    const baseSyncOn = syncCursor ? lastSyncAt : (cached && cached.syncedOn ? new Date(cached.syncedOn).getTime() : null);
-    let result = 'ok';
-    if (rosterHasList) {
-      const seen = {};
-      guests = roster.data().guests.map(entry => {
-        const a = entry.indexOf('|');
-        const b = entry.indexOf('|', a + 1);
-        const id = entry.slice(0, a);
-        seen[id] = true;
-        return { docId: id, id, scanned: entry.slice(a + 1, b) === '1' || !!knownIn[id], name: entry.slice(b + 1) };
-      });
-      // Guests the delta sync added (admitted, newer than the roster) stay.
-      prev.forEach(g => { if (g.scanned && !seen[g.id]) guests.push({ docId: g.id || g.docId, id: g.id, name: g.name, scanned: true }); });
-      // The roster is only rewritten while the dashboard is open, so it can be
-      // hours old: the delta sync starts from its own time (epoch when it has none).
-      // The cursor never moves backwards, or every refresh would re-read all
-      // admissions since the old roster.
-      const upd = roster.data().updatedAt;
-      const updMs = upd && typeof upd.toDate === 'function' ? upd.toDate().getTime() : 0;
-      const fromRoster = new Date(Math.max(0, updMs - SYNC_OVERLAP_MS)).toISOString();
-      if (baseCursor && baseCursor >= fromRoster) {
-        syncCursor = baseCursor;
-        lastSyncAt = baseSyncOn;
-      } else {
-        syncCursor = fromRoster;
-        lastSyncAt = null;
-      }
-    } else {
-      // Roster confirmed missing, or (first load only) unreadable or without a list.
-      // A read that timed out is abandoned, not cancelled: no second full read
-      // starts while it is still running, and its late answer is never used.
-      if (fullLoadInFlight) throw new Error('full load busy');
-      let fullTimer = null, snap;
-      try {
-        const fullRead = getDocs(collection(window._db, 'events', eventId, 'guests'));
-        fullLoadInFlight = true;
-        const settled = () => { fullLoadInFlight = false; };
-        fullRead.then(settled, settled);
-        snap = await Promise.race([
-          fullRead,
-          new Promise((_, reject) => { fullTimer = setTimeout(() => reject(new Error('full load timeout')), FULL_LOAD_TIMEOUT_MS); }),
-        ]);
-      } finally { clearTimeout(fullTimer); }
-      if (epoch !== scanEpoch) return 'stale';
-      guests = snap.docs.map(d => ({ docId: d.id, ...d.data(), scanned: !!d.data().scanned || !!knownIn[d.id] }));
-      syncCursor = new Date(startedAt - SYNC_OVERLAP_MS).toISOString();
-      lastSyncAt = startedAt;
-      result = 'full';
-    }
+    mergeGuests(res.rows, true);
+    syncCursor = res.cursor;
+    lastSyncAt = Date.now();
+    listLastChange = changeBefore === undefined ? null : changeBefore;
     deltaFailed = false;
     guestsLoadedAt = new Date().toISOString();
     updateScanCounter();
     refreshConnectionBanner(true);
     cacheGuestsOffline();
-    return result;
+    return 'full';
   } catch (error) {
     if (epoch !== scanEpoch) return 'stale';
     console.error('guests load error:', error);
-    if (error && error.code === 'permission-denied') { sessionRevoked(); return 'stale'; }
+    if (isAccessLost(error)) { sessionRevoked(error.code === 'auth-lost' ? 'signedout' : undefined); return 'stale'; }
     if (hadList) { deltaFailed = true; return 'failed'; }
     refreshConnectionBanner(false);
     return 'failed';
   }
+}
+
+// Opens the scanner's data: the list first (so the watch's cursor matches it),
+// then the polls.
+async function startScanData() {
+  stopScanWatch();
+  const epoch = scanEpoch;
+  await loadGuestsOnce();
+  if (epoch !== scanEpoch) return;
+  scanWatch = Data.scan.watch(eventId, {
+    since: syncCursor,
+    lastChange: listLastChange,
+    onCounter: onScanCounter,
+    onGuests: onScanGuests,
+    count: () => guests.length,
+    onError: onScanError,
+  });
 }
 
 // Used to just clear the result cards and assume the camera was still
@@ -1276,10 +1185,9 @@ async function init() {
     return;
   }
   try { localStorage.setItem(lastEventKey(), eventId); } catch (e) {}
-  const { doc, getDoc } = window._fsFns;
-  let snap;
+  let ev;
   try {
-    snap = await getDoc(doc(window._db, 'events', eventId));
+    ev = await Data.invite.event(eventId);
   } catch (e) {
     // Same "trapped forever" failure the splash fix closed, one layer
     // deeper: a dropped connection here (bad venue wifi) used to leave
@@ -1313,41 +1221,37 @@ async function init() {
     }
     return;
   }
-  if (!snap.exists()) {
+  if (!ev) {
     document.getElementById('loading-msg').textContent = '⚠️ هذه المناسبة غير موجودة';
     return;
   }
-  eventData = snap.data();
+  eventData = ev;
   applyEventTheme(eventData.theme);
 
-  const user = await waitForAuth();
+  const user = await Data.auth.current();
+  curUser = user;
   document.getElementById('loading-msg').style.display = 'none';
   watchSignOut(user);
 
-  if (isAdmin(user)) {
-    showScanner();
-    return;
-  }
-
-  // The event's own organizer opening their scan link — already proven by
-  // their real sign-in, no need to type their own code.
-  if (user && !user.isAnonymous && user.uid === eventData.ownerUid) {
-    showScanner();
-    return;
-  }
-
-  // A device that unlocked before holds an identity that Firebase restores
-  // across reloads — the anonymous one this page signs it in with, or a
-  // customer's real account if they were already signed in when they typed
-  // the code. Its session doc can only be read back while the code it was
-  // created with is still the live one — a denied read here means the
-  // organizer changed the code (or the rules aren't deployed yet), and
-  // either way the answer is the same: ask for the code.
+  // A device that is signed in may already be let in: the admin, the event's
+  // own organizer (their real sign-in proves it, no need to type their own
+  // code), or a device that unlocked before — the anonymous identity this page
+  // signs it in with is restored across reloads, and so is a customer's real
+  // account if they were signed in when they typed the code. The server
+  // answers the door call only while that is still true; a refusal here means
+  // the organizer changed the code (or the sign-in is gone), and either way
+  // the answer is the same: ask for the code.
   if (user) {
-    const { getDoc } = window._fsFns;
     try {
-      const sess = await getDoc(sessionRef(user.uid));
-      if (sess.exists()) { usesSessionDoc = true; showScanner(); return; }
+      const [live, sess] = await Promise.all([Data.scan.event(eventId), Data.scan.valid(eventId).catch(() => false)]);
+      if (live) {
+        eventData.scannedCount = live.scannedCount;
+        eventData.guestCount = live.guestCount;
+        eventData.lastChange = live.lastChange;
+        usesSessionDoc = sess;
+        showScanner();
+        return;
+      }
     } catch (e) {}
   }
 
@@ -1467,17 +1371,6 @@ async function startCamera() {
   }
 }
 
-async function sessionStillValid(getDoc) {
-  const user = window._auth.currentUser;
-  if (!user) return false;
-  try {
-    const snap = await getDoc(sessionRef(user.uid));
-    return snap.exists();
-  } catch (e) {
-    return false;
-  }
-}
-
 async function handleScan(raw) {
   const match = raw.trim().toUpperCase().match(/WD-[A-Z0-9]+/);
   if (!match) return;
@@ -1491,82 +1384,60 @@ async function handleScan(raw) {
   const status = document.getElementById('camera-status');
   status.textContent = '🔍 جاري التحقق...';
 
-  // The guest's own barcode text IS its document id (see event.html), so
-  // this goes straight to that one document — no collection read, and no
-  // dependency on the once-loaded `guests` array staying in sync. The
-  // transaction's own tx.get() is the single source of truth for both
-  // "not registered" and "already scanned"; it re-reads live every time,
-  // so two devices scanning the same guest at once can't both win.
-  const { doc, runTransaction, getDoc, increment } = window._fsFns;
-  const gRef = doc(window._db, 'events', eventId, 'guests', val);
-  const eventRef = doc(window._db, 'events', eventId);
-  let outcome, guestName, guestVip = false;
-  for (let attempt = 0; ; attempt++) {
-    try {
-      outcome = await runTransaction(window._db, async (tx) => {
-        const snap = await tx.get(gRef);
-        if (!snap.exists()) return 'missing';
-        guestName = snap.data().name;
-        guestVip = !!snap.data().vip;
-        if (snap.data().scanned) return 'dup';
-        // The live door counter (events/{id}.scannedCount) is bumped in this
-        // same transaction, so it can never drift from the guest flip it
-        // represents — see the matching rule in firestore.rules. It is an
-        // increment, not old+1 from a read: a read-then-write value goes stale
-        // when other door phones check in at the same moment and the rule
-        // (+1 over the stored value) then denies it.
-        tx.update(gRef, { scanned: true, scannedAt: new Date().toISOString() });
-        tx.update(eventRef, { scannedCount: increment(1) });
-        return 'ok';
-      });
-      break;
-    } catch (e) {
-      // A failed write used to escape this function entirely, which left
-      // scanCooldown stuck on true — the scanner silently ignored every
-      // barcode after one network hiccup until "مسح جديد" was pressed.
-      console.error('check-in failed:', e);
-      if (epoch !== scanEpoch) return;
-      if (e && e.code === 'permission-denied') {
-        // A door phone with a still-valid session can be denied by a race
-        // between phones; only a missing session means it was revoked.
-        if (usesSessionDoc && attempt < 2 && await sessionStillValid(getDoc)) {
-          await new Promise(r => setTimeout(r, 100 + Math.random() * 300));
-          if (epoch !== scanEpoch) return;
-          continue;
-        }
-        sessionRevoked();
-        return;
-      }
-      if (window._isFirestoreTerminated && window._isFirestoreTerminated(e)) {
-        status.textContent = '⏳ انقطع الاتصال — جاري تحديث الصفحة...';
-        setTimeout(() => { if (!window._leaving) location.reload(); }, 800);
-        return;
-      }
-      status.textContent = '⚠️ تعذّر تسجيل الدخول — تأكد من الإنترنت وحاول مرة ثانية';
-      lastScanned = null;
-      showResult('error', 'تعذّر تسجيل الدخول', false, 'تأكد من الإنترنت وحاول مرة ثانية');
+  // The guest's own barcode text IS its id, so this goes straight to the one
+  // guest — no list read, and no dependency on the loaded `guests` array
+  // staying in sync. The server decides in one atomic step whether the guest
+  // is unknown ("not registered"), already in, or admitted now, so two devices
+  // scanning the same guest at once can't both win. There is no automatic
+  // retry: if the answer is lost, scanning again gets "already used" when the
+  // first one went through.
+  let res;
+  try {
+    res = await Data.scan.checkIn(eventId, val);
+  } catch (e) {
+    // A failed check-in used to escape this function entirely, which left
+    // scanCooldown stuck on true — the scanner silently ignored every
+    // barcode after one network hiccup until "مسح جديد" was pressed.
+    console.error('check-in failed:', e);
+    if (epoch !== scanEpoch) return;
+    if (isAccessLost(e)) {
+      sessionRevoked(e.code === 'auth-lost' ? 'signedout' : undefined);
       return;
     }
+    status.textContent = '⚠️ تعذّر تسجيل الدخول — تأكد من الإنترنت وحاول مرة ثانية';
+    lastScanned = null;
+    showResult('error', 'تعذّر تسجيل الدخول', false, 'تأكد من الإنترنت وحاول مرة ثانية');
+    return;
+  }
+  if (res.outcome === 'no_session') {
+    if (epoch === scanEpoch) sessionRevoked();
+    return;
   }
   const stale = epoch !== scanEpoch;
+  const outcome = res.outcome;
   if (!stale) {
-    if (outcome === 'ok') {
-      showResult('allowed', guestName, guestVip);
+    if (outcome === 'allowed') {
+      showResult('allowed', res.guestName, res.vip);
       status.textContent = RESULT_UI.allowed.camera;
-    } else if (outcome === 'dup') {
-      showResult('duplicate', guestName, guestVip);
+    } else if (outcome === 'duplicate') {
+      showResult('duplicate', res.guestName, res.vip, undefined, res.scannedAt);
       status.textContent = RESULT_UI.duplicate.camera;
     } else {
       showResult('denied', 'غير مسجّل', false);
       status.textContent = RESULT_UI.denied.camera;
     }
   }
-  if (outcome === 'ok' || outcome === 'dup') {
-    // The counter itself updates from startEventCounterWatch(), moments
-    // after this transaction commits. The name list was only read once, at
-    // open — keep its offline copy in step with what this device learned
-    // (a duplicate means the guest is already in, whoever checked them in).
-    if (outcome === 'ok') localCheckinTimes[val] = listTime(new Date());
+  if (outcome === 'allowed' || outcome === 'duplicate') {
+    // Keep the counter, the names list and its saved copy in step with what
+    // this device just learned (a duplicate means the guest is already in,
+    // whoever checked them in).
+    if (outcome === 'allowed') localCheckinTimes[val] = listTime(new Date());
+    localAdmitAt[val] = Date.now();
+    if (eventData && typeof res.scannedCount === 'number') {
+      countFloor = { value: res.scannedCount, at: Date.now() };
+      eventData.scannedCount = Math.max(eventData.scannedCount || 0, res.scannedCount);
+    }
+    updateScanCounter();
     if (!guests.length && listFallback) {
       // The list is showing the saved copy: keep it as is (no one-guest `guests`
       // array, which would shrink the list and the counter total).
@@ -1575,28 +1446,24 @@ async function handleScan(raw) {
     } else {
       const cached = guests.find(g => g.id === val);
       if (cached) cached.scanned = true;
-      else guests.push({ docId: val, id: val, name: guestName, scanned: true });
+      else guests.push({ docId: val, id: val, name: res.guestName, scanned: true });
+      updateScanCounter();
       cacheGuestsOffline();
     }
     if (document.getElementById('offline-list-section').style.display === 'block') renderOfflineList();
+  } else if (outcome === 'not_found') {
+    // Deleted by the organizer after this list was read: drop the stale row.
+    const i = guests.findIndex(g => g.id === val);
+    if (i >= 0) {
+      guests.splice(i, 1);
+      updateScanCounter();
+      cacheGuestsOffline();
+      if (listIsOpen()) renderOfflineList();
+    }
   }
 }
 
-if (window._db) {
-  init();
-} else {
-  // Same "trapped forever" failure other pages' init guards close: a slow
-  // or dropped connection while firebase-init.js's own CDN imports load
-  // means appDbReady never fires, leaving this stuck on "جاري التحميل..."
-  // forever with no way out — bad on any page, worse on the door scanner.
-  const appDbTimeout = setTimeout(() => {
-    const el = document.getElementById('loading-msg');
-    el.textContent = '⚠️ تعذّر الاتصال — اضغط هنا للمحاولة مرة ثانية';
-    el.style.cursor = 'pointer';
-    el.onclick = () => location.reload();
-  }, 8000);
-  window.addEventListener('appDbReady', () => { clearTimeout(appDbTimeout); init(); });
-}
+init();
 
 window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) {

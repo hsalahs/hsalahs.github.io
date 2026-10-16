@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedAppStore, seedEvent } = require('./helpers');
 
 const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 
@@ -62,26 +62,16 @@ test('the landing page links to the guide', async ({ page }) => {
 });
 
 test('the events list links to the guide', async ({ page }) => {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, {
-    user: { uid: 'u1', email: 'customer@example.com' },
-    store: { events: {} },
-  });
+  await stubSupabase(page);
+  await seedAppStore(page, { user: { id: 'u1', email: 'customer@example.com' }, events: [] });
   await page.goto('/app.html');
   await expect(page.locator('#app-view')).toBeVisible();
   await expect(page.locator('#app-view a[href="guide.html"]')).toBeVisible();
 });
 
 test('the event menu links to the guide', async ({ page }) => {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, {
-    user: { uid: 'u1', email: 'customer@example.com' },
-    store: {
-      events: { e1: { name: 'حفل', ownerUid: 'u1', date: '2026-01-01', venue: 'x', theme: 'gold', createdAt: { seconds: 1 } } },
-      'events/e1/guests': {}, 'events/e1/requests': {},
-      'events/e1/private': { scan: { scanPin: '1234' } },
-    },
-  });
+  await stubSupabase(page);
+  await seedEvent(page, { user: { id: 'u1', email: 'customer@example.com' }, event: { name: 'حفل', venue: 'x' } });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
   await page.getByRole('button', { name: 'القائمة' }).click();
@@ -243,15 +233,18 @@ test('numbers and wording the guide states match the code', () => {
   expect(scan).toMatch(/denied:\s*\{ autoMs: 6000,/);
   expect(guide).toContain('بعد 5 ثواني تقريبًا');
   expect(guide).toContain('بعد 6 ثواني تقريبًا');
-  expect(scan).toMatch(/const SYNC_AUTO_MS = 2 \* 60 \* 1000;/);
-  expect(guide).toContain('أكثر من دقيقتين');
+  expect(guide).toContain('يتحدثون تلقائيًا كل ثواني قليلة');
+  expect(guide).toContain('والضيف المحذوف يختفي خلال دقيقة تقريبًا');
+  expect(guide).toContain('أدخلوا أجهزة الباب (جوالات المشرفين) بالرقم قبل المناسبة');
+  expect(guide).not.toContain('أكثر من دقيقتين');
 });
 
 test('the downloads follow the current list and the old custom link stops after a rename', () => {
   const ev = read('event.html');
   expect(ev).toMatch(/function askRangeDownload\(\) \{\s*const total = visibleGuests\(\)/);
   expect(ev).toMatch(/function downloadAllCards\(from, to\)[\s\S]{0,300}visibleGuests\(\)/);
-  expect(ev).toContain("if (old) tx.delete(doc(window._db, 'slugs', old));");
+  // the server frees the old name in the same step that claims the new one
+  expect(ev).toContain('Data.event.claimSlug(eventId, slug)');
   expect(ev).not.toContain('الروابط القديمة تبقى شغالة');
   const g = read('guide.html');
   expect(g).not.toContain('الروابط اللي أرسلتها قبل تبقى شغالة');

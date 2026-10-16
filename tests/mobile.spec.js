@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedInviteStore, seedScan, seedAppStore, seedEvent } = require('./helpers');
 
 // Narrow phones (320 = the smallest still in use, 375 = the most common): no
 // page may scroll sideways, even with long names, emails and links — the
@@ -39,8 +39,25 @@ for (const width of [320, 375]) {
   for (const [name, url, user, ready] of PAGES) {
     test(`${width}px: ${name} has no sideways scroll`, async ({ page }) => {
       await page.setViewportSize({ width, height: 760 });
-      await stubFirebase(page);
-      await seedFakeFirebase(page, { user, store });
+      await stubSupabase(page);
+      if (url.startsWith('/event.html')) {
+        const e = store.events.e1;
+        await seedEvent(page, {
+          user: { id: user.uid, email: user.email }, pin: '123456',
+          event: { name: e.name, owner_uid: 'u1', owner_email: LONG_EMAIL, date: e.date, venue: e.venue, theme: e.theme, slug: e.slug, slug_decided: true, paid: true, guest_limit: 100 },
+          guests: Object.values(store['events/e1/guests']).map((g) => ({ id: g.id, name: g.name, scanned: !!g.scanned, vip: !!g.vip })),
+        });
+      } else if (url.startsWith('/app.html')) {
+        const e = store.events.e1;
+        await seedAppStore(page, {
+          user: { id: user.uid, email: user.email }, admin: user === ADMIN,
+          events: [{ id: 'e1', name: e.name, owner_uid: 'u1', owner_email: LONG_EMAIL, date: e.date, venue: e.venue, theme: e.theme, slug: e.slug, guest_count: 3, scanned_count: 1, paid: true, guest_limit: 100 }],
+          users: [{ uid: 'u1', email: LONG_EMAIL, created_at: '2026-09-21T10:00:00.000000+00:00' }],
+          limits: { u1: { event_limit: 1, event_count: 1 } },
+        });
+      } else {
+        await seedInviteStore(page, { store });
+      }
       await page.goto(url);
       await ready(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
@@ -50,8 +67,8 @@ for (const width of [320, 375]) {
 
 test('320px: a long event name on the scanner code screen stays clear of the refresh button', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 760 });
-  await stubFirebase(page);
-  await seedFakeFirebase(page, { store });
+  await stubSupabase(page);
+  await seedScan(page, { event: { name: store.events.e1.name } });
   await page.goto('/scan.html?event=e1');
   await page.locator('#pin-input').waitFor();
   await expect(page.locator('#pin-event-name')).not.toBeEmpty();
