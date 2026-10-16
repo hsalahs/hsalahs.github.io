@@ -2,26 +2,18 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 const JSZip = require('jszip');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedEvent } = require('./helpers');
 
 const JSZIP_BROWSER = fs.readFileSync(path.join(__dirname, '..', 'node_modules', 'jszip', 'dist', 'jszip.min.js'), 'utf8');
-const EVENT = { name: 'حفل تجريبي', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض', theme: 'gold', createdAt: { seconds: 1 } };
-
-function guestsStore(names) {
-  const g = {};
-  names.forEach((name, i) => {
-    g['g' + i] = { id: 'WD-' + String(i + 1).padStart(4, '0'), name, scanned: false, registeredAt: '2026-03-01T10:15:00.000Z' };
-  });
-  return { events: { e1: { ...EVENT, paid: true, guestCount: names.length } }, 'events/e1/guests': g, 'events/e1/requests': {} };
-}
+const guestRows = (names) => names.map((name, i) => ({ id: 'WD-' + String(i + 1).padStart(4, '0'), name, registered_at: '2026-03-01T10:15:00.000000+00:00' }));
 const numbered = (n) => Array.from({ length: n }, (_, i) => 'ضيف ' + (i + 1));
 
 // Cards are cheap 8x8 canvases (the real card builder is covered in event.spec.js);
 // failAll makes every card fail the way a blocked canvas does.
 async function open(page, names, { failAll = false, noZip = false } = {}) {
-  await stubFirebase(page);
+  await stubSupabase(page);
   if (!noZip) await page.route('https://cdnjs.cloudflare.com/ajax/libs/jszip/**', (r) => r.fulfill({ contentType: 'text/javascript', body: JSZIP_BROWSER }));
-  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: guestsStore(names) });
+  await seedEvent(page, { user: { id: 'u1', email: 'customer@example.com' }, event: { paid: true }, guests: guestRows(names) });
   const dialogs = [];
   page.on('dialog', (d) => {
     dialogs.push({ type: d.type(), message: d.message() });

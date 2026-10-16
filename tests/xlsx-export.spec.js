@@ -2,10 +2,9 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 const JSZip = require('jszip');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedEvent } = require('./helpers');
 
 const JSZIP_BROWSER = fs.readFileSync(path.join(__dirname, '..', 'node_modules', 'jszip', 'dist', 'jszip.min.js'), 'utf8');
-const EVENT = { name: 'حفل تجريبي', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض', theme: 'gold', createdAt: { seconds: 1 } };
 
 // Names of every shape a customer's list might hold.
 const ARABIC = ['أحمد بن سعد القحطاني', 'نورة عبدالله', 'عبدالرحمن'];
@@ -24,18 +23,15 @@ const AWKWARD = [
   'ctrl\u0001char\u0008here',
 ];
 
-function guestsStore(names, extra = {}) {
-  const g = {};
-  names.forEach((name, i) => {
-    g['g' + i] = { id: 'WD-' + String(i + 1).padStart(4, '0'), name, scanned: i % 2 === 0, registeredAt: '2026-03-0' + ((i % 9) + 1) + 'T10:15:00.000Z', ...(extra[i] || {}) };
-  });
-  return { events: { e1: { ...EVENT, paid: true, guestCount: names.length } }, 'events/e1/guests': g, 'events/e1/requests': {} };
+// The list the dashboard shows is what the export is built from.
+function guestRows(names) {
+  return names.map((name, i) => ({ id: 'WD-' + String(i + 1).padStart(4, '0'), name, scanned: i % 2 === 0, registered_at: '2026-03-0' + ((i % 9) + 1) + 'T10:15:00.000000+00:00' }));
 }
 
 async function open(page, names, { withZip = true } = {}) {
-  await stubFirebase(page);
+  await stubSupabase(page);
   if (withZip) await page.route('https://cdnjs.cloudflare.com/ajax/libs/jszip/**', (r) => r.fulfill({ contentType: 'text/javascript', body: JSZIP_BROWSER }));
-  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: guestsStore(names) });
+  await seedEvent(page, { user: { id: 'u1', email: 'customer@example.com' }, event: { paid: true }, guests: guestRows(names) });
   const dialogs = [];
   page.on('dialog', (d) => { dialogs.push(d.message()); d.accept(); });
   await page.goto('/event.html?id=e1');

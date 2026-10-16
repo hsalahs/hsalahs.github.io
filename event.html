@@ -1136,7 +1136,6 @@ async function handleAuthUserNow(user) {
   updateNotifButtonLabel();
   dashboardStarted = true;
   startWatch();
-  autoClaimSlug();
 }
 
 // The live poll's numbers (Data.event.watch asks the server every 5 seconds,
@@ -1240,6 +1239,8 @@ function startWatch() {
       scheduleRenderGuests();
       if (!guestsMarked) {
         guestsMarked = true;
+        // A write during the first poll would make it read everything twice: the link is picked after it.
+        autoClaimSlug();
         tmark('guests ' + (full ? 'full' : 'delta') + ' n=' + rows.length);
         requestAnimationFrame(() => tmark('render ' + Math.round(performance.now() - at) + 'ms'));
       }
@@ -1268,6 +1269,14 @@ function startWatch() {
 // waiting for the next 5-second poll.
 function liveRefresh() {
   if (liveWatch) liveWatch.refresh();
+}
+
+// After an own write the guest count moves on screen at once (the limit banner
+// and its toast included), not 5 seconds later; the next poll sets the exact number.
+function bumpGuestCount(delta) {
+  if (!eventData || !delta) return;
+  eventData.guestCount = Math.max(0, guestCount() + delta);
+  renderPaymentGate();
 }
 
 function visibleGuests() {
@@ -1385,7 +1394,9 @@ async function bulkDeleteSelected() {
   for (let i = 0; i < ids.length; i += 100) {
     const chunk = ids.slice(i, i + 100);
     try {
-      deleted += await Data.guests.removeMany(eventId, chunk);
+      const n = await Data.guests.removeMany(eventId, chunk);
+      deleted += n;
+      bumpGuestCount(-n);
       dropGuestsLocally(chunk);
       showToast('⏳ جاري الحذف... ' + Math.min(i + chunk.length, ids.length) + ' / ' + ids.length);
     } catch (e) {
@@ -1453,6 +1464,7 @@ async function deleteGuest(id, name) {
   if (!confirm('حذف "' + name + '" نهائيًا؟')) return;
   try {
     await Data.guests.remove(eventId, id);
+    bumpGuestCount(-1);
     dropGuestsLocally([id]);
     liveRefresh();
     showToast('✅ تم حذف الضيف');
@@ -2089,6 +2101,7 @@ async function toggleRequestNotifications() {
   updateNotifButtonLabel();
   if (perm === 'granted') {
     showToast('✅ تم تفعيل إشعارات الطلبات');
+    startWatch();
     try { new Notification('🎉 تم التفعيل', { body: 'بتوصلك إشعارات لما يوصل طلب جديد، بس لازم الصفحة تكون مفتوحة بالخلفية' }); } catch (e) {}
   } else {
     showToast('⚠️ ما وافقت على الإشعارات');
@@ -2180,6 +2193,7 @@ async function approveAllRequests() {
       const chunk = queue.slice(i, i + chunkSize);
       const res = await Data.requests.approve(eventId, chunk.map(r => ({ reqId: r.id })));
       accepted += res.approved.length;
+      bumpGuestCount(res.approved.length);
       if (res.blocked) capped = true; else skipped += chunk.length - res.approved.length;
       const done = new Set(res.approved);
       requests = requests.filter(r => !done.has(r.id));
@@ -2235,6 +2249,7 @@ async function addGuest() {
   }
   if (res.blocked) { openPaymentWhatsapp(); return; }
   const justHitCap = !adminFlag && guestCount() + 1 >= guestCapOf(eventData);
+  bumpGuestCount(1);
   nameInput.value = '';
   nameInput.focus();
   if (res.ids[0]) {
@@ -2284,6 +2299,7 @@ async function importGuestNames(names) {
       const batch = toAdd.slice(i, i + batchSize);
       const res = await Data.guests.add(eventId, batch.map(name => ({ name })), true);
       added += res.added;
+      bumpGuestCount(res.added);
       showToast('⏳ جاري الإضافة... ' + Math.min(added, total) + ' / ' + total);
       // Everything not yet written is left out — this batch's remainder AND every later batch.
       if (res.added < batch.length) { blockedByGate = total - added; break; }
@@ -2401,6 +2417,7 @@ async function approveRequest(reqId, vip) {
       return;
     }
     requests = requests.filter(r => r.id !== reqId);
+    bumpGuestCount(1);
     updateRequestsBadge();
     renderRequests();
     liveRefresh();

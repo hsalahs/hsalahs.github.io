@@ -15,10 +15,12 @@
 
   // Per-function failure injection: S().fail = { get_request: { error, times } }
   // where error is { message, code } or 'network' (a fetch failure) and times
-  // is how many calls fail (default: all).
+  // is how many calls fail (default: all); skip: how many calls succeed first.
   function injected(name) {
     const f = S().fail && S().fail[name];
     if (!f) return null;
+    // skip: let that many calls through first (fail the 2nd call: skip 1)
+    if (f.skip > 0) { f.skip--; return null; }
     if (f.times !== undefined) { if (f.times <= 0) return null; f.times--; }
     return f.error === 'network' ? pgError('TypeError: Failed to fetch', '') : f.error;
   }

@@ -1,17 +1,16 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedEvent } = require('./helpers');
 
-const EVENT = { name: 'حفل زفاف أحمد & سارة', ownerUid: 'u1', date: '2026-10-29', venue: 'قاعة الأفراح — الرياض', theme: 'gold', createdAt: { seconds: 1 } };
+const EVENT = { name: 'حفل زفاف أحمد & سارة', date: '2026-10-29', venue: 'قاعة الأفراح — الرياض', theme: 'gold', paid: true };
 
-function store(list) {
-  const g = {};
-  list.forEach((x, i) => { g['g' + i] = { id: 'WD-' + String(i + 1).padStart(4, '0'), name: x.name, scanned: !!x.scanned, scannedAt: x.scanned ? (x.at || '2026-10-29T19:45:00.000Z') : null, registeredAt: '2026-10-01T08:00:00.000Z' }; });
-  return { events: { e1: { ...EVENT, paid: true, guestCount: list.length } }, 'events/e1/guests': g, 'events/e1/requests': {} };
+function guestRows(list) {
+  return list.map((x, i) => ({ id: 'WD-' + String(i + 1).padStart(4, '0'), name: x.name, scanned: !!x.scanned,
+    scanned_at: x.scanned ? (x.at || '2026-10-29T19:45:00.000000+00:00') : null, registered_at: '2026-10-01T08:00:00.000000+00:00' }));
 }
 
 async function open(page, list) {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: store(list) });
+  await stubSupabase(page);
+  await seedEvent(page, { user: { id: 'u1', email: 'customer@example.com' }, event: EVENT, guests: guestRows(list) });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
   if (list.length) await expect(page.locator('.guest-item')).toHaveCount(list.length);

@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase, stubSupabase, seedInviteStore, seedScan, seedAppStore } = require('./helpers');
+const { stubSupabase, seedInviteStore, seedScan, seedAppStore, seedEvent } = require('./helpers');
 
 // Narrow phones (320 = the smallest still in use, 375 = the most common): no
 // page may scroll sideways, even with long names, emails and links — the
@@ -39,10 +39,15 @@ for (const width of [320, 375]) {
   for (const [name, url, user, ready] of PAGES) {
     test(`${width}px: ${name} has no sideways scroll`, async ({ page }) => {
       await page.setViewportSize({ width, height: 760 });
-      await stubFirebase(page);
-      await seedFakeFirebase(page, { user, store });
       await stubSupabase(page);
-      if (url.startsWith('/app.html')) {
+      if (url.startsWith('/event.html')) {
+        const e = store.events.e1;
+        await seedEvent(page, {
+          user: { id: user.uid, email: user.email }, pin: '123456',
+          event: { name: e.name, owner_uid: 'u1', owner_email: LONG_EMAIL, date: e.date, venue: e.venue, theme: e.theme, slug: e.slug, slug_decided: true, paid: true, guest_limit: 100 },
+          guests: Object.values(store['events/e1/guests']).map((g) => ({ id: g.id, name: g.name, scanned: !!g.scanned, vip: !!g.vip })),
+        });
+      } else if (url.startsWith('/app.html')) {
         const e = store.events.e1;
         await seedAppStore(page, {
           user: { id: user.uid, email: user.email }, admin: user === ADMIN,

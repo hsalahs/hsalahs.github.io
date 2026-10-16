@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { stubFirebase, seedFakeFirebase, stubSupabase, seedAppStore } = require('./helpers');
+const { stubSupabase, seedAppStore, seedEvent } = require('./helpers');
 
 const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 
@@ -70,15 +70,8 @@ test('the events list links to the guide', async ({ page }) => {
 });
 
 test('the event menu links to the guide', async ({ page }) => {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, {
-    user: { uid: 'u1', email: 'customer@example.com' },
-    store: {
-      events: { e1: { name: 'حفل', ownerUid: 'u1', date: '2026-01-01', venue: 'x', theme: 'gold', createdAt: { seconds: 1 } } },
-      'events/e1/guests': {}, 'events/e1/requests': {},
-      'events/e1/private': { scan: { scanPin: '1234' } },
-    },
-  });
+  await stubSupabase(page);
+  await seedEvent(page, { user: { id: 'u1', email: 'customer@example.com' }, event: { name: 'حفل', venue: 'x' } });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
   await page.getByRole('button', { name: 'القائمة' }).click();

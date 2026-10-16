@@ -1,25 +1,20 @@
 const { test, expect } = require('@playwright/test');
 const path = require('path');
-const { stubFirebase, seedFakeFirebase, stubSupabase, seedFakeSupabase } = require('./helpers');
+const { stubSupabase, seedFakeSupabase } = require('./helpers');
 
 const DATA_JS = path.join(__dirname, '..', 'data.js');
 
-// data.js is injected into a Firebase page (event.html); app.html now loads it itself.
+// The Firestore-era helpers of data.js are still there until the last page that needs them is gone:
+// data.js is injected into a plain static page (privacy.html loads no scripts of ours).
 async function open(page) {
-  await stubFirebase(page);
-  await seedFakeFirebase(page);
-  await page.goto('/event.html?id=e1');
+  await page.goto('/privacy.html');
   await page.addScriptTag({ path: DATA_JS });
 }
 
-test('Data is defined and loading it before Firebase is ready does not throw', async ({ page }) => {
-  await stubFirebase(page);
-  await seedFakeFirebase(page);
+test('Data is defined and loading it without any backend present does not throw', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.route('**/firebase-init.js*', (r) => r.fulfill({ contentType: 'text/javascript', body: '' }));
-  await page.goto('/event.html?id=e1');
-  await page.addScriptTag({ path: DATA_JS });
+  await open(page);
   const shape = await page.evaluate(() => ({
     db: typeof window._db, data: typeof window.Data, ready: typeof window.Data.ready,
     norm: window.Data.normalizeError(new Error('GATE')).code,
@@ -71,8 +66,9 @@ test('unknown codes pass through unchanged and keep message and cause', async ({
 test('Data.ready resolves after the Firebase bootstrap', async ({ page }) => {
   await open(page);
   const out = await page.evaluate(async () => {
+    window._auth = {};
     await window.Data.ready();
-    return typeof window._db;
+    return typeof window._auth;
   });
   expect(out).toBe('object');
 });

@@ -1,15 +1,10 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
-const { stubFirebase, seedFakeFirebase, stubSupabase, seedAppStore } = require('./helpers');
+const { stubSupabase, seedAppStore, seedEvent } = require('./helpers');
 
-const USER = { uid: 'u1', email: 'customer@example.com' };
-const EVENT = { name: 'حفل تجريبي', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض', theme: 'gold', createdAt: { seconds: 1 }, guestCount: 2 };
-const STORE = () => ({
-  events: { e1: { ...EVENT } },
-  'events/e1/guests': { g0: { id: 'WD-1', name: 'أحمد', scanned: false }, g1: { id: 'WD-2', name: 'سارة', scanned: true } },
-  'events/e1/requests': {},
-  'events/e1/private': { scan: { scanPin: '1234' } },
-});
+const USER = { id: 'u1', email: 'customer@example.com' };
+const EVENT = { name: 'حفل تجريبي', date: '2026-01-01', venue: 'الرياض', theme: 'gold' };
+const GUESTS = () => [{ id: 'WD-1', name: 'أحمد' }, { id: 'WD-2', name: 'سارة', scanned: true }];
 
 const QR_STAND_IN = `window.QRCode = function (el) {
   const c = document.createElement('canvas'); c.width = c.height = 256;
@@ -18,9 +13,10 @@ const QR_STAND_IN = `window.QRCode = function (el) {
 };
 window.QRCode.CorrectLevel = { H: 2, M: 0, L: 1, Q: 3 };`;
 
-async function setup(page, store = STORE()) {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, { user: USER, store });
+// event.html on Supabase: the owner opens event e1 with two guests. `hang` = the sign-in never answers.
+async function setup(page, { guests = GUESTS(), hang = false, ...rest } = {}) {
+  await stubSupabase(page);
+  await seedEvent(page, { user: USER, event: EVENT, guests, authExtra: { hang }, ...rest });
 }
 
 // app.html runs on Supabase: a signed-in customer with one event.
@@ -90,7 +86,7 @@ test.describe('?timing=1 on event.html', () => {
     const line = page.locator('#timing-line');
     await expect(line).toContainText('render ');
     const text = await line.textContent();
-    const order = ['script ', 'appDbReady', 'auth user', 'getDoc done', 'dashboard shown', 'guests server n=2', 'render '];
+    const order = ['script ', 'supabase', 'auth user', 'event read done', 'dashboard shown', 'guests full n=2', 'render '];
     let at = -1;
     for (const k of order) {
       const i = text.indexOf(k);
@@ -98,7 +94,9 @@ test.describe('?timing=1 on event.html', () => {
       at = i;
     }
     expect(text).toMatch(/utils\.js:\d+/);
+    expect(text).toMatch(/data\.js:[\d…]+/);
     expect(text).toContain('sw:no');
+    expect(text).not.toMatch(/tab:|mode:|firebase/);
   });
 });
 
@@ -156,7 +154,7 @@ test.describe('staged slow-connection message', () => {
     test(`${pageUrl} without ?timing=1: no line while loading, the line appears once stuck (home-screen app)`, async ({ page }) => {
       await page.clock.install();
       if (pageUrl.startsWith('/app')) await setupApp(page, { hangAuth: true });
-      else { await setup(page); await page.addInitScript(() => { window.__hangAuth = true; }); }
+      else await setup(page, { hang: true });
       await page.goto(pageUrl);
       await expect(page.locator(host)).toHaveText('جاري التحميل...');
       await page.clock.runFor(9000);
@@ -173,8 +171,7 @@ test.describe('staged slow-connection message', () => {
 
   test('event.html: a page that recovers after getting stuck drops the line again', async ({ page }) => {
     await page.clock.install();
-    await setup(page);
-    await page.addInitScript(() => { window.__hangAuth = true; });
+    await setup(page, { hang: true });
     await page.goto('/event.html?id=e1');
     await page.clock.runFor(26000);
     await expect(page.locator('#timing-line')).toHaveCount(1);
@@ -183,14 +180,12 @@ test.describe('staged slow-connection message', () => {
   });
 });
 
-test('event.html preconnects to the sign-in hosts and no font host; app.html to the Supabase host only', async () => {
-  const html = fs.readFileSync('event.html', 'utf8');
-  expect(html).toContain('<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>');
-  expect(html).toContain('<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>');
-  expect((html.match(/rel="preconnect"/g) || []).length).toBe(3);
-  expect(html).not.toMatch(/preconnect[^>]*fonts\.(googleapis|gstatic)/);
-  const app = fs.readFileSync('app.html', 'utf8');
-  expect(app.match(/<link rel="preconnect"[^>]*>/g)).toEqual(['<link rel="preconnect" href="https://gunizkapwatixvbfliva.supabase.co" crossorigin>']);
+test('event.html and app.html preconnect to the Supabase host only (no Firebase host, no font host)', async () => {
+  for (const f of ['event.html', 'app.html']) {
+    const html = fs.readFileSync(f, 'utf8');
+    expect(html.match(/<link rel="preconnect"[^>]*>/g)).toEqual(['<link rel="preconnect" href="https://gunizkapwatixvbfliva.supabase.co" crossorigin>']);
+    expect(html).not.toMatch(/firebase|firestore|googleapis|gstatic/i);
+  }
 });
 
 test.describe('event.html loads qrcode.js only when a card is built', () => {
@@ -289,7 +284,7 @@ test.describe('card building and starting the dashboard', () => {
     await expect(page.locator('.guest-item')).toHaveCount(2);
     const dialogs = [];
     page.on('dialog', (d) => { dialogs.push(d.message()); d.dismiss(); });
-    await page.evaluate(() => downloadGuestCard(guests[0].docId));
+    await page.evaluate(() => downloadGuestCard(guests[0].id));
     expect(dialogs[0]).toContain('تأكد من الاتصال وجرّب مرة ثانية');
     const toast = await page.evaluate(async () => {
       const seen = [];
@@ -322,7 +317,7 @@ test.describe('card building and starting the dashboard', () => {
       let n = 0;
       navigator.canShare = () => true;
       navigator.share = async () => { n++; };
-      const id = guests[0].docId;
+      const id = guests[0].id;
       await Promise.all([downloadGuestCard(id), downloadGuestCard(id)]);
       await downloadGuestCard(id);
       return n;
@@ -331,30 +326,24 @@ test.describe('card building and starting the dashboard', () => {
     expect(hits).toBe(1);
   });
 
-  test('retrying after a failed first read starts the listeners exactly once even if auth fires again', async ({ page }) => {
-    await setup(page);
-    await page.addInitScript(() => { window.__failGetDocOnce = true; });
+  test('retrying after a failed first read starts the live watch exactly once even if auth fires again', async ({ page }) => {
+    await setup(page, { fail: { 'from:events': { error: 'network', times: 1 } } });
     await page.goto('/event.html?id=e1');
     const msg = page.locator('#loading-msg');
     await expect(msg).toContainText('تعذّر الاتصال');
-    await page.evaluate(() => {
-      window.__guestListeners = 0;
-      const orig = window._fsFns.onSnapshot;
-      window._fsFns.onSnapshot = function (ref) { if (/guests$/.test(ref.path)) window.__guestListeners++; return orig.apply(this, arguments); };
-    });
     await msg.click();
-    await page.evaluate(() => { const a = window.__fakeFirebase.auth; a.listeners.slice().forEach((cb) => cb(a.user)); });
+    await page.evaluate(() => window.__srv.signInElsewhere({ id: 'u1', email: 'customer@example.com', is_anonymous: false }));
     await expect(page.locator('.guest-item')).toHaveCount(2);
-    expect(await page.evaluate(() => window.__guestListeners)).toBe(1);
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => window.__fakeSupabase.calls.filter((c) => c.name === 'owner_guests').length)).toBe(1);
+    expect(await page.evaluate(() => window.__fakeSupabase.calls.filter((c) => c.name === 'event_live').length)).toBe(1);
   });
 });
 
 test.describe('review round 3', () => {
   test('a ZIP with a hanging QR library fails after one 15 s wait with the network wording', async ({ page }) => {
     await page.clock.install();
-    const store = STORE();
-    for (let i = 0; i < 30; i++) store['events/e1/guests']['x' + i] = { id: 'X-' + i, name: 'ضيف ' + i, scanned: false };
-    await setup(page, store);
+    await setup(page, { guests: GUESTS().concat(Array.from({ length: 30 }, (_, i) => ({ id: 'X-' + i, name: 'ضيف ' + i }))), event: { ...EVENT, paid: true } });
     let cdnHits = 0;
     await page.route(/qrcodejs.*qrcode\.min\.js/, () => { cdnHits++; });
     await page.route(/jszip/, (route) => route.fulfill({ contentType: 'text/javascript', body: fs.readFileSync('node_modules/jszip/dist/jszip.min.js', 'utf8') }));
@@ -390,584 +379,66 @@ test.describe('review round 3', () => {
 
   test('signing out during the first read never starts the dashboard for the old user', async ({ page }) => {
     await setup(page);
-    await page.addInitScript(() => { window.__getDocDelays = { 'events/e1': 600 }; });
+    await page.addInitScript(() => { window.__fakeSupabase.rpcDelay = { is_admin_me: 600 }; });
     await page.goto('/event.html?id=e1');
-    await page.evaluate(() => {
-      const a = window.__fakeFirebase.auth;
-      a.user = null;
-      a.listeners.slice().forEach((cb) => cb(null));
-    });
+    await page.evaluate(() => window.__srv.signOutElsewhere());
     await page.waitForTimeout(1500);
     await expect(page.locator('#dashboard')).toBeHidden();
   });
 
   test('an account switch during the first read is evaluated for the NEW user', async ({ page }) => {
     await setup(page);
-    await page.addInitScript(() => { window.__getDocDelays = { 'events/e1': 600 }; });
+    await page.addInitScript(() => { window.__fakeSupabase.rpcDelay = { is_admin_me: 600 }; });
     await page.goto('/event.html?id=e1');
-    await page.evaluate(() => {
-      const a = window.__fakeFirebase.auth;
-      a.user = { uid: 'u2', email: 'other@example.com' };
-      a.listeners.slice().forEach((cb) => cb(a.user));
-    });
+    await page.evaluate(() => window.__srv.signInElsewhere({ id: 'u2', email: 'other@example.com', is_anonymous: false }));
     await expect(page.locator('#denied-msg')).toBeVisible();
     await expect(page.locator('#dashboard')).toBeHidden();
   });
 });
 
-const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
-const ANDROID_UA = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
-
-test.describe('Firestore tab manager', () => {
-  const tab = (page) => page.evaluate(() => ({ mode: window._fsTab, mgr: window.__fsTabManager }));
-
-  test('default (browser tab, desktop) uses the multi-tab manager', async ({ page }) => {
-    await setup(page);
-    await page.goto('/event.html?id=e1&timing=1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    const t = await tab(page);
-    expect(t.mode).toBe('multi');
-    expect(t.mgr.kind).toBe('multi-tab');
-    await expect(page.locator('#timing-line')).toContainText('tab:multi');
-  });
-
-  test.describe('iPhone home-screen app', () => {
-    test.use({ userAgent: IPHONE_UA });
-    test('navigator.standalone gives single-tab with forceOwnership', async ({ page }) => {
-      await page.addInitScript(() => { Object.defineProperty(navigator, 'standalone', { value: true, configurable: true }); });
-      await setup(page);
-      await page.goto('/event.html?id=e1&timing=1');
-      await expect(page.locator('.guest-item')).toHaveCount(2);
-      const t = await tab(page);
-      expect(t.mode).toBe('single');
-      expect(t.mgr).toEqual({ kind: 'single-tab', settings: { forceOwnership: true } });
-      await expect(page.locator('#timing-line')).toContainText('tab:single');
-    });
-    test('event.html also gets single-tab and still loads', async ({ page }) => {
-      await page.addInitScript(() => { Object.defineProperty(navigator, 'standalone', { value: true, configurable: true }); });
-      await setup(page);
-      await page.goto('/event.html?id=e1&timing=1');
-      await expect(page.locator('.guest-item')).toHaveCount(2);
-      expect((await tab(page)).mode).toBe('single');
-      await expect(page.locator('#timing-line')).toContainText('tab:single');
-    });
-    test('iPhone Safari tab (not installed) stays multi-tab', async ({ page }) => {
-      await setup(page);
-      await page.goto('/event.html?id=e1');
-      await expect(page.locator('.guest-item')).toHaveCount(2);
-      expect((await tab(page)).mode).toBe('multi');
-    });
-  });
-
-  test.describe('Android installed app', () => {
-    test.use({ userAgent: ANDROID_UA });
-    test('display-mode standalone on Android stays multi-tab', async ({ page }) => {
-      await page.addInitScript(() => {
-        const mm = window.matchMedia.bind(window);
-        window.matchMedia = (q) => /display-mode:\s*standalone/.test(q) ? { matches: true, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} } : mm(q);
-      });
-      await setup(page);
-      await page.goto('/event.html?id=e1');
-      await expect(page.locator('.guest-item')).toHaveCount(2);
-      expect((await tab(page)).mode).toBe('multi');
-    });
-  });
-});
-
-test.describe('Firestore mode override and stuck-page probes', () => {
-  const settings = (page) => page.evaluate(() => ({ mode: window._fsMode, s: window.__fsSettings }));
-
-  test('default: unchanged settings, mode:default, no buttons, no line on a fast load', async ({ page }) => {
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    const t = await settings(page);
-    expect(t.mode).toBe('default');
-    expect(t.s.localCache.kind).toBe('persistent');
-    expect(t.s.experimentalForceLongPolling).toBeUndefined();
-    await expect(page.locator('#timing-line')).toHaveCount(0);
-    await expect(page.locator('#timing-btns')).toHaveCount(0);
-  });
-
-  test('an unknown fsmode value behaves like default', async ({ page }) => {
-    await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'bogus'); });
-    await setup(page);
-    await page.goto('/event.html?id=e1&timing=1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    expect((await settings(page)).mode).toBe('default');
-    await expect(page.locator('#timing-btns')).toHaveCount(0);
-  });
-
-  for (const url of ['/event.html?id=e1&timing=1']) {
-    test(`${url}: fsmode=memory uses memoryLocalCache, shows mode:memory and the two buttons`, async ({ page }) => {
-      await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'memory'); });
-      await setup(page);
-      await page.goto(url);
-      await expect(page.locator('#timing-line')).toContainText('mode:memory');
-      const t = await settings(page);
-      expect(t.s.localCache).toEqual({ kind: 'memory' });
-      await expect(page.locator('#timing-btns button')).toHaveCount(2);
-    });
-  }
-
-  test('fsmode=long keeps the persistent cache and forces long polling', async ({ page }) => {
-    await page.addInitScript(() => { sessionStorage.setItem('fsmode', 'long'); });
-    await setup(page);
-    await page.goto('/event.html?id=e1&timing=1');
-    await expect(page.locator('#timing-line')).toContainText('mode:long');
-    const t = await settings(page);
-    expect(t.s.localCache.kind).toBe('persistent');
-    expect(t.s.experimentalForceLongPolling).toBe(true);
-  });
-
-  test('fsmode is removed as soon as it is read: memory applies to one load only', async ({ page }) => {
-    await page.addInitScript(() => { if (!localStorage.getItem('seen')) { localStorage.setItem('seen', '1'); sessionStorage.setItem('fsmode', 'memory'); } });
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    expect((await settings(page)).mode).toBe('memory');
-    expect(await page.evaluate(() => sessionStorage.getItem('fsmode'))).toBeNull();
-    await page.reload();
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    expect((await settings(page)).mode).toBe('default');
-  });
-
-  for (const [pageUrl, host] of [['/event.html?id=e1', '#loading-msg']]) {
-    test(`${pageUrl}: a stuck page shows probes and the two buttons; the first sets fsmode=memory and reloads`, async ({ page }) => {
-      await page.clock.install();
-      await setup(page);
-      await page.addInitScript(() => { window.__hangAuth = true; window.__cacheProbe = 'hang'; });
-      await page.goto(pageUrl);
-      await page.clock.runFor(9000);
-      await expect(page.locator('#timing-btns')).toHaveCount(0);
-      await page.clock.runFor(18000);
-      await expect(page.locator(host)).toContainText('التحميل تأخر');
-      const text = await page.locator('#timing-line').textContent();
-      expect(text).toMatch(/standalone no hist \d+/);
-      expect(text).toMatch(/idb ok \d+ms/);
-      expect(text).toMatch(/net (ok|err) \d+ms/);
-      if (pageUrl.startsWith('/event')) expect(text).toContain('cache hang');
-      expect(text).toContain('mode:default');
-      const btns = page.locator('#timing-btns button');
-      await expect(btns).toHaveCount(2);
-      await expect(btns.nth(0)).toHaveText('جرّب بدون ذاكرة');
-      await expect(btns.nth(1)).toHaveText('جرّب اتصال بديل');
-      const reloaded = page.waitForEvent('load');
-      await btns.nth(0).click();
-      await reloaded;
-      expect((await settings(page)).mode).toBe('memory');
-    });
-  }
-
-  test('app.html: a stuck page shows the probe line but no Firestore mode buttons, and tapping the message retries', async ({ page }) => {
+test.describe('a stuck event.html (home-screen app without ?timing=1)', () => {
+  test('shows the probe line (no Firestore buttons), and tapping the message retries', async ({ page }) => {
     await page.clock.install();
-    await setupApp(page, { hangAuth: true });
-    await page.goto('/app.html');
+    await setup(page, { hang: true });
+    await page.goto('/event.html?id=e1');
     await page.clock.runFor(9000);
-    await expect(page.locator('#auth-loading')).toHaveText('الاتصال بطيء، لحظات…');
-    await page.waitForTimeout(500);
+    await expect(page.locator('#timing-line')).toHaveCount(0);
     await page.clock.runFor(18000);
+    await expect(page.locator('#loading-msg')).toContainText('التحميل تأخر');
     const text = await page.locator('#timing-line').textContent();
+    expect(text).toMatch(/standalone no hist \d+/);
     expect(text).toMatch(/idb ok \d+ms/);
     expect(text).toMatch(/net (ok|err) \d+ms/);
-    expect(text).not.toMatch(/mode:|tab:/);
+    expect(text).not.toMatch(/mode:|tab:|cache /);
     await expect(page.locator('#timing-btns')).toHaveCount(0);
-    const reloaded = page.waitForEvent('load');
-    await page.locator('#auth-loading').click();
-    await reloaded;
-  });
-
-  test('app.html: stuck then recovered removes the line', async ({ page }) => {
-    await page.clock.install();
-    await setupApp(page, { hangAuth: true });
-    await page.goto('/app.html');
-    await page.clock.runFor(27000);
-    await expect(page.locator('#timing-line')).toHaveCount(1);
-    await page.evaluate(() => { document.querySelector('#auth-loading').style.display = 'none'; tmark('recovered'); });
-    await expect(page.locator('#timing-line')).toHaveCount(0);
-  });
-
-  test('the second button sets fsmode=long', async ({ page }) => {
-    await page.clock.install();
-    await setup(page);
-    await page.addInitScript(() => { window.__hangAuth = true; });
-    await page.goto('/event.html?id=e1');
-    await page.clock.runFor(27000);
-    const reloaded = page.waitForEvent('load');
-    await page.locator('#timing-btns button').nth(1).click();
-    await reloaded;
-    expect((await settings(page)).mode).toBe('long');
-  });
-
-  test('event.html: a cache probe that misses is labelled miss', async ({ page }) => {
-    await page.clock.install();
-    await setup(page);
-    await page.addInitScript(() => { window.__hangAuth = true; window.__cacheProbe = 'miss'; });
-    await page.goto('/event.html?id=e1');
-    await page.clock.runFor(9000);
-    await expect(page.locator('#timing-line')).toHaveCount(0);
-    await page.clock.runFor(18000);
-    expect(await page.locator('#timing-line').textContent()).toMatch(/cache miss \d+ms/);
-  });
-
-  test('tapping the stuck message still retries', async ({ page }) => {
-    await page.clock.install();
-    await setup(page);
-    await page.addInitScript(() => { window.__hangAuth = true; });
-    await page.goto('/event.html?id=e1');
-    await page.clock.runFor(27000);
     const reloaded = page.waitForEvent('load');
     await page.locator('#loading-msg').click();
     await reloaded;
   });
 
-  test('the mode set by a button travels in sessionStorage (one load), never localStorage', async ({ page }) => {
+  test('stuck then recovered removes the line', async ({ page }) => {
     await page.clock.install();
-    await setup(page);
-    await page.addInitScript(() => { window.__hangAuth = true; });
+    await setup(page, { hang: true });
     await page.goto('/event.html?id=e1');
     await page.clock.runFor(27000);
-    const reloaded = page.waitForEvent('load');
-    await page.locator('#timing-btns button').nth(0).click();
-    await reloaded;
-    expect((await settings(page)).mode).toBe('memory');
-    expect(await page.evaluate(() => [sessionStorage.getItem('fsmode'), localStorage.getItem('fsmode')])).toEqual([null, null]);
+    await expect(page.locator('#timing-line')).toHaveCount(1);
+    await page.evaluate(() => { document.querySelector('#loading-msg').style.display = 'none'; tmark('recovered'); });
+    await expect(page.locator('#timing-line')).toHaveCount(0);
   });
 
-  test('a localStorage fsmode (old key) is ignored', async ({ page }) => {
-    await page.addInitScript(() => { localStorage.setItem('fsmode', 'memory'); });
+  test('a localStorage or sessionStorage fsmode (old keys) does nothing any more', async ({ page }) => {
+    await page.addInitScript(() => { localStorage.setItem('fsmode', 'memory'); sessionStorage.setItem('fsmode', 'memory'); });
     await setup(page);
     await page.goto('/event.html?id=e1');
     await expect(page.locator('.guest-item')).toHaveCount(2);
-    expect((await settings(page)).mode).toBe('default');
+    expect(await page.evaluate(() => window._fsMode)).toBeUndefined();
   });
-
-  for (const [pageUrl, host] of [['/event.html?id=e1', '#loading-msg']]) {
-    test(`${pageUrl}: stuck then recovered removes the line and the buttons`, async ({ page }) => {
-      await page.clock.install();
-      await setup(page);
-      await page.addInitScript(() => { window.__hangAuth = true; });
-      await page.goto(pageUrl);
-      await page.clock.runFor(27000);
-      await expect(page.locator('#timing-btns')).toHaveCount(1);
-      await page.evaluate((h) => { document.querySelector(h).style.display = 'none'; tmark('recovered'); }, host);
-      await expect(page.locator('#timing-line')).toHaveCount(0);
-      await expect(page.locator('#timing-btns')).toHaveCount(0);
-    });
-  }
 });
 
-const IOS_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
-const standalone = (page) => page.addInitScript(() => { Object.defineProperty(navigator, 'standalone', { value: true, configurable: true }); });
-const calls = (page) => page.evaluate(() => Number(sessionStorage.getItem('__terminateCalls') || 0));
-
-test.describe('Leaving a Firestore page in the iOS home-screen app', () => {
-  test.use({ userAgent: IOS_UA });
-
-  test('a same-origin link tap terminates Firestore, then navigates', async ({ page }) => {
-    await standalone(page);
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    await page.evaluate(() => { document.body.insertAdjacentHTML('beforeend', '<a id="t" href="guide.html" style="display:block;padding:20px">go</a>'); });
-    await page.locator('#t').click();
-    await page.waitForURL('**/guide.html');
-    expect(await calls(page)).toBeGreaterThanOrEqual(1);
-  });
-
-  test('the next page shows how long leaving took', async ({ page }) => {
-    await standalone(page);
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    await page.evaluate(() => { document.body.insertAdjacentHTML('beforeend', '<a id="t" href="event.html?id=e1&again=1" style="display:block;padding:20px">go</a>'); });
-    await page.locator('#t').click();
-    await page.waitForURL('**/event.html?id=e1&again=1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    await page.evaluate(() => { TM.param = true; TM.show = true; tmark('x'); });
-    await expect(page.locator('#timing-line')).toContainText(/leave \d+ms/);
-  });
-
-  test('a terminate that never answers does not hold the navigation (about 400 ms)', async ({ page }) => {
-    await standalone(page);
-    await page.addInitScript(() => { window.__terminateHang = true; });
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    const t0 = Date.now();
-    await page.evaluate(() => { window._leave('guide.html'); });
-    await page.waitForURL('**/guide.html', { waitUntil: 'commit' });
-    const ms = Date.now() - t0;
-    expect(ms).toBeGreaterThanOrEqual(350);
-    expect(ms).toBeLessThan(1500);
-  });
-
-  test('the event menu buttons go back to app.html through the same path', async ({ page }) => {
-    await standalone(page);
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    await page.getByRole('button', { name: 'كل مناسباتي' }).click();
-    await page.waitForURL('**/app.html');
-    expect(await calls(page)).toBeGreaterThanOrEqual(1);
-  });
-
-  test('an unrelated window.goTo with no _leave still navigates (non-Firestore pages)', async ({ page }) => {
-    await standalone(page);
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    await page.evaluate(() => { delete window._leave; goTo('guide.html'); });
-    await page.waitForURL('**/guide.html');
-  });
-
-  // page.evaluate waits for a pending navigation, so these tests watch the
-  // page's load/navigation events and the held request instead.
-  test('a slow navigation is not cancelled by a reload', async ({ page }) => {
-    await standalone(page);
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    const seen = [];
-    page.on('load', () => seen.push('load'));
-    page.on('framenavigated', (f) => seen.push(f.url()));
-    await page.route('**/guide.html', async (r) => { await new Promise((x) => setTimeout(x, 6500)); await r.continue().catch(() => {}); });
-    await page.evaluate(() => window._leave('guide.html'));
-    await page.waitForTimeout(5000);
-    expect(seen).toEqual([]);
-    await page.waitForURL('**/guide.html');
-  });
-
-  test('coming back (visible again) to a page that was left reloads it; a normal page does not', async ({ page }) => {
-    await standalone(page);
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    const fire = () => {
-      window.__mark = 1;
-      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
-      document.dispatchEvent(new Event('visibilitychange'));
-    };
-    await page.evaluate(fire);
-    await page.waitForTimeout(500);
-    expect(await page.evaluate(() => window.__mark)).toBe(1);
-    await page.route('**/guide.html', async (r) => { await new Promise((x) => setTimeout(x, 30000)); await r.abort().catch(() => {}); });
-    const reloaded = page.waitForEvent('load');
-    await page.evaluate((src) => { window._leave('guide.html'); setTimeout(new Function('return ' + src)(), 1000); }, fire.toString());
-    await reloaded;
-    await expect.poll(() => page.evaluate(() => window.__mark === undefined)).toBe(true);
-  });
-
-  test('a later tap works again after 10 s if the first navigation never happened', async ({ page }) => {
-    await standalone(page);
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    let requests = 0;
-    await page.route('**/guide.html', async (r) => { requests++; await new Promise((x) => setTimeout(x, 30000)); await r.abort().catch(() => {}); });
-    await page.evaluate(() => {
-      window._leave('guide.html');
-      setTimeout(() => window._leave('guide.html'), 1500);
-      setTimeout(() => window._leave('guide.html'), 11000);
-    });
-    await expect.poll(() => requests, { timeout: 5000 }).toBe(1);
-    await page.waitForTimeout(3000);
-    expect(requests).toBe(1);
-    await expect.poll(() => requests, { timeout: 12000 }).toBe(2);
-  });
-
-  test('event.html: after 10 s on a page that stayed, errors are no longer silenced: a terminated one reloads', async ({ page }) => {
-    await standalone(page);
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    await page.route('**/app.html', async (r) => { await new Promise((x) => setTimeout(x, 30000)); await r.abort().catch(() => {}); });
-    const reloaded = page.waitForEvent('load', { timeout: 20000 });
-    await page.evaluate(() => {
-      window._leave('app.html');
-      setTimeout(() => { showErr(Object.assign(new Error('The client has already been terminated.'), { code: 'failed-precondition' })); }, 10500);
-    });
-    await reloaded;
-    expect(page.url()).toContain('event.html');
-  });
-
-  test('event.html: a terminated error raised while leaving shows no toast, does not reload, and the navigation arrives', async ({ page }) => {
-    await standalone(page);
-    await page.addInitScript(() => { window.__terminateHang = true; });
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    const alerts = [];
-    page.on('dialog', (d) => { alerts.push(d.message()); d.dismiss(); });
-    await page.evaluate(() => {
-      window.__mark = 1;
-      window._leave('app.html');
-      showErr(Object.assign(new Error('The client has already been terminated.'), { code: 'failed-precondition' }));
-    });
-    await expect(page.locator('#toast')).not.toContainText('انقطع الاتصال');
-    await page.waitForURL('**/app.html');
-    expect(alerts).toEqual([]);
-  });
-
-  for (const [name, attrs, extra] of [
-    ['target=_blank', 'href="guide.html" target="_blank"', ''],
-    ['download', 'href="guide.html" download', ''],
-    ['external host', 'href="https://example.org/x"', ''],
-    ['wa.me', 'href="https://wa.me/966500000000"', ''],
-    ['mailto', 'href="mailto:a@b.co"', ''],
-    ['tel', 'href="tel:+966500000000"', ''],
-    ['pure #', 'href="#top"', ''],
-    ['the same document', 'href="event.html?id=e1"', ''],
-    ['same document with hash', 'href="event.html?id=e1#x"', ''],
-  ]) {
-    test(`not intercepted: ${name}`, async ({ page }) => {
-      await standalone(page);
-      await setup(page);
-      await page.goto('/event.html?id=e1');
-      await expect(page.locator('.guest-item')).toHaveCount(2);
-      const prevented = await page.evaluate((a) => {
-        const el = document.createElement('div');
-        el.innerHTML = '<a id="t" ' + a + ' style="display:block;padding:20px">go</a>';
-        document.body.appendChild(el);
-        let p = null;
-        document.addEventListener('click', (e) => { p = e.defaultPrevented; e.preventDefault(); }, { once: true });
-        document.getElementById('t').click();
-        return p;
-      }, attrs);
-      expect(prevented).toBe(false);
-      expect(await calls(page)).toBe(0);
-    });
-  }
-
-  test('modifier-key click is not intercepted', async ({ page }) => {
-    await standalone(page);
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    const prevented = await page.evaluate(() => {
-      document.body.insertAdjacentHTML('beforeend', '<a id="t" href="guide.html">go</a>');
-      const a = document.getElementById('t');
-      let p = null;
-      document.addEventListener('click', (e) => { p = e.defaultPrevented; e.preventDefault(); }, { once: true });
-      a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ctrlKey: true }));
-      return p;
-    });
-    expect(prevented).toBe(false);
-    expect(await calls(page)).toBe(0);
-  });
-
-  test('a plain link tap in Safari (not installed) is not intercepted', async ({ page }) => {
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await expect(page.locator('.guest-item')).toHaveCount(2);
-    await page.evaluate(() => { document.body.insertAdjacentHTML('beforeend', '<a id="t" href="guide.html" style="display:block;padding:20px">go</a>'); });
-    await page.locator('#t').click();
-    await page.waitForURL('**/guide.html');
-    expect(await calls(page)).toBe(0);
-  });
-
-});
-
-test.describe('Stalled cache watchdog (iOS home-screen app)', () => {
-  test.use({ userAgent: IOS_UA });
-  // The probe hangs on every load except a memory-mode one.
-  const hangUnlessMemory = (page) => page.addInitScript(() => { window.__cacheProbe = sessionStorage.getItem('fsmode') === 'memory' ? 'miss' : 'hang'; });
-  const flags = (page) => page.evaluate(() => [sessionStorage.getItem('fsmode'), sessionStorage.getItem('fsauto')]);
-
-  for (const url of ['/event.html?id=e1']) {
-    test(`${url}: a healthy probe (even a miss) never reloads and shows probe ok`, async ({ page }) => {
-      await standalone(page);
-      await page.addInitScript(() => { window.__cacheProbe = 'miss'; window.__loads = 1; });
-      await setup(page);
-      let loads = 0;
-      page.on('load', () => { loads++; });
-      await page.goto(url + (url.includes('?') ? '&' : '?') + 'timing=1');
-      await expect(page.locator('#timing-line')).toContainText(/probe ok \d+ms/);
-      await page.waitForTimeout(6500);
-      expect(loads).toBe(1);
-      expect(await flags(page)).toEqual([null, null]);
-    });
-
-    test(`${url}: a hanging probe reloads once in memory mode, then the next load is persistent`, async ({ page }) => {
-      await standalone(page);
-      await hangUnlessMemory(page);
-      await setup(page);
-      const first = page.waitForEvent('load');
-      await page.goto(url + (url.includes('?') ? '&' : '?') + 'timing=1');
-      const reloaded = page.waitForEvent('load', { timeout: 12000 });
-      await reloaded;
-      await expect(page.locator('#timing-line')).toContainText('mode:memory');
-      await expect(page.locator('#timing-line')).toContainText(/probe ok \d+ms/);
-      expect((await page.evaluate(() => window.__fsSettings.localCache.kind))).toBe('memory');
-      await first;
-      expect(await flags(page)).toEqual([null, null]);
-      await page.reload();
-      await page.waitForFunction(() => window._fsMode);
-      expect(await page.evaluate(() => [window._fsMode, window.__fsSettings.localCache.kind])).toEqual(['default', 'persistent']);
-    });
-  }
-
-  test('a watchdog that fires while the page is hidden re-checks when it becomes visible', async ({ page }) => {
-    await standalone(page);
-    await hangUnlessMemory(page);
-    await page.addInitScript(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); });
-    await setup(page);
-    await page.goto('/event.html?id=e1');
-    await page.waitForTimeout(6800);
-    expect(await flags(page)).toEqual([null, null]);
-    const reloaded = page.waitForEvent('load');
-    await page.evaluate(() => {
-      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
-      document.dispatchEvent(new Event('visibilitychange'));
-    });
-    await reloaded;
-    expect(await page.evaluate(() => window.__fsSettings.localCache.kind)).toBe('memory');
-  });
-
-  test('a second stall with fsauto already set does not reload again', async ({ page }) => {
-    await standalone(page);
-    await page.addInitScript(() => { window.__cacheProbe = 'hang'; sessionStorage.setItem('fsauto', '1'); });
-    await setup(page);
-    let loads = 0;
-    page.on('load', () => { loads++; });
-    await page.goto('/event.html?id=e1');
-    await page.waitForTimeout(6800);
-    expect(loads).toBe(1);
-    expect(await page.evaluate(() => sessionStorage.getItem('fsmode'))).toBeNull();
-  });
-
-  test('not active on scan.html', async ({ page }) => {
-    await standalone(page);
-    await page.addInitScript(() => { window.__cacheProbe = 'hang'; });
-    await setup(page);
-    let loads = 0;
-    page.on('load', () => { loads++; });
-    await page.goto('/scan.html');
-    await page.waitForTimeout(6800);
-    expect(loads).toBe(1);
-    expect(await flags(page)).toEqual([null, null]);
-  });
-
-  test('not active on invite.html', async ({ page }) => {
-    await standalone(page);
-    await page.addInitScript(() => { window.__cacheProbe = 'hang'; });
-    await setup(page);
-    let loads = 0;
-    page.on('load', () => { loads++; });
-    await page.goto('/invite.html?event=e1&guest=WD-1');
-    await page.waitForTimeout(6800);
-    expect(loads).toBe(1);
-    expect(await flags(page)).toEqual([null, null]);
-  });
-
-  test('not active outside the home-screen app', async ({ page }) => {
-    await page.addInitScript(() => { window.__cacheProbe = 'hang'; });
-    await setup(page);
-    let loads = 0;
-    page.on('load', () => { loads++; });
-    await page.goto('/event.html?id=e1');
-    await page.waitForTimeout(6800);
-    expect(loads).toBe(1);
-    expect(await flags(page)).toEqual([null, null]);
-  });
+test('the event menu button goes back to app.html with a plain navigation', async ({ page }) => {
+  await setup(page);
+  await page.goto('/event.html?id=e1');
+  await expect(page.locator('.guest-item')).toHaveCount(2);
+  await page.getByRole('button', { name: 'كل مناسباتي' }).first().click();
+  await page.waitForURL('**/app.html');
 });

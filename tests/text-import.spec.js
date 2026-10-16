@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedEvent } = require('./helpers');
 
 // The reader itself, run directly (no browser needed): the same source file the page loads.
 const src = fs.readFileSync(path.join(__dirname, '..', 'guest-names.js'), 'utf8');
@@ -77,17 +77,16 @@ test.describe('reading a list of names from text: any language, any encoding', (
 });
 
 // End to end through the dashboard: the same files, imported by a customer.
-const EVENT = { name: 'حفل تجريبي', ownerUid: 'u1', date: '2026-01-01', venue: 'الرياض', theme: 'gold', createdAt: { seconds: 1 } };
 async function open(page) {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: { e1: { ...EVENT, paid: true, guestCount: 0 } }, 'events/e1/guests': {}, 'events/e1/requests': {} } });
+  await stubSupabase(page);
+  await seedEvent(page, { user: { id: 'u1', email: 'customer@example.com' }, event: { paid: true } });
   const dialogs = [];
   page.on('dialog', (d) => { dialogs.push(d.message()); d.accept(); });
   await page.goto('/event.html?id=e1');
   await expect(page.locator('#dashboard')).toBeVisible();
   return dialogs;
 }
-const namesOnPage = (page) => page.evaluate(() => Object.values(window.__fakeFirebase.store['events/e1/guests']).map(g => g.name));
+const namesOnPage = (page) => page.evaluate(() => window.__fakeSupabase.doors.e1.guests.map(g => g.name));
 
 for (const [file, expected] of [
   ['text-cp1256-arabic.csv', ['أحمد الغامدي', 'سارة العتيبي', 'محمد بن سعد القحطاني']],
@@ -113,9 +112,9 @@ test('a binary file renamed .csv is refused with a clear message and adds nothin
 
 test('an Excel workbook that was saved with a .csv name is still read as a workbook', async ({ page }) => {
   const JSZIP = fs.readFileSync(path.join(__dirname, '..', 'node_modules', 'jszip', 'dist', 'jszip.min.js'), 'utf8');
-  await stubFirebase(page);
+  await stubSupabase(page);
   await page.route('https://cdnjs.cloudflare.com/ajax/libs/jszip/**', (r) => r.fulfill({ contentType: 'text/javascript', body: JSZIP }));
-  await seedFakeFirebase(page, { user: { uid: 'u1', email: 'customer@example.com' }, store: { events: { e1: { ...EVENT, paid: true, guestCount: 0 } }, 'events/e1/guests': {}, 'events/e1/requests': {} } });
+  await seedEvent(page, { user: { id: 'u1', email: 'customer@example.com' }, event: { paid: true } });
   page.on('dialog', (d) => d.accept());
   await page.goto('/event.html?id=e1');
   await page.locator('#csv-import').setInputFiles({ name: 'guests.csv', mimeType: 'text/csv', buffer: fs.readFileSync(FX('names-only.xlsx')) });

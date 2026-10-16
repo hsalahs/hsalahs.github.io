@@ -1,12 +1,12 @@
 const { test, expect } = require('@playwright/test');
-const { stubFirebase, seedFakeFirebase } = require('./helpers');
+const { stubSupabase, seedFakeSupabase } = require('./helpers');
 
 // GitHub Pages can't send X-Frame-Options / frame-ancestors, so the pages
 // with buttons that change data refuse to run inside someone else's frame.
 for (const path of ['/app.html', '/event.html?id=e1', '/scan.html?event=e1']) {
   test('framed inside another page, ' + path + ' hides itself and takes over the whole window', async ({ page }) => {
-    await stubFirebase(page);
-    await seedFakeFirebase(page, { user: null, store: { events: {} } });
+    await stubSupabase(page);
+    await seedFakeSupabase(page, { user: null });
     await page.route('**/framer-test.html', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>framer</title><iframe src="' + path + '" style="width:400px;height:400px"></iframe>' }));
     await page.goto('/framer-test.html');
     // The framed page breaks out: the top window ends up on the real page.
@@ -16,8 +16,8 @@ for (const path of ['/app.html', '/event.html?id=e1', '/scan.html?event=e1']) {
 }
 
 test('opened normally, the pages are not affected', async ({ page }) => {
-  await stubFirebase(page);
-  await seedFakeFirebase(page, { user: null });
+  await stubSupabase(page);
+  await seedFakeSupabase(page, { user: null });
   await page.goto('/app.html');
   await expect(page.locator('#auth-view')).toBeVisible();
 });
