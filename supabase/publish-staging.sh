@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # Publishes the site files of this branch to the staging repo (GitHub Pages mirror), WITHOUT CNAME,
 # tests, docs or SQL. Not part of the live site. Usage: supabase/publish-staging.sh /path/to/da3wt-staging
-# event.html and the Firebase scripts are left out until event.html moves to Supabase (they would talk to
-# the live Firebase project).
+# All four app pages run on Supabase now (event.html included); the Firebase scripts are not published.
 set -euo pipefail
 DEST="${1:?path to the da3wt-staging clone}"
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$SRC"
 find "$DEST" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-git ls-files | grep -Ev '^(tests/|supabase/|docs/|rules-tests/|CNAME$|package|playwright|firestore|firebase|CLAUDE\.md$|\.claude|\.github|\.gitignore$|sitemap\.xml$|robots\.txt$|event\.html$)' \
+git ls-files | grep -Ev '^(tests/|supabase/|docs/|rules-tests/|CNAME$|package|playwright|firestore|firebase|CLAUDE\.md$|\.claude|\.github|\.gitignore$|sitemap\.xml$|robots\.txt$)' \
   | while read -r f; do mkdir -p "$DEST/$(dirname "$f")"; cp "$f" "$DEST/$f"; done
 touch "$DEST/.nojekyll"
 # 1) no indexing: every page gets a robots meta tag (the copy only, never the branch)
