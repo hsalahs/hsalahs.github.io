@@ -156,7 +156,7 @@ test('a failed VIP save shows the error and leaves the guest as it was', async (
   page.on('dialog', (d) => { alerts.push(d.message()); d.accept(); });
   await toggleFirst(page, /تمييز كـ VIP/);
   await expect.poll(() => alerts.length).toBe(1);
-  expect(alerts[0]).toContain('صار خطأ');
+  expect(alerts[0]).toBe('تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية');
   expect((await read(page)).guests[0].vip).toBe(false);
   await expect(page.locator('.guest-item .vip-badge')).toHaveCount(0);
 });

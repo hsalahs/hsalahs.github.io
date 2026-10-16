@@ -942,7 +942,7 @@ async function saveEventEdit() {
     renderEventMeta();
     toggleEditEvent();
   } catch (e) {
-    alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
+    alert(errText(e));
     console.error(e);
   }
 }
@@ -1001,7 +1001,7 @@ async function deleteThisEvent() {
     if (liveWatch) liveWatch.stop();
     goTo('app.html');
   } catch (e) {
-    alert('صار خطأ أثناء الحذف: ' + (e.code || '') + ' — ' + e.message);
+    alert(errText(e, 'صار خطأ أثناء الحذف: '));
     console.error(e);
   }
 }
@@ -2233,8 +2233,18 @@ async function approveAllRequests() {
   }
 }
 
+const ERR_TEXT = {
+  offline: 'تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية',
+  timeout: 'الاتصال بطيء وما انتهت العملية — حدّث الصفحة وتأكد قبل ما تعيد',
+  permission: 'ما عندك صلاحية لهذا الإجراء — سجّل الدخول من جديد',
+};
+// The text of an error alert: one sentence for the codes that have one, else the old «prefix code — message».
+function errText(e, prefix) {
+  return ERR_TEXT[e.code] || (prefix || 'صار خطأ: ') + (e.code || '') + ' — ' + e.message;
+}
+
 function showErr(e) {
-  alert('صار خطأ: ' + (e.code || '') + ' — ' + e.message);
+  alert(errText(e));
   console.error(e);
 }
 

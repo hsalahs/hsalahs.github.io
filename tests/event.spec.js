@@ -1653,7 +1653,7 @@ test('an import whose reply is lost half way: the error is shown and the list is
   const names = Array.from({ length: 100 }, (_, i) => 'اسم ' + (i + 1)).join('\n');
   await page.locator('#csv-import').setInputFiles({ name: 'guests.csv', mimeType: 'text/csv', buffer: Buffer.from(names) });
   await expect.poll(() => alerts.length).toBe(1);
-  expect(alerts[0]).toContain('صار خطأ');
+  expect(alerts[0]).toBe('تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية');
   await expect(page.locator('.guest-item')).toHaveCount(50);
   expect((await server(page)).guests).toHaveLength(50);
   expect((await calls(page, 'add_guests'))).toHaveLength(1);
@@ -1676,7 +1676,7 @@ test('an import whose reply was lost, uploaded again at once, creates no duplica
   const file = { name: 'guests.csv', mimeType: 'text/csv', buffer: Buffer.from(Array.from({ length: 100 }, (_, i) => 'اسم ' + (i + 1)).join('\n')) };
   await page.locator('#csv-import').setInputFiles(file);
   await expect.poll(() => alerts.length).toBe(1);
-  expect(alerts[0]).toContain('صار خطأ');
+  expect(alerts[0]).toBe('تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية');
   // the list already shows what landed (the refresh was awaited before the alert)
   await expect(page.locator('.guest-item')).toHaveCount(50);
   await page.locator('#csv-import').setInputFiles(file);
@@ -1695,7 +1695,7 @@ test('a failed import batch shows the error, keeps the earlier batches and reads
   page.on('dialog', d => { alerts.push(d.message()); d.accept(); });
   await page.locator('#csv-import').setInputFiles({ name: 'g.csv', mimeType: 'text/csv', buffer: Buffer.from(Array.from({ length: 80 }, (_, i) => 'ض' + (i + 1)).join('\n')) });
   await expect.poll(() => alerts.length).toBe(1);
-  expect(alerts[0]).toContain('صار خطأ');
+  expect(alerts[0]).toBe('تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية');
   await expect(page.locator('.guest-item')).toHaveCount(50);
   expect((await calls(page, 'owner_guests')).length).toBeGreaterThanOrEqual(2);
 });
@@ -1767,4 +1767,80 @@ test('leaving the page ends the background check', async ({ page }) => {
   const after = (await calls(page, 'event_live')).length;
   await page.waitForTimeout(700);
   expect((await calls(page, 'event_live')).length).toBe(after);
+});
+
+// ---- error alerts: one approved sentence per code, the old format for the rest ----
+
+const ERR_SENTENCES = {
+  offline: 'تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية',
+  timeout: 'الاتصال بطيء وما انتهت العملية — حدّث الصفحة وتأكد قبل ما تعيد',
+  permission: 'ما عندك صلاحية لهذا الإجراء — سجّل الدخول من جديد',
+};
+const FAILS = { offline: { message: 'Failed to fetch', code: '' }, timeout: { message: 'DATA_TIMEOUT', code: '' }, permission: { message: 'NOT_ALLOWED', code: '42501' } };
+for (const code of Object.keys(ERR_SENTENCES)) {
+  test('a failed write shows exactly the approved «' + code + '» sentence (guest action, edit card and delete)', async ({ page }) => {
+    await go(page, { event: { paid: true, slug_decided: true }, guests: [G('WD-1', 'أحمد')], fail: { set_guest_scanned: { error: FAILS[code] }, 'from:events': { error: FAILS[code], skip: 1 }, delete_event: { error: FAILS[code] } } });
+    await expect(page.locator('.guest-item')).toHaveCount(1);
+    const alerts = [];
+    page.on('dialog', d => { if (d.type() === 'alert') alerts.push(d.message()); d.accept(); });
+    await page.locator('.attend-btn').click();
+    await expect.poll(() => alerts.length).toBe(1);
+    await page.evaluate(() => { document.getElementById('edit-ev-name').value = 'جديد'; saveEventEdit(); });
+    await expect.poll(() => alerts.length).toBe(2);
+    await page.evaluate(() => { eventData.guestCount = 0; });
+    await menu(page);
+    await page.getByRole('button', { name: /تعديل المناسبة/ }).click();
+    await page.getByRole('button', { name: 'حذف المناسبة نهائيًا' }).click();
+    await page.locator('#del-ev-input').fill('حذف');
+    await page.locator('#delete-event-modal .del-ev-confirm').click();
+    await expect.poll(() => alerts.length).toBe(3);
+    expect(alerts).toEqual([ERR_SENTENCES[code], ERR_SENTENCES[code], ERR_SENTENCES[code]]);
+  });
+}
+
+test('an error with no approved sentence keeps today\'s «صار خطأ: code — message» format', async ({ page }) => {
+  await go(page, { guests: [G('WD-1', 'أحمد')], fail: { set_guest_scanned: { error: { message: 'BAD_INPUT', code: '22023' } } } });
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+  const alerts = [];
+  page.on('dialog', d => { alerts.push(d.message()); d.accept(); });
+  await page.locator('.attend-btn').click();
+  await expect.poll(() => alerts.length).toBe(2);   // the confirm, then the alert
+  expect(alerts[1]).toBe('صار خطأ: bad-input — BAD_INPUT');
+});
+
+// ---- VIP, end to end ----
+
+test('VIP from the guest sheet: the row shows ★ VIP, the guest\'s own request reads vip=true in the same step, and un-VIP reverses both', async ({ page }) => {
+  const rid = 'REQ-VIP-0123456789ABCDEF';
+  await go(page, { event: { paid: true }, guests: [G('WD-1', 'سارة')], requests: [{ id: rid, name: 'سارة', status: 'approved', guest_id: 'WD-1' }] });
+  await expect(page.locator('.guest-item')).toHaveCount(1);
+  const seen = () => page.evaluate((id) => window.Data.invite.getRequest('e1', id), rid);
+  await page.locator('.guest-item .more-btn').click();
+  await page.getByRole('button', { name: /تمييز كـ VIP/ }).click();
+  await expect(page.locator('.guest-item .vip-badge')).toHaveText('★ VIP');
+  expect((await seen()).vip).toBe(true);
+  expect(await calls(page, 'set_guest')).toHaveLength(1);
+  await page.locator('.guest-item .more-btn').click();
+  await page.getByRole('button', { name: /إلغاء تمييز VIP/ }).click();
+  await expect(page.locator('.guest-item .vip-badge')).toHaveCount(0);
+  expect((await seen()).vip).toBe(false);
+  expect((await server(page)).guests[0].vip).toBe(false);
+});
+
+test('approve as VIP creates a VIP guest and a VIP request; the VIP card uses the dark style', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.QRCode = function (el) { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); x.fillRect(0, 0, 256, 256); x.fillStyle = '#fff'; x.fillRect(64, 64, 128, 128); el.appendChild(c); };
+    window.QRCode.CorrectLevel = { H: 2, M: 0, L: 1, Q: 3 };
+  });
+  await go(page, { event: { paid: true }, requests: [{ id: 'REQ-0123456789ABCDEFGH', name: 'ضيف مهم' }] });
+  await expect(page.locator('#requests-badge')).toHaveText('1');
+  await menu(page);
+  await page.getByRole('button', { name: /^الطلبات/ }).click();
+  await page.locator('.vip-approve-btn').click();
+  await expect(page.locator('.guest-item .vip-badge')).toHaveText('★ VIP');
+  const s = await server(page);
+  expect(s.guests[0].vip).toBe(true);
+  expect(s.requests['REQ-0123456789ABCDEFGH'].vip).toBe(true);
+  const bg = await page.evaluate(async () => { const c = await buildGuestCard(guests[0]); return Array.from(c.getContext('2d').getImageData(60, 700, 1, 1).data.slice(0, 3)); });
+  expect(Math.max(...bg)).toBeLessThan(40);
 });
