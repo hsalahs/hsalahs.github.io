@@ -573,7 +573,7 @@ test('the event dashboard, the organizer list, the invitation and the scanner pr
   expect(fs.readFileSync('app.html', 'utf8')).toContain('<link rel="preconnect" href="https://gunizkapwatixvbfliva.supabase.co" crossorigin>');
   expect(fs.readFileSync('app.html', 'utf8')).not.toMatch(/firestore|firebase/i);
   const inv = fs.readFileSync('invite.html', 'utf8');
-  expect(inv).toContain('<link rel="preconnect" href="https://gunizkapwatixvbfliva.supabase.co">');
+  expect(inv).toContain('<link rel="preconnect" href="https://gunizkapwatixvbfliva.supabase.co" crossorigin>');
   expect(inv).not.toMatch(/firestore|firebase/i);
   expect(fs.readFileSync('sw.js', 'utf8')).toContain("reject(new Error('timeout')), 1500)");
 });
