@@ -243,7 +243,8 @@ test('the downloads follow the current list and the old custom link stops after 
   const ev = read('event.html');
   expect(ev).toMatch(/function askRangeDownload\(\) \{\s*const total = visibleGuests\(\)/);
   expect(ev).toMatch(/function downloadAllCards\(from, to\)[\s\S]{0,300}visibleGuests\(\)/);
-  expect(ev).toContain("if (old) tx.delete(doc(window._db, 'slugs', old));");
+  // the server frees the old name in the same step that claims the new one
+  expect(ev).toContain('Data.event.claimSlug(eventId, slug)');
   expect(ev).not.toContain('الروابط القديمة تبقى شغالة');
   const g = read('guide.html');
   expect(g).not.toContain('الروابط اللي أرسلتها قبل تبقى شغالة');
