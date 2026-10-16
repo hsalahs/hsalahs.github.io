@@ -46,3 +46,6 @@ Timestamps come back as `timestamptz` with an offset: `data.js` must normalise w
 
 ## Management API rule
 All scripts use `supabase/mgmt.mjs`, a whitelist (database/query, config/auth GET, postgrest GET, api-keys GET). Logs, analytics, advisors, usage, metrics and billing endpoints are refused in code and by tests/mgmt-guard.spec.js. Every run prints its call count and bytes. Never read Supabase logs (the «Log Query» quota was exhausted in Oct 2026).
+
+## Free plan: automatic pause
+A Free project is paused after about 7 days without activity; the whole site then cannot reach its database. Restore: dashboard -> project -> «Restore project» (a few minutes; check the banner for the deadline). See docs/status-and-lessons.md («FREE PLAN PAUSE WARNING»).
