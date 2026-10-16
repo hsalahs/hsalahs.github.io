@@ -62,11 +62,11 @@ select pg_temp.t_eq('3800 delta rows (2300 live + 1500 deleted): none lost or do
 select pg_temp.t_eq('tiny pages with ties', $$select pg_temp.walk_mix('tq', 13)$$, '3800/3800/1500/293/true', 'authenticated', pg_temp.uid('A'));
 select pg_temp.t_eq('the delta limit is capped at 1000', $$select count(*) from public.owner_guests('tq', now() - interval '2 days', null, null, 5000)$$, '1000', 'authenticated', pg_temp.uid('A'));
 select pg_temp.t_eq('the full list stays live-only (2300)', $$select count(*) from public.owner_guests('tq', null, null, null, 1000) where not deleted$$, '1000', 'authenticated', pg_temp.uid('A'));
--- cleanup: tombstones older than 7 days and of gone events; rejected requests older than 30 days
+-- cleanup: tombstones older than 7 days and of gone events; rejected requests (retention rule in 59)
 update public.guest_tombstones set deleted_at = now() - interval '8 days' where event_id = 'tq' and substr(id, 5)::int <= 500;
 insert into public.requests (event_id, id, name, status, created_at) values
-  ('t1', 'old-rejected-' || repeat('a', 10), 'old rej', 'rejected', now() - interval '31 days'),
-  ('t1', 'new-rejected-' || repeat('b', 10), 'new rej', 'rejected', now() - interval '29 days'),
+  ('t1', 'old-rejected-' || repeat('a', 10), 'old rej', 'rejected', now() - interval '100 days'),
+  ('t1', 'new-rejected-' || repeat('b', 10), 'new rej', 'rejected', now() - interval '80 days'),
   ('t1', 'old-pending-' || repeat('c', 10), 'old pen', 'pending', now() - interval '60 days'),
   ('t1', 'old-approved-' || repeat('d', 10), 'old app', 'approved', now() - interval '60 days');
 select pg_temp.t_eq('before the cleanup', $$select count(*) from public.guest_tombstones where event_id = 'tq'$$, '1500');

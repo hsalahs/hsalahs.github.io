@@ -42,7 +42,7 @@ Timestamps come back as `timestamptz` with an offset: `data.js` must normalise w
 - The admin row on staging is done (hsallah@outlook.sa). Production needs the same one-time insert: `insert into app_private.admins select id from auth.users where email = 'hsallah@outlook.sa'`.
 - **Plan: start on the Free plan.** Upgrading (Pro, ~USD 25/month) is NOT planned: it happens only with the founder's explicit approval, after real usage (egress, database size) has been measured. Budget limit USD 30/month total.
 - The weekly cleanup of old anonymous accounts is scheduled with pg_cron (`cleanup-anonymous-users`, Sundays 03:30 UTC); check it is active on the production project.
-- **Check that the weekly cleanup job `cleanup-anonymous-users` is scheduled and active on the PRODUCTION project** (pg_cron, Sundays 03:30 UTC). It also purges guest tombstones older than 7 days and rejected registration requests older than 30 days; without it those tables only grow.
+- **Check that the weekly cleanup job `cleanup-anonymous-users` is scheduled and active on the PRODUCTION project** (pg_cron, Sundays 03:30 UTC). It also purges guest tombstones older than 7 days and rejected registration requests (30 days after the event's date, or 90 days after the rejection when the event has no valid date); without it those tables only grow.
 
 ## Management API rule
 All scripts use `supabase/mgmt.mjs`, a whitelist (database/query, config/auth GET, postgrest GET, api-keys GET). Logs, analytics, advisors, usage, metrics and billing endpoints are refused in code and by tests/mgmt-guard.spec.js. Every run prints its call count and bytes. Never read Supabase logs (the «Log Query» quota was exhausted in Oct 2026).
