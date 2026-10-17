@@ -629,7 +629,7 @@ test('regenerating the scanner door code updates the display and the server, so 
 
   await page.getByRole('button', { name: 'رمز جديد' }).click();
   await expect(page.locator('#pin-modal')).toBeVisible();
-  await expect(page.locator('#pin-modal')).toContainText('كل أجهزة المشرفين الحالية تطلع وتحتاج الرمز الجديد');
+  await expect(page.locator('#pin-modal')).toContainText('تخرج جميع أجهزة فريق الاستقبال الحالية وتحتاج إلى الرمز الجديد');
   await page.getByRole('button', { name: 'نعم، غيّر الرمز' }).click();
   await expect(page.locator('#toast')).toContainText('تم توليد رمز جديد');
   await expect(page.locator('#scan-pin-display')).not.toHaveText('123456');
@@ -677,13 +677,13 @@ test('door alert: nothing below 20 wrong codes an hour, a warning from 20, a red
   await page.evaluate(() => { window.__fakeSupabase.doors.e1.alert = { failed_last_hour: 24, failed_last_day: 24, door_locked: false }; return refreshDoorAlert(); });
   await expect(page.locator('#door-alert.warn')).toBeVisible();
   await expect(page.locator('#door-alert')).toContainText('تم رصد 24 محاولة خاطئة خلال الساعة الأخيرة');
-  await expect(page.locator('#door-alert')).toContainText('فلا تغيّره وقت المناسبة');
-  await expect(page.getByRole('button', { name: 'إعادة فتح الباب' })).toHaveCount(0);
+  await expect(page.locator('#door-alert')).toContainText('فلا تغيّره أثناء المناسبة');
+  await expect(page.getByRole('button', { name: 'إعادة فتح المدخل' })).toHaveCount(0);
   await page.evaluate(() => { window.__fakeSupabase.doors.e1.alert = { failed_last_hour: 60, failed_last_day: 60, door_locked: true }; return refreshDoorAlert(); });
   await expect(page.locator('#door-alert.lock')).toBeVisible();
-  await expect(page.locator('#door-alert')).toContainText('الباب مقفل للأجهزة الجديدة');
+  await expect(page.locator('#door-alert')).toContainText('المدخل مقفل للأجهزة الجديدة');
   await expect(page.locator('#door-alert')).toContainText('تم رصد 60 محاولة خاطئة خلال الساعة الأخيرة');
-  await expect(page.locator('#door-alert')).toContainText('الرمز يبقى نفسه وأجهزة المشرفين ما تتأثر');
+  await expect(page.locator('#door-alert')).toContainText('يبقى الرمز كما هو ولا تتأثر أجهزة فريق الاستقبال');
 });
 
 test('door alert: locked by the daily budget says "خلال اليوم"', async ({ page }) => {
@@ -691,11 +691,11 @@ test('door alert: locked by the daily budget says "خلال اليوم"', async 
   await expect(page.locator('#door-alert.lock')).toContainText('تم رصد 300 محاولة خاطئة خلال اليوم');
 });
 
-test('"إعادة فتح الباب" clears the count and keeps the same door code; the alert goes away', async ({ page }) => {
+test('"إعادة فتح المدخل" clears the count and keeps the same door code; the alert goes away', async ({ page }) => {
   await go(page, { alert: { failed_last_hour: 60, failed_last_day: 61, door_locked: true } });
   await expect(page.locator('#door-alert.lock')).toBeVisible();
-  await page.getByRole('button', { name: 'إعادة فتح الباب' }).click();
-  await expect(page.locator('#toast')).toContainText('تم فتح الباب من جديد');
+  await page.getByRole('button', { name: 'إعادة فتح المدخل' }).click();
+  await expect(page.locator('#toast')).toContainText('تم فتح المدخل من جديد');
   await expect(page.locator('#door-alert')).toBeHidden();
   expect(await calls(page, 'reset_door_attempts')).toEqual([{ p_event_id: 'e1' }]);
   expect(await calls(page, 'regenerate_door_code')).toEqual([]);

@@ -88,7 +88,7 @@ test('an approved guest gets their card from the request itself — the invite p
   await page.goto('/invite.html?event=e1');
   await expect(page.locator('#card')).toContainText('تم تأكيد حضورك');
   // The demo-only scanning note shouldn't show up for a real guest.
-  await expect(page.locator('#card')).not.toContainText('مسح الكود عند الباب يتم لحظياً');
+  await expect(page.locator('#card')).not.toContainText('مسح الكود عند المدخل يتم لحظياً');
   const names = await page.evaluate(() => window.__fakeSupabase.calls.map((c) => c.name));
   expect([...new Set(names)].sort()).toEqual(['event_public', 'get_request']);
 });
@@ -218,7 +218,7 @@ test('the sample invitation (?demo=1) walks through registration and approval wi
   await expect(page.locator('#card')).toContainText('تم تأكيد حضورك', { timeout: 5000 });
   // The demo can't simulate the door camera itself, only the card a real
   // guest ends up with — this clarifies scanning still happens for real.
-  await expect(page.locator('#card')).toContainText('مسح الكود عند الباب يتم لحظياً');
+  await expect(page.locator('#card')).toContainText('مسح الكود عند المدخل يتم لحظياً');
 
   const state = await page.evaluate(() => ({
     calls: window.__fakeSupabase.calls.length,

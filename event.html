@@ -571,7 +571,7 @@ setTimeout(() => {
     <div class="card share-card">
       <div class="sc-head">
         <span class="chipbox"><i data-ic="scan-line"></i></span>
-        <div><div class="sc-title">رابط السكانر</div><div class="sc-sub">شاركه مع المشرفين على الباب — للمسح والبحث بالأسماء فقط، بدون تعديل أو حذف</div></div>
+        <div><div class="sc-title">رابط السكانر</div><div class="sc-sub">شاركه مع فريق الاستقبال عند المدخل — للمسح والبحث بالأسماء فقط، بدون تعديل أو حذف</div></div>
       </div>
       <div class="link-box">
         <input type="text" id="scan-link" readonly>
@@ -580,7 +580,7 @@ setTimeout(() => {
       </div>
       <div class="pin-row">
         <div>
-          <div class="pin-lbl"><i data-ic="key-round" data-size="13"></i> رقم دخول المشرفين:</div>
+          <div class="pin-lbl"><i data-ic="key-round" data-size="13"></i> رمز دخول فريق الاستقبال:</div>
           <span id="scan-pin-display"></span>
         </div>
         <button class="ibtn ghost" onclick="regenerateScanPin()" aria-label="رمز جديد" title="رمز جديد"><i data-ic="refresh-cw" data-size="17"></i></button>
@@ -665,7 +665,7 @@ setTimeout(() => {
       <div class="modal-header">
         <h3><i data-ic="key-round" data-size="18"></i> تغيير الرمز؟</h3>
       </div>
-      <div style="font-size:13px; opacity:0.75; line-height:1.7; margin-bottom:14px;">سيتم إنشاء رمز جديد، وكل أجهزة المشرفين الحالية تطلع وتحتاج الرمز الجديد. لا تغيّره وقت المناسبة إلا للضرورة.</div>
+      <div style="font-size:13px; opacity:0.75; line-height:1.7; margin-bottom:14px;">سيُنشأ رمز جديد، وتخرج جميع أجهزة فريق الاستقبال الحالية وتحتاج إلى الرمز الجديد. لا تغيّره أثناء المناسبة إلا للضرورة.</div>
       <div style="display:flex; gap:10px;">
         <button class="btn" style="flex:1;" onclick="confirmRegenerateScanPin()">نعم، غيّر الرمز</button>
         <button class="btn ghost" style="flex:1;" onclick="closePinModal()">إلغاء</button>
@@ -931,7 +931,7 @@ async function confirmRegenerateScanPin() {
 
 // Too many wrong door codes: an early warning at 20 in the last hour, a red box once the
 // door is shut to NEW devices (60 an hour or 300 a day). Devices that already hold a
-// session are never affected; «إعادة فتح الباب» clears the count and keeps the code.
+// session are never affected; «إعادة فتح المدخل» clears the count and keeps the code.
 const DOOR_WARN_AT = 20;
 let doorAlertPoll = null;
 function renderDoorAlert(a) {
@@ -940,15 +940,15 @@ function renderDoorAlert(a) {
   if (a && a.doorLocked) {
     const lockN = a.failedLastHour >= 60 ? a.failedLastHour : a.failedLastDay;
     box.className = 'door-alert lock show';
-    box.innerHTML = '<div class="da-title">' + ic('lock', 16) + ' الباب مقفل للأجهزة الجديدة</div>' +
-      '<div class="da-body">تم رصد ' + lockN + ' ' + arPlural(lockN, 'محاولة', 'محاولتين', 'محاولات') + ' خاطئة ' + (a.failedLastHour >= 60 ? 'خلال الساعة الأخيرة' : 'خلال اليوم') + '. الأجهزة اللي دخلت بالرمز قبل كذا تواصل الشغل عادي، لكن أي جهاز جديد ما يقدر يدخل حاليًا.</div>' +
-      '<div class="da-actions"><button class="btn" onclick="reopenDoor()">' + ic('lock-open', 16) + ' إعادة فتح الباب</button>' +
+    box.innerHTML = '<div class="da-title">' + ic('lock', 16) + ' المدخل مقفل للأجهزة الجديدة</div>' +
+      '<div class="da-body">تم رصد ' + lockN + ' ' + arPlural(lockN, 'محاولة', 'محاولتين', 'محاولات') + ' خاطئة ' + (a.failedLastHour >= 60 ? 'خلال الساعة الأخيرة' : 'خلال اليوم') + '. الأجهزة التي دخلت بالرمز سابقًا تعمل بشكل طبيعي، أما أي جهاز جديد فلا يستطيع الدخول حاليًا.</div>' +
+      '<div class="da-actions"><button class="btn" onclick="reopenDoor()">' + ic('lock-open', 16) + ' إعادة فتح المدخل</button>' +
       '<button class="btn ghost" onclick="regenerateScanPin()">' + ic('refresh-cw', 16) + ' رمز جديد</button></div>' +
-      '<div class="da-note">«إعادة فتح الباب» يمسح عدّاد المحاولات فقط، والرمز يبقى نفسه وأجهزة المشرفين ما تتأثر.</div>';
+      '<div class="da-note">«إعادة فتح المدخل» تمسح عدّاد المحاولات فقط؛ يبقى الرمز كما هو ولا تتأثر أجهزة فريق الاستقبال.</div>';
   } else if (a && a.failedLastHour >= DOOR_WARN_AT) {
     box.className = 'door-alert warn show';
-    box.innerHTML = '<div class="da-title">' + ic('alert', 16) + ' محاولات كثيرة على رمز الباب</div>' +
-      '<div class="da-body">تم رصد ' + a.failedLastHour + ' ' + arPlural(a.failedLastHour, 'محاولة', 'محاولتين', 'محاولات') + ' خاطئة خلال الساعة الأخيرة. لو ما تتوقعها، غيّر الرمز بزر «رمز جديد». انتبه: تغيير الرمز يطلّع كل أجهزة المشرفين، فلا تغيّره وقت المناسبة.</div>' +
+    box.innerHTML = '<div class="da-title">' + ic('alert', 16) + ' محاولات كثيرة على رمز الدخول</div>' +
+      '<div class="da-body">تم رصد ' + a.failedLastHour + ' ' + arPlural(a.failedLastHour, 'محاولة', 'محاولتين', 'محاولات') + ' خاطئة خلال الساعة الأخيرة. إن لم تكن تتوقعها فاختر «رمز جديد». تنبيه: تغيير الرمز يُخرج جميع أجهزة فريق الاستقبال، فلا تغيّره أثناء المناسبة.</div>' +
       '<div class="da-actions"><button class="btn ghost" onclick="regenerateScanPin()">' + ic('refresh-cw', 16) + ' رمز جديد</button></div>';
   } else {
     box.className = 'door-alert';
@@ -970,7 +970,7 @@ function stopDoorAlert() {
 async function reopenDoor() {
   try {
     await Data.door.reopen(eventId);
-    showToast('✅ تم فتح الباب من جديد');
+    showToast('✅ تم فتح المدخل من جديد');
     refreshDoorAlert();
   } catch (e) { showErr(e); }
 }
@@ -1936,7 +1936,7 @@ function openGuestSheet(id) {
   document.getElementById('gs-sub').innerHTML = 'الكود <b>' + escapeHtml(g.id) + '</b> · ' + (g.scanned ? 'حضر' : 'لم يحضر بعد');
   document.getElementById('gs-vip-text').innerHTML = g.vip
     ? 'إلغاء تمييز VIP<small>ترجع بطاقته للتصميم العادي</small>'
-    : 'تمييز كـ VIP<small>بطاقة VIP خاصة، وتنبيه عند الباب</small>';
+    : 'تمييز كـ VIP<small>بطاقة VIP خاصة، وتنبيه عند المدخل</small>';
   document.getElementById('guest-sheet').classList.add('active');
 }
 function closeGuestSheet() {

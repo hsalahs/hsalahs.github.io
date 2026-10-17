@@ -97,10 +97,10 @@ test('the code field takes six digits', async ({ page }) => {
   await expect(page.locator('#scanner-view')).toBeVisible();
 });
 
-test('a wrong code shows "رقم غير صحيح" and keeps the scanner locked', async ({ page }) => {
+test('a wrong code shows "رمز غير صحيح" and keeps the scanner locked', async ({ page }) => {
   await open(page);
   await unlockWith(page, '000000');
-  await expect(page.locator('#pin-err')).toHaveText('رقم غير صحيح');
+  await expect(page.locator('#pin-err')).toHaveText('رمز غير صحيح');
   await expect(page.locator('#scanner-view')).toBeHidden();
   expect(await page.evaluate(() => window.__fakeSupabase.sessions.e1 || {})).toEqual({});
 });
@@ -109,7 +109,7 @@ test('after 10 wrong codes this device is locked: even the right code is refused
   await open(page);
   for (let i = 0; i < 10; i++) {
     await unlockWith(page, '000000');
-    await expect(page.locator('#pin-err')).toHaveText('رقم غير صحيح');
+    await expect(page.locator('#pin-err')).toHaveText('رمز غير صحيح');
   }
   await unlockWith(page, '123456');
   await expect(page.locator('#pin-err')).toBeVisible();
@@ -174,7 +174,7 @@ test('a code change while the scanner is open sends it back to the code screen w
   await srv(page, 'setPin', 'e1', '999999');
   await page.clock.fastForward(4500);
   await expect(page.locator('#pin-gate')).toBeVisible();
-  await expect(page.locator('#pin-err')).toContainText('تغيّر كود الدخول');
+  await expect(page.locator('#pin-err')).toContainText('تغيّر رمز الدخول');
   await expect(page.locator('#connection-banner')).toBeHidden();
   await expect(page.locator('#scanner-view')).toBeHidden();
 });
@@ -187,14 +187,14 @@ test('the session is also asked about directly once a minute, even when the poll
   await expect(page.locator('#scanner-view')).toBeVisible();
   await page.clock.fastForward(31000);
   await expect(page.locator('#pin-gate')).toBeVisible();
-  await expect(page.locator('#pin-err')).toContainText('تغيّر كود الدخول');
+  await expect(page.locator('#pin-err')).toContainText('تغيّر رمز الدخول');
 });
 
 test('coming back to the page re-checks the session right away', async ({ page }) => {
   await openUnlocked(page);
   await fake(page, () => { window.__srv.setPin('e1', '999999'); document.dispatchEvent(new Event('visibilitychange')); });
   await expect(page.locator('#pin-gate')).toBeVisible();
-  await expect(page.locator('#pin-err')).toContainText('تغيّر كود الدخول');
+  await expect(page.locator('#pin-err')).toContainText('تغيّر رمز الدخول');
 });
 
 test('a session the server no longer has also counts as revoked', async ({ page }) => {
@@ -468,7 +468,7 @@ test('the organizer opens the scanner on their own account, then signs out in an
   await expect(page.locator('#pin-gate')).toBeVisible();
   await expect(page.locator('#scanner-view')).toBeHidden();
   await expect(page.locator('#pin-err')).toContainText('تم تسجيل الخروج من الحساب على هذا الجهاز');
-  await expect(page.locator('#pin-err')).not.toContainText('تغيّر كود الدخول');
+  await expect(page.locator('#pin-err')).not.toContainText('تغيّر رمز الدخول');
 });
 
 test('the same for the admin', async ({ page }) => {
@@ -492,7 +492,7 @@ test('a door device that unlocked with the code and then loses its sign-in gets 
 test('a real code change still says the code changed (the identity is still there, only its session is refused)', async ({ page }) => {
   await openUnlocked(page);
   await fake(page, () => { window.__srv.setPin('e1', '999999'); document.dispatchEvent(new Event('visibilitychange')); });
-  await expect(page.locator('#pin-err')).toContainText('تغيّر كود الدخول');
+  await expect(page.locator('#pin-err')).toContainText('تغيّر رمز الدخول');
   await expect(page.locator('#pin-err')).not.toContainText('تم تسجيل الخروج');
 });
 
@@ -501,7 +501,7 @@ test('the wording follows the cause: an organizer identity that is present but r
   await expect(page.locator('#scanner-view')).toBeVisible();
   await page.evaluate(() => sessionRevoked());
   await expect(page.locator('#pin-err')).toContainText('ما عاد عندك صلاحية على هذا الجهاز');
-  await expect(page.locator('#pin-err')).not.toContainText('تغيّر كود الدخول');
+  await expect(page.locator('#pin-err')).not.toContainText('تغيّر رمز الدخول');
 });
 
 test('pressing "تسجيل خروج من هذا الجهاز" on purpose goes back to the code screen with no error message', async ({ page }) => {
@@ -975,7 +975,7 @@ test('scanner batch 2: qr-scanner is served locally, the shell is precached by s
     expect(sw).toMatch(new RegExp("SHELL_FILES = \\[[^\\]]*'" + f.replace(/[.]/g, '\\.') + "'"));
   }
   expect(sw).not.toMatch(/SHELL_FILES = \[[^\]]*firebase-init/);
-  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v20'");
+  expect(sw).toContain("CACHE_NAME = 'dawaat-scan-v21'");
   expect(fs.readFileSync('vendor/qr-scanner.umd.min.js', 'utf8')).toContain('QrScanner');
   const requested = [];
   page.on('request', (r) => requested.push(r.url()));

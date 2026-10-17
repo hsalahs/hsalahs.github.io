@@ -35,7 +35,7 @@ test('every button and message the guide quotes still exists in the page it belo
     'event.html': [
       'تعديل المناسبة', 'استيراد قائمة (Excel / CSV / أسماء)', 'إضافة أرقام متسلسلة (مثال: 1–200)',
       'تحميل كل الدعوات (ZIP)', 'تحميل نطاق معيّن (مثال: 1–100)', 'تصدير قائمة الضيوف (Excel)', 'تصدير قائمة الضيوف (CSV)', 'كشف الحضور (طباعة / PDF)',
-      'تفعيل إشعارات الطلبات', 'الطلبات', 'اقبل الكل', 'رمز جديد', 'رقم دخول المشرفين', 'اسم ضيف جديد',
+      'تفعيل إشعارات الطلبات', 'الطلبات', 'اقبل الكل', 'رمز جديد', 'رمز دخول فريق الاستقبال', 'اسم ضيف جديد',
       'تحديد ضيوف للحذف', 'حذف المحددين', 'حذف الضيف', 'حذف المناسبة نهائيًا', 'تمييز كـ VIP', 'إلغاء تمييز VIP', 'قبول كـ VIP',
       'الدعوات والتقارير', 'معاينة رسالة الواتساب', 'مشاركة عبر الواتساب', 'مشاركة بطريقة ثانية', 'الحد المجاني لعدد الضيوف',
       'للتواصل عبر واتساب', 'تراجع', 'حضر',
@@ -85,25 +85,25 @@ test('the door-day section talks about a door supervisor the organizer chooses, 
   for (const word of ['الموظف', 'الموظفين', 'موظف', 'دوام', 'فريق الأمن']) {
     expect(src, 'the guide should not say "' + word + '"').not.toContain(word);
   }
-  expect(src).toContain('مشرف الباب يفتح الرابط ويكتب الرقم اللي أعطيته له');
+  expect(src).toContain('عضو فريق الاستقبال يفتح الرابط ويكتب الرمز اللي أعطيته له');
   expect(src).toContain('قريب أو صديق أو أي أحد من فريقك');
   // The safety note covers handing the phone to someone else, not only a shift ending.
   expect(src).toContain('أو سلّمت جهازك لشخص ثاني');
 });
 
-// The people at the door are "المشرفين" (supervisors the organizer picks), never
-// a "security team"; and the panel is the organizer's own ("المنظّم"), not "the organizers'".
-test('no page, script or manifest says "فريق الأمن" or "لوحة تحكم المنظّمين", and the scanner link is described as being for supervisors', () => {
+// The people at the door are "فريق الاستقبال" (the organizer picks them; one person: "عضو فريق الاستقبال"), never
+// "المشرفين" (founder, Oct 17 2026: too colloquial), "الباب" (it is "المدخل") or a "security team"; and the panel is the organizer's own ("المنظّم"), not "the organizers'".
+test('no page, script or manifest says "فريق الأمن" or "لوحة تحكم المنظّمين", and the door is called «المدخل» and the people at it «فريق الاستقبال»', () => {
   const offenders = [];
   for (const f of fs.readdirSync(path.join(__dirname, '..')).filter(n => /\.(html|js|webmanifest)$/.test(n))) {
     const src = read(f);
-    for (const phrase of ['فريق الأمن', 'فريق الامن', 'لفريق الأمن', 'لوحة تحكم المنظّمين', 'رقم الدخول للفريق']) {
+    for (const phrase of ['فريق الأمن', 'فريق الامن', 'لفريق الأمن', 'لوحة تحكم المنظّمين', 'رقم الدخول للفريق', 'المشرف', 'مشرف', 'الباب', 'رقم الدخول', 'رقم دخول', 'كود الدخول']) {
       if (src.includes(phrase)) offenders.push(f + ': ' + phrase);
     }
   }
   expect(offenders).toEqual([]);
-  expect(read('event.html')).toContain('رابط السكانر</div><div class="sc-sub">شاركه مع المشرفين');
-  expect(read('event.html')).toContain('رقم دخول المشرفين');
+  expect(read('event.html')).toContain('رابط السكانر</div><div class="sc-sub">شاركه مع فريق الاستقبال');
+  expect(read('event.html')).toContain('رمز دخول فريق الاستقبال');
   expect(read('scan.html')).toContain('<div class="sub">سكانر الدخول</div>');
   expect(read('app.html')).toContain('لوحة تحكم المنظّم — أنشئ دعوة رقمية لمناسبتك');
 });
@@ -152,7 +152,7 @@ test('the FAQ no longer claims a «حضر» / «لسه» status on each row and 
 test('the new FAQ entries exist and promise no price or time', async ({ page }) => {
   await page.goto('/guide.html');
   const qs = await page.locator('#faq summary').allTextContents();
-  for (const q of ['وصلت حد الضيوف ولا أقدر أضيف', 'نسيت كلمة المرور', 'هل يقدر أكثر من مشرف يمسح في نفس الوقت؟',
+  for (const q of ['وصلت حد الضيوف ولا أقدر أضيف', 'نسيت كلمة المرور', 'هل يقدر أكثر من عضو في فريق الاستقبال يمسح في نفس الوقت؟',
     'هل أقدر أضيف الموقع على شاشة الجوال الرئيسية؟', 'كيف يحفظ الضيف بطاقته في جواله؟', 'من يفعّل مناسبتي لعدد أكبر من الضيوف؟']) {
     expect(qs, q).toContain(q);
   }
@@ -235,7 +235,7 @@ test('numbers and wording the guide states match the code', () => {
   expect(guide).toContain('بعد 6 ثواني تقريبًا');
   expect(guide).toContain('يتحدثون تلقائيًا كل ثواني قليلة');
   expect(guide).toContain('والضيف المحذوف يختفي خلال دقيقة تقريبًا');
-  expect(guide).toContain('أدخلوا أجهزة الباب (جوالات المشرفين) بالرقم قبل المناسبة');
+  expect(guide).toContain('سجّلوا أجهزة فريق الاستقبال بالرمز قبل المناسبة');
   expect(guide).not.toContain('أكثر من دقيقتين');
 });
 

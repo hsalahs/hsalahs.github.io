@@ -201,9 +201,9 @@
 
   <div id="pin-gate" style="display:none">
     <h1 id="pin-event-name"></h1>
-    <div class="sub">أدخل رقم الدخول اللي وصلك من المنظّم</div>
+    <div class="sub">أدخل رمز الدخول اللي وصلك من المنظّم</div>
     <div class="card">
-      <div class="err" id="pin-err">رقم غير صحيح</div>
+      <div class="err" id="pin-err">رمز غير صحيح</div>
       <input type="tel" inputmode="numeric" maxlength="6" id="pin-input" placeholder="000000" onkeydown="if(event.key==='Enter') checkPin()">
       <button class="btn" onclick="checkPin(event)">دخول</button>
     </div>
@@ -218,7 +218,7 @@
       <input type="email" class="text-input" id="admin-email" placeholder="البريد الإلكتروني" onkeydown="if(event.key==='Enter') document.getElementById('admin-pass').focus()">
       <input type="password" class="text-input" id="admin-pass" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter') submitAdminLogin()">
       <button class="btn" onclick="submitAdminLogin()">دخول</button>
-      <div class="toggle-row"><a onclick="hideAdminLogin()">رجوع لكود الدخول</a></div>
+      <div class="toggle-row"><a onclick="hideAdminLogin()">رجوع لرمز الدخول</a></div>
     </div>
   </div>
 
@@ -466,7 +466,7 @@ function showPinError(msg) {
 
 // Code screen texts. 'locked' = too many wrong codes from this device.
 const PIN_TEXT = {
-  wrong: 'رقم غير صحيح',
+  wrong: 'رمز غير صحيح',
   locked: 'الدخول مقفل مؤقتًا، حاول بعد قليل أو كلّم صاحب المناسبة',
   offline: '⚠️ تعذّر الاتصال — تأكد من الإنترنت وحاول مرة ثانية',
 };
@@ -596,9 +596,9 @@ function sessionRevoked(reason) {
   document.getElementById('pin-input').value = '';
   document.getElementById('pin-gate').style.display = 'block';
   document.getElementById('pin-event-name').textContent = eventData ? eventData.name : '';
-  showPinError(why === 'code' ? '🔒 تغيّر كود الدخول — أدخل الكود الجديد'
-    : why === 'signedout' ? '🔓 تم تسجيل الخروج من الحساب على هذا الجهاز — أدخل رقم الدخول للمتابعة'
-    : '🔒 ما عاد عندك صلاحية على هذا الجهاز — أدخل رقم الدخول للمتابعة');
+  showPinError(why === 'code' ? '🔒 تغيّر رمز الدخول — أدخل الرمز الجديد'
+    : why === 'signedout' ? '🔓 تم تسجيل الخروج من الحساب على هذا الجهاز — أدخل رمز الدخول للمتابعة'
+    : '🔒 ما عاد عندك صلاحية على هذا الجهاز — أدخل رمز الدخول للمتابعة');
 }
 
 // Notices the sign-out itself, the moment it happens in another tab of this
