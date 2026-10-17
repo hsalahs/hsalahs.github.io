@@ -1928,3 +1928,47 @@ test('approve as VIP creates a VIP guest and a VIP request; the VIP card uses th
   const bg = await page.evaluate(async () => { const c = await buildGuestCard(guests[0]); return Array.from(c.getContext('2d').getImageData(60, 700, 1, 1).data.slice(0, 3)); });
   expect(Math.max(...bg)).toBeLessThan(40);
 });
+
+
+test('both share buttons of the scanner card open one preview with the scanner link and the door code together', async ({ page }) => {
+  await go(page, { pin: '828583', event: { name: 'حفل ليلى' } });
+  await expect(page.locator('#scan-pin-display')).toHaveText('828583');
+  for (const btn of [page.locator('.pin-row button[title="مشاركة الرابط والرمز"]'), page.locator('#scan-link').locator('xpath=..').locator('button[title="مشاركة"]')]) {
+    await btn.click();
+    const preview = page.locator('#scan-share-preview');
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText('سكانر الدخول');
+    await expect(preview).toContainText('حفل ليلى');
+    await expect(preview).toContainText('افتح الرابط وأدخل رمز الدخول:');
+    await expect(preview).not.toContainText('عند الطلب');
+    await expect(preview).toContainText('scan.html?event=e1');
+    await expect(preview).toContainText('رمز الدخول: 828583');
+    await expect(preview).toContainText('للمسح والبحث بالأسماء فقط. لا تشارك الرمز مع أحد.');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#scan-share-modal')).toBeHidden();
+  }
+});
+
+test('the scanner message goes to WhatsApp with the link and the code, and the preview shows HTML in the event name as text', async ({ page }) => {
+  await go(page, { pin: '007654', event: { name: '<img id="xs" src=x onerror="window.__x=1">' } });
+  await expect(page.locator('#scan-pin-display')).toHaveText('007654');
+  await page.locator('.pin-row button[title="مشاركة الرابط والرمز"]').click();
+  await expect(page.locator('#scan-share-preview img')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__x)).toBeUndefined();
+  await page.getByRole('button', { name: 'مشاركة عبر الواتساب' }).last().click();
+  const opened = (await server(page)).opened;
+  expect(opened).toHaveLength(1);
+  const text = decodeURIComponent(opened[0]);
+  expect(text).toContain('https://wa.me/?text=');
+  expect(text).toContain('scan.html?event=e1');
+  expect(text).toContain('*رمز الدخول:* 007654');
+});
+
+test('the scanner share tells the owner when the door code could not be read', async ({ page }) => {
+  await go(page, { pin: '123456' });
+  await expect(page.locator('#scan-pin-display')).toHaveText('123456');
+  await page.evaluate(() => { currentScanPin = null; });
+  await page.locator('.pin-row button[title="مشاركة الرابط والرمز"]').click();
+  await expect(page.locator('#toast')).toContainText('الرمز ما انقرأ');
+  await expect(page.locator('#scan-share-modal')).toBeHidden();
+});
