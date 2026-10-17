@@ -152,7 +152,7 @@ test('the cards say only what the product does: no invented attendance percentag
   // The dashboard shows counts (came / not yet), not a percentage.
   expect(text).not.toContain('نسبة');
   // Door staff holding the code can open the list, so it is not "only you".
-  expect(text).toContain('إلا أنت ومن تعطيه رمز الباب وإدارة المنصة عند طلب الدعم');
+  expect(text).toContain('إلا أنت ومن تعطيه رمز الدخول وإدارة المنصة عند طلب الدعم');
   expect(text).not.toContain('غيرك');
   expect(text).toContain('حتى 5 ضيوف مجانًا');
 });

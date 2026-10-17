@@ -349,6 +349,19 @@ tmark('script');</script>
   .ibtn.ghost { background:transparent; border:1px solid rgba(var(--accent-rgb),0.35); color:var(--gold); }
   .pin-row { display:flex; align-items:center; justify-content:space-between; margin-top:12px; padding:10px 12px; border-radius:12px; background:rgba(var(--accent-rgb),0.06); border:1px dashed rgba(var(--accent-rgb),0.3); }
   .pin-row .pin-lbl { font-size:11.5px; color:var(--text-soft); display:flex; align-items:center; gap:6px; }
+  .door-alert { display:none; margin-top:12px; padding:12px 14px; border-radius:12px; font-size:13px; line-height:1.75; border:1px solid; }
+  .door-alert.show { display:block; }
+  .door-alert.warn { background:rgba(255,152,0,0.08); border-color:rgba(255,152,0,0.35); }
+  .door-alert.lock { background:rgba(244,67,54,0.08); border-color:rgba(244,67,54,0.3); }
+  .door-alert .da-title { display:flex; align-items:center; gap:6px; font-size:14px; font-weight:700; margin-bottom:4px; }
+  .door-alert.warn .da-title { color:#ffb54d; }
+  .door-alert.lock .da-title { color:#ff9d9d; }
+  .door-alert .da-body { color:var(--text-main); }
+  .door-alert .da-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+  .door-alert .da-actions .btn { flex:1 1 130px; margin:0; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+  .door-alert .da-note { font-size:11.5px; color:var(--text-soft); margin-top:8px; line-height:1.7; }
+  #pin-modal { z-index:510; }
+  #pin-modal h3 { display:flex; align-items:center; gap:6px; }
   #scan-pin-display { display:block; font-size:20px; font-weight:700; letter-spacing:5px; color:var(--gold); direction:ltr; text-align:right; }
   .inwrap { position:relative; flex:1; }
   .inwrap > svg.ic { position:absolute; right:13px; top:50%; transform:translateY(-50%); color:var(--gold); opacity:0.8; pointer-events:none; }
@@ -558,7 +571,7 @@ setTimeout(() => {
     <div class="card share-card">
       <div class="sc-head">
         <span class="chipbox"><i data-ic="scan-line"></i></span>
-        <div><div class="sc-title">رابط السكانر</div><div class="sc-sub">شاركه مع المشرفين على الباب — للمسح والبحث بالأسماء فقط، بدون تعديل أو حذف</div></div>
+        <div><div class="sc-title">رابط السكانر</div><div class="sc-sub">شاركه مع فريق الاستقبال عند المدخل — للمسح والبحث بالأسماء فقط، بدون تعديل أو حذف</div></div>
       </div>
       <div class="link-box">
         <input type="text" id="scan-link" readonly>
@@ -567,11 +580,12 @@ setTimeout(() => {
       </div>
       <div class="pin-row">
         <div>
-          <div class="pin-lbl"><i data-ic="key-round" data-size="13"></i> رقم دخول المشرفين:</div>
+          <div class="pin-lbl"><i data-ic="key-round" data-size="13"></i> رمز دخول فريق الاستقبال:</div>
           <span id="scan-pin-display"></span>
         </div>
-        <button class="ibtn ghost" onclick="regenerateScanPin()" aria-label="كود جديد" title="كود جديد"><i data-ic="refresh-cw" data-size="17"></i></button>
+        <button class="ibtn ghost" onclick="regenerateScanPin()" aria-label="رمز جديد" title="رمز جديد"><i data-ic="refresh-cw" data-size="17"></i></button>
       </div>
+      <div class="door-alert" id="door-alert" role="status"></div>
     </div>
     <div id="page-guests">
       <div class="card">
@@ -642,6 +656,19 @@ setTimeout(() => {
       <div style="display:flex; gap:10px;">
         <button class="btn" style="flex:1;" onclick="approveAllRequests()">اقبل الكل</button>
         <button class="btn ghost" style="flex:1;" onclick="closeApproveAllModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="pin-modal" onclick="if (event.target === this) closePinModal();">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3><i data-ic="key-round" data-size="18"></i> تغيير الرمز؟</h3>
+      </div>
+      <div style="font-size:13px; opacity:0.75; line-height:1.7; margin-bottom:14px;">سيُنشأ رمز جديد، وتخرج جميع أجهزة فريق الاستقبال الحالية وتحتاج إلى الرمز الجديد. لا تغيّره أثناء المناسبة إلا للضرورة.</div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn" style="flex:1;" onclick="confirmRegenerateScanPin()">نعم، غيّر الرمز</button>
+        <button class="btn ghost" style="flex:1;" onclick="closePinModal()">إلغاء</button>
       </div>
     </div>
   </div>
@@ -884,14 +911,71 @@ async function loadScanPin() {
 // Every door device that unlocked with the old code is cut off the moment
 // this saves: their door session no longer matches, so their next read or
 // check-in is refused and scan.html sends them back to the code screen.
-async function regenerateScanPin() {
+function regenerateScanPin() {
+  document.getElementById('pin-modal').classList.add('active');
+}
+function closePinModal() {
+  document.getElementById('pin-modal').classList.remove('active');
+}
+async function confirmRegenerateScanPin() {
+  closePinModal();
   if (pinReady) await pinReady;
-  if (!confirm('توليد كود دخول جديد؟ أي جهاز دخل بالكود القديم بيحتاج الكود الجديد.')) return;
   try {
     const newPin = String(await Data.door.regenerate(eventId));
     currentScanPin = newPin;
     document.getElementById('scan-pin-display').textContent = newPin;
-    showToast('✅ تم توليد كود جديد');
+    showToast('✅ تم توليد رمز جديد');
+    refreshDoorAlert();
+  } catch (e) { showErr(e); }
+}
+
+// Too many wrong door codes: an early warning at 20 in the last hour, a red box once the
+// door is shut to NEW devices (60 an hour or 300 a day). Devices that already hold a
+// session are never affected; «إعادة فتح المدخل» clears the count and keeps the code.
+const DOOR_WARN_AT = 20;
+let doorAlertPoll = null;
+function renderDoorAlert(a) {
+  const box = document.getElementById('door-alert');
+  if (!box) return;
+  if (a && a.doorLocked) {
+    const lockN = a.failedLastHour >= 60 ? a.failedLastHour : a.failedLastDay;
+    box.className = 'door-alert lock show';
+    box.innerHTML = '<div class="da-title">' + ic('lock', 16) + ' المدخل مقفل للأجهزة الجديدة</div>' +
+      '<div class="da-body">تم رصد ' + lockN + ' ' + arPlural(lockN, 'محاولة', 'محاولتين', 'محاولات') + ' خاطئة ' + (a.failedLastHour >= 60 ? 'خلال الساعة الأخيرة' : 'خلال اليوم') + '. الأجهزة التي دخلت بالرمز سابقًا تعمل بشكل طبيعي، أما أي جهاز جديد فلا يستطيع الدخول حاليًا.</div>' +
+      '<div class="da-actions"><button class="btn" onclick="reopenDoor()">' + ic('lock-open', 16) + ' إعادة فتح المدخل</button>' +
+      '<button class="btn ghost" onclick="regenerateScanPin()">' + ic('refresh-cw', 16) + ' رمز جديد</button></div>' +
+      '<div class="da-note">«إعادة فتح المدخل» تمسح عدّاد المحاولات فقط؛ يبقى الرمز كما هو ولا تتأثر أجهزة فريق الاستقبال.</div>';
+  } else if (a && a.failedLastHour >= DOOR_WARN_AT) {
+    box.className = 'door-alert warn show';
+    box.innerHTML = '<div class="da-title">' + ic('alert', 16) + ' محاولات كثيرة على رمز الدخول</div>' +
+      '<div class="da-body">تم رصد ' + a.failedLastHour + ' ' + arPlural(a.failedLastHour, 'محاولة', 'محاولتين', 'محاولات') + ' خاطئة خلال الساعة الأخيرة. إن لم تكن تتوقعها فاختر «رمز جديد». تنبيه: تغيير الرمز يُخرج جميع أجهزة فريق الاستقبال، فلا تغيّره أثناء المناسبة.</div>' +
+      '<div class="da-actions"><button class="btn ghost" onclick="regenerateScanPin()">' + ic('refresh-cw', 16) + ' رمز جديد</button></div>';
+  } else {
+    box.className = 'door-alert';
+    box.innerHTML = '';
+  }
+}
+// The poll lets a failure through (makePoller then waits longer); a refresh after the owner's own
+// action swallows it, the next poll tries again.
+async function pollDoorAlert() {
+  renderDoorAlert(await Data.door.alert(eventId));
+}
+function refreshDoorAlert() {
+  return pollDoorAlert().catch(() => {});
+}
+function startDoorAlert() {
+  if (doorAlertPoll) doorAlertPoll.stop();
+  doorAlertPoll = Data.makePoller(pollDoorAlert, 60000);
+  doorAlertPoll.start();
+}
+function stopDoorAlert() {
+  if (doorAlertPoll) { doorAlertPoll.stop(); doorAlertPoll = null; }
+}
+async function reopenDoor() {
+  try {
+    await Data.door.reopen(eventId);
+    showToast('✅ تم فتح المدخل من جديد');
+    refreshDoorAlert();
   } catch (e) { showErr(e); }
 }
 
@@ -999,6 +1083,7 @@ async function deleteThisEvent() {
     // the owner's event slot back.
     await Data.events.remove(eventId);
     if (liveWatch) liveWatch.stop();
+    stopDoorAlert();
     goTo('app.html');
   } catch (e) {
     alert(errText(e, 'صار خطأ أثناء الحذف: '));
@@ -1076,6 +1161,7 @@ async function handleAuthUserNow(user) {
       // so stop showing data instead of a fake outage.
       sessionEnded = true;
       if (liveWatch) { liveWatch.stop(); liveWatch = null; }
+      stopDoorAlert();
       document.getElementById('dashboard').style.display = 'none';
       document.getElementById('loading-msg').style.display = 'none';
       document.getElementById('denied-msg').style.display = 'block';
@@ -1136,6 +1222,7 @@ async function handleAuthUserNow(user) {
   updateNotifButtonLabel();
   dashboardStarted = true;
   startWatch();
+  startDoorAlert();
 }
 
 // The live poll's numbers (Data.event.watch asks the server every 5 seconds,
@@ -1147,6 +1234,7 @@ function onLiveEvent(l) {
   if (!l) {
     // deleted elsewhere: the same screen as an event that is gone or not yours
     if (liveWatch) { liveWatch.stop(); liveWatch = null; }
+    stopDoorAlert();
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('loading-msg').style.display = 'none';
     document.getElementById('denied-msg').style.display = 'block';
@@ -1852,7 +1940,7 @@ function openGuestSheet(id) {
   document.getElementById('gs-sub').innerHTML = 'الكود <b>' + escapeHtml(g.id) + '</b> · ' + (g.scanned ? 'حضر' : 'لم يحضر بعد');
   document.getElementById('gs-vip-text').innerHTML = g.vip
     ? 'إلغاء تمييز VIP<small>ترجع بطاقته للتصميم العادي</small>'
-    : 'تمييز كـ VIP<small>بطاقة VIP خاصة، وتنبيه عند الباب</small>';
+    : 'تمييز كـ VIP<small>بطاقة VIP خاصة، وتنبيه عند المدخل</small>';
   document.getElementById('guest-sheet').classList.add('active');
 }
 function closeGuestSheet() {
@@ -1873,6 +1961,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('guest-sheet').classList.contains('active')) closeGuestSheet();
   if (e.key === 'Escape' && document.getElementById('share-modal').classList.contains('active')) closeShareModal();
   if (e.key === 'Escape' && document.getElementById('approve-all-modal').classList.contains('active')) closeApproveAllModal();
+  if (e.key === 'Escape' && document.getElementById('pin-modal').classList.contains('active')) closePinModal();
 });
 
 function openRequestsModal() {
@@ -2329,6 +2418,7 @@ async function importGuestNamesNow(names) {
 
   let added = 0;
   let blockedByGate = 0;
+  let trimmed = 0;
   const batchSize = 50;
   const total = toAdd.length;
   // Always shown, even for a handful of names: a write is not echoed to the UI
@@ -2343,6 +2433,7 @@ async function importGuestNamesNow(names) {
       const batch = toAdd.slice(i, i + batchSize);
       const res = await Data.guests.add(eventId, batch.map(name => ({ name })), true);
       added += res.added;
+      trimmed += res.trimmed || 0;
       bumpGuestCount(res.added);
       showToast('⏳ جاري الإضافة... ' + Math.min(added, total) + ' / ' + total);
       // Everything not yet written is left out — this batch's remainder AND every later batch.
@@ -2356,6 +2447,7 @@ async function importGuestNamesNow(names) {
   const capForMsg = guestCapOf(eventData);
   let msg = 'تم استيراد ' + added + ' ' + guestWord(added) + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' ' + arPlural(duplicates, 'اسم مكرر', 'اسمين مكررين', 'أسماء مكررة') + ')' : '');
   if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + capForMsg + ' ' + guestWord(capForMsg) + '، وما انضاف ' + blockedByGate + ' ' + arPlural(blockedByGate, 'اسم', 'اسمين', 'أسماء') + '. تواصل معنا لزيادة العدد.';
+  if (trimmed > 0) msg += '\n⚠️ تم اختصار ' + trimmed + ' ' + arPlural(trimmed, 'اسم', 'اسمين', 'أسماء') + ' لأن الحد الأقصى للاسم 100 حرف.';
   alert(msg);
   if (blockedByGate > 0) openPaymentWhatsapp();
 }

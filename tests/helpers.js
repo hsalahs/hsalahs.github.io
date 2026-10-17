@@ -187,9 +187,10 @@ async function seedAppStore(page, { user = null, admin = false, events = [], con
 // The event dashboard's server (event.html and Data.event / Data.guests / Data.requests / Data.door).
 // One event, id e1. event: database columns (owner_uid defaults to `user`); guests: [{ id, name, scanned?, vip?,
 // changed_at?, registered_at? }]; requests: [{ id, name, vip?, status? ('pending'), created_at?, guest_id? }];
-// user: { id, email } (the owner; admin: true makes it the admin); pin: the door code.
+// user: { id, email } (the owner; admin: true makes it the admin); pin: the door code;
+// alert: { failed_last_hour, failed_last_day, door_locked } as door_alert() answers it.
 // Plain-object options after these are passed to seedFakeSupabase.
-async function seedEvent(page, { event = {}, guests = [], requests = [], user = null, admin = false, pin = '123456',
+async function seedEvent(page, { event = {}, guests = [], requests = [], user = null, admin = false, pin = '123456', alert = null,
   lastChange = '2026-01-01T00:00:00.000000+00:00', ...rest } = {}) {
   const u = user ? Object.assign({ is_anonymous: false }, user) : null;
   const ev = Object.assign({ name: 'حفل تجريبي', type: 'wedding', date: '2026-01-01', venue: 'الرياض', theme: 'gold', paid: false,
@@ -202,7 +203,7 @@ async function seedEvent(page, { event = {}, guests = [], requests = [], user = 
       created_at: r.created_at || '2026-01-01T00:' + String(i).padStart(2, '0') + ':00.000000+00:00' };
   });
   return seedFakeSupabase(page, {
-    events: { e1: ev }, doors: { e1: { pin, guests: rows, lastChange } }, requests: { e1: reqs },
+    events: { e1: ev }, doors: { e1: { pin, guests: rows, lastChange, alert } }, requests: { e1: reqs },
     user: u, admins: admin && u ? [u.email] : [], ...rest,
   });
 }

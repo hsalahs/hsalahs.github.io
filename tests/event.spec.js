@@ -14,7 +14,7 @@ async function go(page, opts = {}, url = '/event.html?id=e1') {
   await page.goto(url);
 }
 const G = (id, name, extra) => Object.assign({ id, name }, extra);
-const fill = (n, prefix) => Array.from({ length: n }, (_, i) => G('WD-F' + i, (prefix || 'ضيف ') + (i + 1)));
+const fill = (n, prefix) => Array.from({ length: n }, (_, i) => G('WD-FILL' + i, (prefix || 'ضيف ') + (i + 1)));
 const server = (page) => page.evaluate(() => {
   const s = window.__fakeSupabase;
   return { event: s.events.e1, guests: s.doors.e1.guests, pin: s.doors.e1.pin, requests: s.requests.e1, slugs: s.slugs, opened: window.__opened };
@@ -627,9 +627,11 @@ test('regenerating the scanner door code updates the display and the server, so 
   await go(page);
   await expect(page.locator('#scan-pin-display')).toHaveText('123456');
 
-  page.on('dialog', d => d.accept());
-  await page.getByRole('button', { name: 'كود جديد' }).click();
-  await expect(page.locator('#toast')).toContainText('تم توليد كود جديد');
+  await page.getByRole('button', { name: 'رمز جديد' }).click();
+  await expect(page.locator('#pin-modal')).toBeVisible();
+  await expect(page.locator('#pin-modal')).toContainText('تخرج جميع أجهزة فريق الاستقبال الحالية وتحتاج إلى الرمز الجديد');
+  await page.getByRole('button', { name: 'نعم، غيّر الرمز' }).click();
+  await expect(page.locator('#toast')).toContainText('تم توليد رمز جديد');
   await expect(page.locator('#scan-pin-display')).not.toHaveText('123456');
 
   const storedPin = (await server(page)).pin;
@@ -659,10 +661,92 @@ test('declining the "generate a new code" confirm leaves the old scanner code in
   await go(page);
   await expect(page.locator('#scan-pin-display')).toHaveText('123456');
 
-  page.on('dialog', d => d.dismiss());
-  await page.getByRole('button', { name: 'كود جديد' }).click();
+  await page.getByRole('button', { name: 'رمز جديد' }).click();
+  await page.getByRole('button', { name: 'إلغاء' }).click();
+  await expect(page.locator('#pin-modal')).toBeHidden();
   await expect(page.locator('#scan-pin-display')).toHaveText('123456');
   expect((await server(page)).pin).toBe('123456');
+  expect(await calls(page, 'regenerate_door_code')).toEqual([]);
+});
+
+test('door alert: nothing below 20 wrong codes an hour, a warning from 20, a red box with the reopen button when the door is locked', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 19, failed_last_day: 19, door_locked: false } });
+  await expect(page.locator('#scan-pin-display')).toHaveText('123456');
+  await expect(page.locator('#door-alert')).toBeHidden();
+  expect((await calls(page, 'door_alert')).length).toBeGreaterThan(0);
+  await page.evaluate(() => { window.__fakeSupabase.doors.e1.alert = { failed_last_hour: 24, failed_last_day: 24, door_locked: false }; return refreshDoorAlert(); });
+  await expect(page.locator('#door-alert.warn')).toBeVisible();
+  await expect(page.locator('#door-alert')).toContainText('تم رصد 24 محاولة خاطئة خلال الساعة الأخيرة');
+  await expect(page.locator('#door-alert')).toContainText('فلا تغيّره أثناء المناسبة');
+  await expect(page.getByRole('button', { name: 'إعادة فتح المدخل' })).toHaveCount(0);
+  await page.evaluate(() => { window.__fakeSupabase.doors.e1.alert = { failed_last_hour: 60, failed_last_day: 60, door_locked: true }; return refreshDoorAlert(); });
+  await expect(page.locator('#door-alert.lock')).toBeVisible();
+  await expect(page.locator('#door-alert')).toContainText('المدخل مقفل للأجهزة الجديدة');
+  await expect(page.locator('#door-alert')).toContainText('تم رصد 60 محاولة خاطئة خلال الساعة الأخيرة');
+  await expect(page.locator('#door-alert')).toContainText('يبقى الرمز كما هو ولا تتأثر أجهزة فريق الاستقبال');
+});
+
+test('door alert: locked by the daily budget says "خلال اليوم"', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 12, failed_last_day: 300, door_locked: true } });
+  await expect(page.locator('#door-alert.lock')).toContainText('تم رصد 300 محاولة خاطئة خلال اليوم');
+});
+
+test('"إعادة فتح المدخل" clears the count and keeps the same door code; the alert goes away', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 60, failed_last_day: 61, door_locked: true } });
+  await expect(page.locator('#door-alert.lock')).toBeVisible();
+  await page.getByRole('button', { name: 'إعادة فتح المدخل' }).click();
+  await expect(page.locator('#toast')).toContainText('تم فتح المدخل من جديد');
+  await expect(page.locator('#door-alert')).toBeHidden();
+  expect(await calls(page, 'reset_door_attempts')).toEqual([{ p_event_id: 'e1' }]);
+  expect(await calls(page, 'regenerate_door_code')).toEqual([]);
+  expect((await server(page)).pin).toBe('123456');
+});
+
+test('door alert: exactly 20 wrong codes an hour show the warning', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 20, failed_last_day: 20, door_locked: false } });
+  await expect(page.locator('#door-alert.warn')).toBeVisible();
+  await expect(page.locator('#door-alert')).toContainText('تم رصد 20 محاولة خاطئة');
+});
+
+test('door alert: a failed alert read shows no error and the dashboard keeps working', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 60, failed_last_day: 60, door_locked: true }, fail: { door_alert: { error: 'network' } } });
+  await expect(page.locator('#scan-pin-display')).toHaveText('123456');
+  await expect(page.locator('#door-alert')).toBeHidden();
+  await expect(page.locator('#connection-banner')).toBeHidden();
+  expect((await calls(page, 'door_alert')).length).toBeGreaterThan(0);
+});
+
+test('door alert: the dialog closes by tapping the backdrop, and a new code re-reads the alert', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 30, failed_last_day: 30, door_locked: false } });
+  await expect(page.locator('#door-alert.warn')).toBeVisible();
+  await page.getByRole('button', { name: 'رمز جديد' }).first().click();
+  await page.locator('#pin-modal').click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('#pin-modal')).toBeHidden();
+  expect(await calls(page, 'regenerate_door_code')).toEqual([]);
+  const before = (await calls(page, 'door_alert')).length;
+  await page.getByRole('button', { name: 'رمز جديد' }).first().click();
+  await page.getByRole('button', { name: 'نعم، غيّر الرمز' }).click();
+  await expect(page.locator('#toast')).toContainText('تم توليد رمز جديد');
+  await expect.poll(async () => (await calls(page, 'door_alert')).length).toBeGreaterThan(before);
+});
+
+test('door alert: no more reads after the owner leaves (event deleted elsewhere)', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 0, failed_last_day: 0, door_locked: false } });
+  await expect(page.locator('#scan-pin-display')).toHaveText('123456');
+  await page.evaluate(() => { delete window.__fakeSupabase.events.e1; return liveRefresh(); });
+  await expect(page.locator('#denied-msg')).toBeVisible();
+  const n = (await calls(page, 'door_alert')).length;
+  await page.evaluate(() => { document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('focus')); });
+  await page.waitForTimeout(500);
+  expect((await calls(page, 'door_alert')).length).toBe(n);
+});
+
+test('the "رمز جديد" button inside the door alert opens the same confirmation', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 30, failed_last_day: 30, door_locked: false } });
+  await page.locator('#door-alert').getByRole('button', { name: 'رمز جديد' }).click();
+  await expect(page.locator('#pin-modal')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#pin-modal')).toBeHidden();
 });
 
 test('a dropped connection while loading the dashboard shows a tappable retry instead of hanging on "جاري التحميل..." forever', async ({ page }) => {
@@ -879,7 +963,7 @@ test('accept-all on the free plan stops at the guest cap and leaves the oldest-f
   await acceptAll(page).click();
   await expect(page.locator('#toast')).toContainText('تم قبول 2 — وتبقى 2');
   const st = await fbState(page);
-  expect(st.guests.filter((g) => !g.id.startsWith('WD-F')).map(g => g.name)).toEqual(['أ', 'ب']);
+  expect(st.guests.filter((g) => !g.id.startsWith('WD-FILL')).map(g => g.name)).toEqual(['أ', 'ب']);
   expect(st.count).toBe(5);
   expect(Object.values(st.requests).filter(r => r.status === 'pending').map(r => r.name).sort()).toEqual(['ج', 'د']);
   await expect(page.locator('#payment-gate')).toBeVisible();
