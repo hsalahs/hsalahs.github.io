@@ -702,6 +702,45 @@ test('"إعادة فتح المدخل" clears the count and keeps the same door 
   expect((await server(page)).pin).toBe('123456');
 });
 
+test('door alert: exactly 20 wrong codes an hour show the warning, 19 do not', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 20, failed_last_day: 20, door_locked: false } });
+  await expect(page.locator('#door-alert.warn')).toBeVisible();
+  await expect(page.locator('#door-alert')).toContainText('تم رصد 20 محاولة خاطئة');
+});
+
+test('door alert: a failed alert read shows no error and the dashboard keeps working', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 60, failed_last_day: 60, door_locked: true }, fail: { door_alert: { error: 'network' } } });
+  await expect(page.locator('#scan-pin-display')).toHaveText('123456');
+  await expect(page.locator('#door-alert')).toBeHidden();
+  await expect(page.locator('#connection-banner')).toBeHidden();
+  expect((await calls(page, 'door_alert')).length).toBeGreaterThan(0);
+});
+
+test('door alert: the dialog closes by tapping the backdrop, and a new code re-reads the alert', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 30, failed_last_day: 30, door_locked: false } });
+  await expect(page.locator('#door-alert.warn')).toBeVisible();
+  await page.getByRole('button', { name: 'رمز جديد' }).first().click();
+  await page.locator('#pin-modal').click({ position: { x: 5, y: 5 } });
+  await expect(page.locator('#pin-modal')).toBeHidden();
+  expect(await calls(page, 'regenerate_door_code')).toEqual([]);
+  const before = (await calls(page, 'door_alert')).length;
+  await page.getByRole('button', { name: 'رمز جديد' }).first().click();
+  await page.getByRole('button', { name: 'نعم، غيّر الرمز' }).click();
+  await expect(page.locator('#toast')).toContainText('تم توليد رمز جديد');
+  await expect.poll(async () => (await calls(page, 'door_alert')).length).toBeGreaterThan(before);
+});
+
+test('door alert: no more reads after the owner leaves (event deleted elsewhere)', async ({ page }) => {
+  await go(page, { alert: { failed_last_hour: 0, failed_last_day: 0, door_locked: false } });
+  await expect(page.locator('#scan-pin-display')).toHaveText('123456');
+  await page.evaluate(() => { delete window.__fakeSupabase.events.e1; return liveRefresh(); });
+  await expect(page.locator('#denied-msg')).toBeVisible();
+  const n = (await calls(page, 'door_alert')).length;
+  await page.evaluate(() => { document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('focus')); });
+  await page.waitForTimeout(500);
+  expect((await calls(page, 'door_alert')).length).toBe(n);
+});
+
 test('the "رمز جديد" button inside the door alert opens the same confirmation', async ({ page }) => {
   await go(page, { alert: { failed_last_hour: 30, failed_last_day: 30, door_locked: false } });
   await page.locator('#door-alert').getByRole('button', { name: 'رمز جديد' }).click();

@@ -357,8 +357,8 @@ tmark('script');</script>
   .door-alert.warn .da-title { color:#ffb54d; }
   .door-alert.lock .da-title { color:#ff9d9d; }
   .door-alert .da-body { color:var(--text-main); }
-  .door-alert .da-actions { display:flex; gap:10px; margin-top:10px; }
-  .door-alert .da-actions .btn { flex:1; margin:0; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+  .door-alert .da-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+  .door-alert .da-actions .btn { flex:1 1 130px; margin:0; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
   .door-alert .da-note { font-size:11.5px; color:var(--text-soft); margin-top:8px; line-height:1.7; }
   #pin-modal { z-index:510; }
   #pin-modal h3 { display:flex; align-items:center; gap:6px; }
@@ -955,13 +955,17 @@ function renderDoorAlert(a) {
     box.innerHTML = '';
   }
 }
-async function refreshDoorAlert() {
-  const a = await Data.door.alert(eventId);
-  renderDoorAlert(a);
+// The poll lets a failure through (makePoller then waits longer); a refresh after the owner's own
+// action swallows it, the next poll tries again.
+async function pollDoorAlert() {
+  renderDoorAlert(await Data.door.alert(eventId));
+}
+function refreshDoorAlert() {
+  return pollDoorAlert().catch(() => {});
 }
 function startDoorAlert() {
   if (doorAlertPoll) doorAlertPoll.stop();
-  doorAlertPoll = Data.makePoller(refreshDoorAlert, 60000);
+  doorAlertPoll = Data.makePoller(pollDoorAlert, 60000);
   doorAlertPoll.start();
 }
 function stopDoorAlert() {
