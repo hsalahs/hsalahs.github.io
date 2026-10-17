@@ -702,7 +702,7 @@ test('"إعادة فتح المدخل" clears the count and keeps the same door 
   expect((await server(page)).pin).toBe('123456');
 });
 
-test('door alert: exactly 20 wrong codes an hour show the warning, 19 do not', async ({ page }) => {
+test('door alert: exactly 20 wrong codes an hour show the warning', async ({ page }) => {
   await go(page, { alert: { failed_last_hour: 20, failed_last_day: 20, door_locked: false } });
   await expect(page.locator('#door-alert.warn')).toBeVisible();
   await expect(page.locator('#door-alert')).toContainText('تم رصد 20 محاولة خاطئة');
