@@ -1940,7 +1940,6 @@ test('both share buttons of the scanner card open one preview with the scanner l
     await expect(preview).toContainText('سكانر الدخول');
     await expect(preview).toContainText('حفل ليلى');
     await expect(preview).toContainText('افتح الرابط وأدخل رمز الدخول:');
-    await expect(preview).not.toContainText('عند الطلب');
     await expect(preview).toContainText('scan.html?event=e1');
     await expect(preview).toContainText('رمز الدخول: 828583');
     await expect(preview).toContainText('للمسح والبحث بالأسماء فقط. لا تشارك الرمز مع أحد.');
@@ -1971,4 +1970,37 @@ test('the scanner share tells the owner when the door code could not be read', a
   await page.locator('.pin-row button[title="مشاركة الرابط والرمز"]').click();
   await expect(page.locator('#toast')).toContainText('الرمز ما انقرأ');
   await expect(page.locator('#scan-share-modal')).toBeHidden();
+});
+
+test('after «رمز جديد» the scanner message carries the NEW code', async ({ page }) => {
+  await go(page, { pin: '123456' });
+  await expect(page.locator('#scan-pin-display')).toHaveText('123456');
+  await page.getByRole('button', { name: 'رمز جديد' }).click();
+  await page.getByRole('button', { name: 'نعم، غيّر الرمز' }).click();
+  await expect(page.locator('#scan-pin-display')).not.toHaveText('123456');
+  const fresh = await page.locator('#scan-pin-display').textContent();
+  await page.locator('.pin-row button[title="مشاركة الرابط والرمز"]').click();
+  await expect(page.locator('#scan-share-preview')).toContainText('رمز الدخول: ' + fresh);
+  await expect(page.locator('#scan-share-preview')).not.toContainText('123456');
+});
+
+test('«مشاركة بطريقة ثانية» of the scanner message uses the phone share sheet, else copies and says so', async ({ page }) => {
+  await go(page, { pin: '828583' });
+  await expect(page.locator('#scan-pin-display')).toHaveText('828583');
+  await page.evaluate(() => { window.__shared = null; navigator.share = (d) => { window.__shared = d; return Promise.resolve(); }; });
+  await page.locator('.pin-row button[title="مشاركة الرابط والرمز"]').click();
+  await page.getByRole('button', { name: 'مشاركة بطريقة ثانية' }).last().click();
+  const shared = await page.evaluate(() => window.__shared);
+  expect(shared.text).toContain('*رمز الدخول:* 828583');
+  expect(shared.text).toContain('scan.html?event=e1');
+  // no share sheet: copy, and say so only when the copy worked
+  await page.evaluate(() => { navigator.share = undefined; window.__copied = null; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: (t) => { window.__copied = t; return Promise.resolve(); } } }); });
+  await page.locator('.pin-row button[title="مشاركة الرابط والرمز"]').click();
+  await page.getByRole('button', { name: 'مشاركة بطريقة ثانية' }).last().click();
+  await expect(page.locator('#toast')).toContainText('تم نسخ الرسالة');
+  expect(await page.evaluate(() => window.__copied)).toContain('*رمز الدخول:* 828583');
+  await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: () => Promise.reject(new Error('denied')) } }); });
+  await page.locator('.pin-row button[title="مشاركة الرابط والرمز"]').click();
+  await page.getByRole('button', { name: 'مشاركة بطريقة ثانية' }).last().click();
+  await expect(page.locator('#toast')).toContainText('تعذّر النسخ');
 });

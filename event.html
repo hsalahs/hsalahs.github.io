@@ -919,8 +919,9 @@ function shareScanOtherWay() {
   closeScanShareModal();
   const text = scanShareMessage();
   if (navigator.share) { navigator.share({ title: 'سكانر الدخول', text }).catch(() => {}); return; }
-  navigator.clipboard?.writeText(text).catch(() => {});
-  showToast('✅ تم نسخ الرسالة');
+  const done = () => showToast('✅ تم نسخ الرسالة');
+  const fail = () => showToast('⚠️ تعذّر النسخ');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fail); else fail();
 }
 
 function copyScanLink() {
