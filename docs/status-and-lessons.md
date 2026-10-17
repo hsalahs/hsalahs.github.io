@@ -6,7 +6,7 @@ _Moved out of CLAUDE.md (nothing was removed). Read this when: at the start of a
 
 **State:** the site (index, app, event, invite, scan) now talks ONLY to Supabase (project `gunizkapwatixvbfliva`, Free plan; it is both staging and live). No page loads Firebase. Firebase files (`firebase-init*.js`, `firebase.json`, `firestore.rules`, `rules-tests/`) are kept on purpose as the rollback path; delete them only after the founder accepts the cutover. No customers existed at cutover, so no data was migrated.
 
-**Live verification result:** see the line "LIVE CHECK" at the end of this section (filled after the merge).
+**Live verification result:** see the line "LIVE CHECK" below.
 
 **Three phone test steps for the founder:**
 1. Open https://da3wt.com in a private tab, press sign up, create an account with a real email, confirm it from the email, sign in.
@@ -17,9 +17,13 @@ _Moved out of CLAUDE.md (nothing was removed). Read this when: at the start of a
 
 **WARNING — the Free Supabase project pauses after about 7 days without activity.** While paused every page fails to reach the database. Fix: Supabase dashboard -> project `da3wt-staging` -> «Restore project» (data is kept; takes a few minutes). Before the first real event: use the site that week, or decide with the founder between a harmless weekly keep-alive job or upgrading (founder's decision only).
 
+**LIVE CHECK (Oct 16 2026, after the merge, PR #159, squash f4fd10d):** da3wt.com serves the new pages (app/event/invite/scan reference `supabase-config.js`, none references Firebase; sw cache `dawaat-scan-v20`; data.js, supabase-config.js, vendor/supabase.min.js answer 200). A headless phone-size load of index, app (login screen), invite (bad-link screen), scan and guide: no script errors, zero requests to Firebase/Google hosts. Anon grants for `event_public`, `get_request`, `resolve_slug`, `submit_request` confirmed in the database. NOT tested from the sandbox (the proxy replaces the apikey): the real anonymous path, sign-up with the confirmation email, and a real scan: that is what the three phone steps are for. CI on the merged head: both checks green (836 page tests); reviewer «جاهز»; `backup-before-supabase` = previous main (286405a).
+
+**500-GUEST LOAD TEST — PASSED (Oct 17 2026, real HTTP path from a GitHub runner):** 1 owner adds 500 guests in one call (538 ms; the 501st is refused), full owner read 500 rows 556 ms, 10 anonymous door phones enter the door code and check in at the same moment while the dashboard (5 s) and the phones (4 s door_event, 10 s delta) poll: 560 scans (500 distinct + 50 repeats + 10 unknown codes) in 11.4 s = exactly 500 `allowed`, 50 `duplicate`, 10 `not_found`, 0 other; 623 HTTP requests, 0 failed, 558 KB downloaded in total; `check_in` p50 179 ms / p95 207 ms / max 627 ms; counter 500 = 500 scanned guests (database check), every entered guest has a time. Why a runner: the sandbox proxy replaces the apikey AND the Authorization header, so signed-in calls cannot be made from here. How to re-run: `supabase/load-test.mjs setup 500 10` (sandbox; creates/reuses the test owner `lt-owner@test.invalid`, resets scanned flags, writes `supabase/load-test.run` with a fresh random password), commit + push that file to `claude/supabase-migration` (the workflow `.github/workflows/load-test.yml` starts on that path and runs `supabase/load-run.mjs`), read the job log, then `supabase/load-test.mjs verify` (checks the database and rotates the password, because the old one sat in git) and `git rm` the run file. For 2000: `setup 2000 10`. KEPT test data (never deleted by Claude): owner `lt-owner@test.invalid` (password rotated, nobody knows it), event `lt50052d4ed` "اختبار حمل 500" with 500 guests, all entered, door code stored in `event_secrets`, 10 anonymous door sessions. NOT covered by this test: real phones/cameras, the pages' own rendering with 500 guests (covered by Playwright with stubs), Turnstile.
+
 **Still to do before the FIRST CUSTOMER:**
 1. D4: door lockout alert on the dashboard + «إعادة فتح الباب» + «رمز جديد» confirmation + "names shortened" notice — built on the REAL pages, real screenshot next to main, founder approval first.
-2. 500-guest load test (2000 later, before a big event), plus real iPhone/Android checks of the whole flow.
+2. 2000-guest load test before a big event, plus real iPhone/Android checks of the whole flow. (The 500-guest test is DONE, see below.)
 3. Turnstile on the scanner's anonymous sign-in (Site Key is public; the Secret Key stays with the founder).
 4. CI job for the SQL tests (Postgres container); today they run on staging with `supabase/run-staging.mjs`.
 5. Admin events-list egress (poll only changes); verify the weekly cleanup jobs are active.

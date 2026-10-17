@@ -1,0 +1,22 @@
+name: Load test (Supabase)
+
+# Started by pushing supabase/load-test.run (written by `supabase/load-test.mjs setup`).
+# Runs the real HTTP path from a GitHub runner; the sandbox proxy cannot send signed-in calls.
+on:
+  push:
+    branches: [claude/supabase-migration]
+    paths: [supabase/load-test.run]
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run
+        run: |
+          if [ ! -f supabase/load-test.run ]; then echo "no run file, nothing to do"; exit 0; fi
+          node supabase/load-run.mjs supabase/load-test.run
