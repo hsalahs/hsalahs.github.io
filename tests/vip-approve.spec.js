@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { stubSupabase, seedInviteStore, seedEvent } = require('./helpers');
 
-const fill = (n) => Array.from({ length: n }, (_, i) => ({ id: 'WD-F' + i, name: 'ضيف ' + (i + 1) }));
+const fill = (n) => Array.from({ length: n }, (_, i) => ({ id: 'WD-FILL' + i, name: 'ضيف ' + (i + 1) }));
 
 // What event e1 holds: pending requests (r0, r1, ...), guests, and event columns (the event is paid).
 function store(reqs, guests, eventExtra) {

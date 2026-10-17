@@ -14,7 +14,7 @@ async function go(page, opts = {}, url = '/event.html?id=e1') {
   await page.goto(url);
 }
 const G = (id, name, extra) => Object.assign({ id, name }, extra);
-const fill = (n, prefix) => Array.from({ length: n }, (_, i) => G('WD-F' + i, (prefix || 'ضيف ') + (i + 1)));
+const fill = (n, prefix) => Array.from({ length: n }, (_, i) => G('WD-FILL' + i, (prefix || 'ضيف ') + (i + 1)));
 const server = (page) => page.evaluate(() => {
   const s = window.__fakeSupabase;
   return { event: s.events.e1, guests: s.doors.e1.guests, pin: s.doors.e1.pin, requests: s.requests.e1, slugs: s.slugs, opened: window.__opened };
@@ -963,7 +963,7 @@ test('accept-all on the free plan stops at the guest cap and leaves the oldest-f
   await acceptAll(page).click();
   await expect(page.locator('#toast')).toContainText('تم قبول 2 — وتبقى 2');
   const st = await fbState(page);
-  expect(st.guests.filter((g) => !g.id.startsWith('WD-F')).map(g => g.name)).toEqual(['أ', 'ب']);
+  expect(st.guests.filter((g) => !g.id.startsWith('WD-FILL')).map(g => g.name)).toEqual(['أ', 'ب']);
   expect(st.count).toBe(5);
   expect(Object.values(st.requests).filter(r => r.status === 'pending').map(r => r.name).sort()).toEqual(['ج', 'د']);
   await expect(page.locator('#payment-gate')).toBeVisible();
