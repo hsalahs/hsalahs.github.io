@@ -348,6 +348,7 @@ tmark('script');</script>
   .ibtn { width:44px; height:44px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; border:none; cursor:pointer; background:linear-gradient(135deg,var(--gold-deep),var(--gold)); color:#1a1400; padding:0; }
   .ibtn.ghost { background:transparent; border:1px solid rgba(var(--accent-rgb),0.35); color:var(--gold); }
   .pin-row { display:flex; align-items:center; justify-content:space-between; margin-top:12px; padding:10px 12px; border-radius:12px; background:rgba(var(--accent-rgb),0.06); border:1px dashed rgba(var(--accent-rgb),0.3); }
+  .pin-btns { display:flex; gap:8px; }
   .pin-row .pin-lbl { font-size:11.5px; color:var(--text-soft); display:flex; align-items:center; gap:6px; }
   .door-alert { display:none; margin-top:12px; padding:12px 14px; border-radius:12px; font-size:13px; line-height:1.75; border:1px solid; }
   .door-alert.show { display:block; }
@@ -583,7 +584,10 @@ setTimeout(() => {
           <div class="pin-lbl"><i data-ic="key-round" data-size="13"></i> رمز دخول فريق الاستقبال:</div>
           <span id="scan-pin-display"></span>
         </div>
-        <button class="ibtn ghost" onclick="regenerateScanPin()" aria-label="رمز جديد" title="رمز جديد"><i data-ic="refresh-cw" data-size="17"></i></button>
+        <div class="pin-btns">
+          <button class="ibtn ghost" onclick="shareScanLink()" aria-label="مشاركة الرابط والرمز" title="مشاركة الرابط والرمز"><i data-ic="share-2" data-size="17"></i></button>
+          <button class="ibtn ghost" onclick="regenerateScanPin()" aria-label="رمز جديد" title="رمز جديد"><i data-ic="refresh-cw" data-size="17"></i></button>
+        </div>
       </div>
       <div class="door-alert" id="door-alert" role="status"></div>
     </div>
@@ -633,6 +637,19 @@ setTimeout(() => {
       <div class="sh-count" id="share-count"></div>
       <button class="sh-wa" onclick="shareOnWhatsapp()"><i data-ic="message-circle" data-size="19"></i> مشاركة عبر الواتساب</button>
       <button class="sh-other" onclick="shareOtherWay()">مشاركة بطريقة ثانية</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="scan-share-modal" onclick="if (event.target === this) closeScanShareModal();">
+    <div class="modal-box" style="max-height:92vh">
+      <div class="modal-header">
+        <h3>معاينة رسالة الواتساب</h3>
+        <button class="icon-btn" onclick="closeScanShareModal()" aria-label="إغلاق"><i data-ic="x" data-size="20"></i></button>
+      </div>
+      <div class="sh-label">هكذا تظهر الرسالة لفريق الاستقبال:</div>
+      <div class="sh-bubble" id="scan-share-preview" dir="rtl"></div>
+      <button class="sh-wa" onclick="shareScanOnWhatsapp()"><i data-ic="message-circle" data-size="19"></i> مشاركة عبر الواتساب</button>
+      <button class="sh-other" onclick="shareScanOtherWay()">مشاركة بطريقة ثانية</button>
     </div>
   </div>
 
@@ -880,7 +897,32 @@ function shareOtherWay() {
   closeShareModal();
   shareLink('invite-link', eventData ? eventData.name : 'دعوة', copyInviteLink);
 }
-function shareScanLink() { shareLink('scan-link', 'سكانر الدخول', copyScanLink); }
+// The share buttons next to the scanner link and the door code open a preview of one ready message
+// for the entrance team: the link and the code together.
+function scanShareMessage() {
+  return buildScanShareMessage(eventData, document.getElementById('scan-link').value, currentScanPin);
+}
+async function shareScanLink() {
+  if (pinReady) await pinReady;
+  if (!currentScanPin) { showToast('⚠️ الرمز ما انقرأ، تأكد من الإنترنت وحدّث الصفحة'); return; }
+  document.getElementById('scan-share-preview').innerHTML = escapeHtml(scanShareMessage())
+    .replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+  document.getElementById('scan-share-modal').classList.add('active');
+}
+function closeScanShareModal() {
+  document.getElementById('scan-share-modal').classList.remove('active');
+}
+function shareScanOnWhatsapp() {
+  window.open('https://wa.me/?text=' + encodeURIComponent(scanShareMessage()), '_blank');
+}
+function shareScanOtherWay() {
+  closeScanShareModal();
+  const text = scanShareMessage();
+  if (navigator.share) { navigator.share({ title: 'سكانر الدخول', text }).catch(() => {}); return; }
+  const done = () => showToast('✅ تم نسخ الرسالة');
+  const fail = () => showToast('⚠️ تعذّر النسخ');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fail); else fail();
+}
 
 function copyScanLink() {
   const input = document.getElementById('scan-link');
@@ -1960,6 +2002,7 @@ function sheetDeleteGuest() {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('guest-sheet').classList.contains('active')) closeGuestSheet();
   if (e.key === 'Escape' && document.getElementById('share-modal').classList.contains('active')) closeShareModal();
+  if (e.key === 'Escape' && document.getElementById('scan-share-modal').classList.contains('active')) closeScanShareModal();
   if (e.key === 'Escape' && document.getElementById('approve-all-modal').classList.contains('active')) closeApproveAllModal();
   if (e.key === 'Escape' && document.getElementById('pin-modal').classList.contains('active')) closePinModal();
 });

@@ -183,6 +183,16 @@ function buildShareMessage(ev, link) {
   return lines.join('\n');
 }
 
+// The message for the people at the entrance: the scanner link and the door code together.
+function buildScanShareMessage(ev, link, pin) {
+  const k = EVENT_TYPES[eventTypeOf(ev)];
+  const lines = ['*🎫 سكانر الدخول*', ''];
+  if (ev.name) lines.push((k.nameLabel === 'الفعالية' ? '📌' : '🎉') + ' *' + k.nameLabel + ':* ' + ev.name, '');
+  lines.push('افتح الرابط وأدخل رمز الدخول:', '🔗 ' + link, '🔑 *رمز الدخول:* ' + pin, '',
+    'للمسح والبحث بالأسماء فقط. لا تشارك الرمز مع أحد.');
+  return lines.join('\n');
+}
+
 // A link name from the event's own name, so every event gets a readable link
 // without the owner typing one: Arabic letters spelled in English (Arabic has
 // no written short vowels, so "حلا" becomes "hla" — the owner can change it),
