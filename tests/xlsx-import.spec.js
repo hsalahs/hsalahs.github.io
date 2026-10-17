@@ -178,3 +178,22 @@ test('the names read from the file are sent to the server in add_guests calls of
   expect(sent[0].p_partial).toBe(true);
   expect(sent[0].p_guests.map((g) => g.name).sort()).toEqual(['أحمد الغامدي', 'سارة العتيبي', 'محمد بن سعد القحطاني', 'نورة'].sort());
 });
+
+test('a name longer than 100 characters is cut, and the import message says how many were shortened', async ({ page }) => {
+  const messages = await open(page);
+  const long = 'ع'.repeat(130);
+  const csv = ['أحمد', long, 'سارة', 'ن'.repeat(120)].join('\n');
+  await page.locator('#csv-import').setInputFiles({ name: 'names.csv', mimeType: 'text/csv', buffer: Buffer.from(csv, 'utf8') });
+  await expect.poll(() => guestCount(page)).toBe(4);
+  const names = await namesOnPage(page);
+  expect(names.filter((n) => n.length === 100)).toHaveLength(2);
+  expect(messages.join(' ')).toContain('تم استيراد 4 ضيوف');
+  expect(messages.join(' ')).toContain('تم اختصار 2 اسمين لأن الحد الأقصى للاسم 100 حرف');
+});
+
+test('no shortening notice when every name fits', async ({ page }) => {
+  const messages = await open(page);
+  await importFile(page, 'names-only.xlsx');
+  await expect.poll(() => messages.length).toBe(1);
+  expect(messages[0]).not.toContain('تم اختصار');
+});

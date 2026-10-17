@@ -2418,6 +2418,7 @@ async function importGuestNamesNow(names) {
 
   let added = 0;
   let blockedByGate = 0;
+  let trimmed = 0;
   const batchSize = 50;
   const total = toAdd.length;
   // Always shown, even for a handful of names: a write is not echoed to the UI
@@ -2432,6 +2433,7 @@ async function importGuestNamesNow(names) {
       const batch = toAdd.slice(i, i + batchSize);
       const res = await Data.guests.add(eventId, batch.map(name => ({ name })), true);
       added += res.added;
+      trimmed += res.trimmed || 0;
       bumpGuestCount(res.added);
       showToast('⏳ جاري الإضافة... ' + Math.min(added, total) + ' / ' + total);
       // Everything not yet written is left out — this batch's remainder AND every later batch.
@@ -2445,6 +2447,7 @@ async function importGuestNamesNow(names) {
   const capForMsg = guestCapOf(eventData);
   let msg = 'تم استيراد ' + added + ' ' + guestWord(added) + (duplicates > 0 ? ' (تجاهلنا ' + duplicates + ' ' + arPlural(duplicates, 'اسم مكرر', 'اسمين مكررين', 'أسماء مكررة') + ')' : '');
   if (blockedByGate > 0) msg += ' — وصلت لحد الـ' + capForMsg + ' ' + guestWord(capForMsg) + '، وما انضاف ' + blockedByGate + ' ' + arPlural(blockedByGate, 'اسم', 'اسمين', 'أسماء') + '. تواصل معنا لزيادة العدد.';
+  if (trimmed > 0) msg += '\n⚠️ تم اختصار ' + trimmed + ' ' + arPlural(trimmed, 'اسم', 'اسمين', 'أسماء') + ' لأن الحد الأقصى للاسم 100 حرف.';
   alert(msg);
   if (blockedByGate > 0) openPaymentWhatsapp();
 }
